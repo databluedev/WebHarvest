@@ -12,8 +12,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -38,6 +36,9 @@ services:
       resources:
         limits:
           memory: 1G
+    networks:
+      - default
+      - dokploy-network
 
   celery-worker-scrape:
     build:
@@ -181,13 +182,14 @@ services:
       target: prod
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-    ports:
-      - "4000:3000"
     depends_on:
       - backend
     environment:
       - NODE_ENV=production
     restart: unless-stopped
+    networks:
+      - default
+      - dokploy-network
 
   db:
     image: postgres:16-alpine
@@ -228,4 +230,8 @@ services:
 volumes:
   pgdata:
   redisdata:
+
+networks:
+  dokploy-network:
+    external: true
 
