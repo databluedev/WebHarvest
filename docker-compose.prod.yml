@@ -12,8 +12,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -38,6 +36,9 @@ services:
       resources:
         limits:
           memory: 1G
+    networks:
+      - default
+      - dokploy-network
 
   celery-worker-scrape:
     build:
@@ -186,6 +187,9 @@ services:
     environment:
       - NODE_ENV=production
     restart: unless-stopped
+    networks:
+      - default
+      - dokploy-network
 
   db:
     image: postgres:16-alpine
@@ -226,3 +230,7 @@ services:
 volumes:
   pgdata:
   redisdata:
+
+networks:
+  dokploy-network:
+    external: true
