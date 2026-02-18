@@ -130,7 +130,8 @@ export default function DashboardPage() {
         api.getTopDomains(),
       ]);
       setStats(statsRes as UsageStats);
-      setTopDomains((domainsRes as any)?.domains ?? domainsRes as TopDomain[]);
+      const raw = domainsRes as any;
+      setTopDomains(Array.isArray(raw) ? raw : (raw?.domains ?? []) as TopDomain[]);
     } catch (err: any) {
       setError(err.message || "Failed to load dashboard data");
     } finally {
