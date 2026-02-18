@@ -1,8 +1,35 @@
+# Production docker-compose
+# Usage: docker compose -f docker-compose.prod.yml up --build -d
+#
+# Required: create a .env file with production values:
+#   SECRET_KEY=<random-64-char-string>
+#   ENCRYPTION_KEY=<random-32-char-string>
+#   POSTGRES_PASSWORD=<strong-password>
+#   NEXT_PUBLIC_API_URL=https://yourdomain.com  (or http://your-server-ip:8000)
+
 services:
   backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-webharvest}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -16,8 +43,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    volumes:
-      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
@@ -26,11 +51,12 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://webharvest:webharvest@db:5432/webharvest
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-webharvest}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-    command: celery -A app.workers.celery_app worker -l info -c 4 -Q scrape
+    command: celery -A app.workers.celery_app worker -l warning -c 4 -Q scrape
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -46,8 +72,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    volumes:
-      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
@@ -56,11 +80,12 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://webharvest:webharvest@db:5432/webharvest
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-webharvest}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-    command: celery -A app.workers.celery_app worker -l info -c 2 -Q crawl
+    command: celery -A app.workers.celery_app worker -l warning -c 2 -Q crawl
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -76,8 +101,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    volumes:
-      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
@@ -86,11 +109,12 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://webharvest:webharvest@db:5432/webharvest
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-webharvest}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-    command: celery -A app.workers.celery_app worker -l info -c 4 -Q batch
+    command: celery -A app.workers.celery_app worker -l warning -c 4 -Q batch
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -106,8 +130,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    volumes:
-      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
@@ -116,11 +138,12 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://webharvest:webharvest@db:5432/webharvest
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-webharvest}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-    command: celery -A app.workers.celery_app worker -l info -c 2 -Q search,map
+    command: celery -A app.workers.celery_app worker -l warning -c 2 -Q search,map
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -132,12 +155,55 @@ services:
         limits:
           memory: 1G
 
-  # Override dev celery-worker: disable in prod (use dedicated workers above)
-  celery-worker:
-    deploy:
-      replicas: 0
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-webharvest}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    command: celery -A app.workers.celery_app beat -l warning
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
 
   db:
+    image: postgres:16-alpine
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-webharvest}
+      - POSTGRES_USER=${POSTGRES_USER:-webharvest}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    # No ports exposed to host in production — only internal network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-webharvest}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
     command: >
       postgres
       -c max_connections=200
@@ -147,4 +213,18 @@ services:
       -c maintenance_work_mem=64MB
 
   redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    # No ports exposed to host in production — only internal network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+volumes:
+  pgdata:
+  redisdata:
