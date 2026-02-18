@@ -28,7 +28,7 @@ interface Job {
   error: string | null;
   started_at: string | null;
   completed_at: string | null;
-  created_at: string;
+  created_at: string | null;
   duration_seconds: number | null;
 }
 
@@ -349,7 +349,7 @@ export default function JobsPage() {
                               {formatDuration(job.duration_seconds)}
                             </td>
                             <td className="py-3 px-3 whitespace-nowrap text-muted-foreground">
-                              {formatDate(job.created_at)}
+                              {formatDate(job.created_at ?? "")}
                             </td>
                             <td className="py-3 px-3 text-right">
                               <Button
