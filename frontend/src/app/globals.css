@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 142 76% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 142 76% 36%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(0 0% 6%);
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 20%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(0 0% 30%);
+}
+
+/* Code blocks */
+pre, code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.markdown-output {
+  @apply text-sm leading-relaxed;
+}
+
+.markdown-output h1 { @apply text-2xl font-bold mt-6 mb-3; }
+.markdown-output h2 { @apply text-xl font-bold mt-5 mb-2; }
+.markdown-output h3 { @apply text-lg font-semibold mt-4 mb-2; }
+.markdown-output p { @apply mb-3; }
+.markdown-output ul { @apply list-disc pl-6 mb-3; }
+.markdown-output ol { @apply list-decimal pl-6 mb-3; }
+.markdown-output a { @apply text-primary underline; }
+.markdown-output code { @apply bg-muted px-1.5 py-0.5 rounded text-xs; }
+.markdown-output pre { @apply bg-muted p-4 rounded-lg overflow-x-auto mb-4; }
+.markdown-output table { @apply w-full border-collapse mb-4; }
+.markdown-output th { @apply border border-border px-3 py-2 bg-muted text-left font-semibold; }
+.markdown-output td { @apply border border-border px-3 py-2; }
