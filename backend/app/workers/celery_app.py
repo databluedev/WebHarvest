@@ -29,6 +29,14 @@ celery_app.conf.update(
         "app.workers.map_worker.*": {"queue": "map"},
         "app.workers.batch_worker.*": {"queue": "batch"},
         "app.workers.search_worker.*": {"queue": "search"},
+        "app.workers.schedule_worker.*": {"queue": "scrape"},  # Lightweight, reuse scrape queue
+    },
+    # Celery Beat schedule — periodic tasks
+    beat_schedule={
+        "check-schedules-every-60s": {
+            "task": "app.workers.schedule_worker.check_schedules",
+            "schedule": 60.0,  # Every 60 seconds
+        },
     },
 )
 
@@ -39,4 +47,5 @@ celery_app.conf.include = [
     "app.workers.map_worker",
     "app.workers.batch_worker",
     "app.workers.search_worker",
+    "app.workers.schedule_worker",
 ]

@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     # Search
     RATE_LIMIT_SEARCH: int = 30
     MAX_SEARCH_RESULTS: int = 10
+    BRAVE_SEARCH_API_KEY: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

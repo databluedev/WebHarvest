@@ -109,6 +109,13 @@ export default function SearchPage() {
                     DuckDuckGo
                   </Button>
                   <Button
+                    variant={engine === "brave" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setEngine("brave")}
+                  >
+                    Brave
+                  </Button>
+                  <Button
                     variant={engine === "google" ? "default" : "outline"}
                     size="sm"
                     onClick={() => setEngine("google")}

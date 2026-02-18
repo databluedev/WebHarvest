@@ -19,12 +19,15 @@ class CrawlRequest(BaseModel):
     url: str
     max_pages: int = 100
     max_depth: int = 3
+    concurrency: int = 3  # Concurrent scrapes (1-10)
     include_paths: list[str] | None = None  # glob patterns
     exclude_paths: list[str] | None = None
     allow_external_links: bool = False
     respect_robots_txt: bool = True
     scrape_options: ScrapeOptions | None = None
     use_proxy: bool = False
+    webhook_url: str | None = None
+    webhook_secret: str | None = None
 
 
 class CrawlStartResponse(BaseModel):

@@ -24,6 +24,8 @@ export default function CrawlPage() {
   const [maxDepth, setMaxDepth] = useState(3);
   const [includePaths, setIncludePaths] = useState("");
   const [excludePaths, setExcludePaths] = useState("");
+  const [concurrency, setConcurrency] = useState(3);
+  const [webhookUrl, setWebhookUrl] = useState("");
 
   useEffect(() => {
     if (!api.getToken()) router.push("/auth/login");
@@ -41,8 +43,10 @@ export default function CrawlPage() {
       if (showAdvanced) {
         params.max_pages = maxPages;
         params.max_depth = maxDepth;
+        params.concurrency = concurrency;
         if (includePaths.trim()) params.include_paths = includePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
         if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
+        if (webhookUrl.trim()) params.webhook_url = webhookUrl.trim();
       }
 
       const res = await api.startCrawl(params);
@@ -158,6 +162,24 @@ export default function CrawlPage() {
                   </div>
 
                   <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Concurrency: {concurrency}
+                    </label>
+                    <input
+                      type="range"
+                      min={1}
+                      max={10}
+                      value={concurrency}
+                      onChange={(e) => setConcurrency(parseInt(e.target.value))}
+                      className="w-full accent-primary"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>1 (sequential)</span>
+                      <span>10 (max parallel)</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-sm font-medium flex items-center gap-1.5">
                       Only Crawl These Paths
                       <span className="text-xs text-muted-foreground font-normal">
@@ -182,6 +204,20 @@ export default function CrawlPage() {
                       placeholder="Leave empty to skip nothing"
                       value={excludePaths}
                       onChange={(e) => setExcludePaths(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium flex items-center gap-1.5">
+                      Webhook URL
+                      <span className="text-xs text-muted-foreground font-normal">
+                        (optional, notified on completion)
+                      </span>
+                    </label>
+                    <Input
+                      placeholder="https://your-server.com/webhook"
+                      value={webhookUrl}
+                      onChange={(e) => setWebhookUrl(e.target.value)}
                     />
                   </div>
 

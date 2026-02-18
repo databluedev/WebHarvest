@@ -10,21 +10,26 @@ import {
   History,
   Key,
   Settings,
-  LayoutDashboard,
+  Home,
   Bug,
   LogOut,
   Layers,
+  Clock,
+  BarChart3,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/", label: "Home", icon: Home },
+  { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/scrape", label: "Scrape", icon: Search },
   { href: "/crawl", label: "Crawl", icon: Globe },
   { href: "/batch", label: "Batch", icon: Layers },
   { href: "/search", label: "Search", icon: Search },
   { href: "/map", label: "Map", icon: Map },
   { href: "/jobs", label: "Jobs", icon: History },
+  { href: "/schedules", label: "Schedules", icon: Clock },
   { href: "/api-keys", label: "API Keys", icon: Key },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -68,7 +73,8 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t p-4">
+      <div className="border-t p-4 space-y-1">
+        <ThemeToggle />
         <button
           onClick={handleLogout}
           className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -78,17 +80,90 @@ class GoogleCustomSearch(SearchEngine):
         return results
 
 
+class BraveSearch(SearchEngine):
+    """Search using Brave Search API (free tier: 2000 queries/month)."""
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    async def search(self, query: str, num_results: int) -> list[SearchResult]:
+        results = []
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                "https://api.search.brave.com/res/v1/web/search",
+                params={
+                    "q": query,
+                    "count": min(num_results, 20),
+                },
+                headers={
+                    "Accept": "application/json",
+                    "Accept-Encoding": "gzip",
+                    "X-Subscription-Token": self.api_key,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            for item in data.get("web", {}).get("results", []):
+                results.append(SearchResult(
+                    url=item.get("url", ""),
+                    title=item.get("title", ""),
+                    snippet=item.get("description", ""),
+                ))
+
+        return results
+
+
 async def web_search(
     query: str,
     num_results: int = 5,
     engine: str = "duckduckgo",
     google_api_key: str | None = None,
     google_cx: str | None = None,
+    brave_api_key: str | None = None,
 ) -> list[SearchResult]:
-    """High-level search function. Dispatches to the appropriate engine."""
-    if engine == "google" and google_api_key and google_cx:
-        search_engine = GoogleCustomSearch(google_api_key, google_cx)
-    else:
-        search_engine = DuckDuckGoSearch()
+    """High-level search function with automatic fallback chain.
 
-    return await search_engine.search(query, num_results)
+    Default chain: primary engine -> DuckDuckGo -> Brave -> Google (if configured)
+    """
+    # Build the engine chain based on the requested engine
+    engines: list[tuple[str, SearchEngine]] = []
+
+    # Primary engine first
+    if engine == "google" and google_api_key and google_cx:
+        engines.append(("google", GoogleCustomSearch(google_api_key, google_cx)))
+    elif engine == "brave":
+        brave_key = brave_api_key or settings.BRAVE_SEARCH_API_KEY
+        if brave_key:
+            engines.append(("brave", BraveSearch(brave_key)))
+    else:
+        engines.append(("duckduckgo", DuckDuckGoSearch()))
+
+    # Fallback engines
+    if engine != "duckduckgo":
+        engines.append(("duckduckgo", DuckDuckGoSearch()))
+
+    brave_key = brave_api_key or settings.BRAVE_SEARCH_API_KEY
+    if engine != "brave" and brave_key:
+        engines.append(("brave", BraveSearch(brave_key)))
+
+    if engine != "google" and google_api_key and google_cx:
+        engines.append(("google", GoogleCustomSearch(google_api_key, google_cx)))
+
+    # Try each engine in order
+    last_error = None
+    for engine_name, search_engine in engines:
+        try:
+            results = await search_engine.search(query, num_results)
+            if results:
+                logger.info(f"Search succeeded with {engine_name}: {len(results)} results")
+                return results
+            logger.warning(f"{engine_name} returned no results, trying fallback")
+        except Exception as e:
+            logger.warning(f"{engine_name} search failed: {e}, trying fallback")
+            last_error = e
+
+    # All engines failed
+    if last_error:
+        raise last_error
+    return []

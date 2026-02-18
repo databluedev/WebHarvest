@@ -13,6 +13,8 @@ class LinkResult(BaseModel):
     url: str
     title: str | None = None
     description: str | None = None
+    lastmod: str | None = None
+    priority: float | None = None
 
 
 class MapResponse(BaseModel):
@@ -20,3 +22,4 @@ class MapResponse(BaseModel):
     total: int
     links: list[LinkResult]
     error: str | None = None
+    job_id: str | None = None

@@ -23,6 +23,8 @@ class BatchScrapeRequest(BaseModel):
     timeout: int = 30000
     concurrency: int = 5  # Max concurrent scrapes
     use_proxy: bool = False
+    webhook_url: str | None = None
+    webhook_secret: str | None = None
 
 
 class BatchStartResponse(BaseModel):

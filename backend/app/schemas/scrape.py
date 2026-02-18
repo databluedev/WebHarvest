@@ -66,3 +66,4 @@ class ScrapeResponse(BaseModel):
     success: bool
     data: ScrapeData | None = None
     error: str | None = None
+    job_id: str | None = None

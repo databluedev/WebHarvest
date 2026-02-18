@@ -163,6 +163,7 @@ async def scrape_url(
     Scrape a URL with maximum anti-detection.
 
     Pipeline:
+    0. Check if URL is a document (PDF, DOCX) — handle separately
     1. curl_cffi with Chrome TLS impersonation (ALL sites including hard sites)
     2. httpx HTTP/2 fallback (non-hard sites only)
     3. Chromium browser with stealth + warm-up navigation
@@ -171,6 +172,7 @@ async def scrape_url(
     """
     from app.core.cache import get_cached_scrape, set_cached_scrape
     from app.core.metrics import scrape_duration_seconds
+    from app.services.document import detect_document_type, extract_pdf, extract_docx
 
     url = request.url
     start_time = time.time()
@@ -183,6 +185,11 @@ async def scrape_url(
                 return ScrapeData(**cached)
             except Exception:
                 pass
+
+    # Check if URL points to a document (PDF, DOCX) by extension
+    doc_type = detect_document_type(url, content_type=None, raw_bytes=b"")
+    if doc_type in ("pdf", "docx"):
+        return await _handle_document_url(url, doc_type, request, proxy_manager, start_time)
 
     raw_html = ""
     status_code = 0
@@ -240,8 +247,8 @@ async def scrape_url(
         except Exception as e:
             logger.debug(f"httpx failed for {url}: {e}")
 
-    # === Strategy 2: Chromium browser with stealth + warm-up ===
-    if not fetched:
+    # === Strategy 2: Chromium browser with stealth ===
+    if not fetched and not (raw_html_best and len(raw_html_best) > 5000):
         try:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
                 await _fetch_with_browser_stealth(url, request, proxy=proxy_playwright)
@@ -257,8 +264,8 @@ async def scrape_url(
         except Exception as e:
             logger.warning(f"Chromium stealth failed for {url}: {e}")
 
-    # === Strategy 3: Firefox browser (different TLS fingerprint) ===
-    if not fetched:
+    # === Strategy 3: Firefox browser (only if no usable content yet) ===
+    if not fetched and not (raw_html_best and len(raw_html_best) > 5000):
         try:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
                 await _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)
@@ -273,8 +280,12 @@ async def scrape_url(
         except Exception as e:
             logger.warning(f"Firefox failed for {url}: {e}")
 
-    # === Strategy 4: Chromium aggressive — human simulation + challenge wait ===
-    if not fetched:
+    # If we have decent content from any strategy, use it instead of aggressive
+    if not fetched and raw_html_best and len(raw_html_best) > 2000:
+        raw_html = raw_html_best
+        logger.info(f"Using best available content ({len(raw_html_best)} chars) for {url}")
+    # === Strategy 4: Aggressive browser — only if we truly have nothing ===
+    elif not fetched:
         try:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
                 await _fetch_with_browser_aggressive(url, request, proxy=proxy_playwright)
@@ -287,7 +298,7 @@ async def scrape_url(
                     raw_html_best = raw_html
                 if not raw_html:
                     raw_html = raw_html_best
-                logger.warning(f"All strategies exhausted for {url}, using best result")
+                logger.warning(f"All strategies exhausted for {url}")
         except Exception as e:
             logger.warning(f"Aggressive browser failed for {url}: {e}")
             if not raw_html:
@@ -356,6 +367,106 @@ async def scrape_url(
 
 
 # ---------------------------------------------------------------------------
+# Document handling (PDF, DOCX)
+# ---------------------------------------------------------------------------
+
+async def _handle_document_url(
+    url: str,
+    doc_type: str,
+    request: ScrapeRequest,
+    proxy_manager,
+    start_time: float,
+) -> ScrapeData:
+    """Fetch and extract content from document URLs (PDF, DOCX)."""
+    from app.core.metrics import scrape_duration_seconds
+    from app.services.document import extract_pdf, extract_docx, detect_document_type
+
+    proxy_url = None
+    if proxy_manager:
+        proxy_obj = proxy_manager.get_random()
+        if proxy_obj:
+            proxy_url = proxy_manager.to_httpx(proxy_obj)
+
+    # Fetch raw bytes
+    raw_bytes = b""
+    status_code = 0
+    content_type = ""
+
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=request.timeout / 1000,
+            **({"proxy": proxy_url} if proxy_url else {}),
+        ) as client:
+            resp = await client.get(url)
+            raw_bytes = resp.content
+            status_code = resp.status_code
+            content_type = resp.headers.get("content-type", "")
+    except Exception:
+        pass
+
+    # Fallback to curl_cffi
+    if not raw_bytes:
+        try:
+            from curl_cffi.requests import AsyncSession
+            async with AsyncSession(impersonate="chrome124") as session:
+                kwargs: dict[str, Any] = {"timeout": request.timeout / 1000, "allow_redirects": True}
+                if proxy_url:
+                    kwargs["proxy"] = proxy_url
+                resp = await session.get(url, **kwargs)
+                raw_bytes = resp.content
+                status_code = resp.status_code
+                content_type = dict(resp.headers).get("content-type", "")
+        except Exception:
+            pass
+
+    if not raw_bytes:
+        duration = time.time() - start_time
+        scrape_duration_seconds.observe(duration)
+        return ScrapeData(
+            metadata=PageMetadata(source_url=url, status_code=status_code or 0),
+        )
+
+    # Re-detect type from content-type header and bytes
+    actual_type = detect_document_type(url, content_type, raw_bytes)
+
+    if actual_type == "pdf":
+        doc_result = await extract_pdf(raw_bytes)
+    elif actual_type == "docx":
+        doc_result = await extract_docx(raw_bytes)
+    else:
+        # Not actually a document, return the text as HTML
+        duration = time.time() - start_time
+        scrape_duration_seconds.observe(duration)
+        return ScrapeData(
+            markdown=raw_bytes.decode("utf-8", errors="replace"),
+            metadata=PageMetadata(source_url=url, status_code=status_code),
+        )
+
+    # Build ScrapeData from DocumentResult
+    doc_metadata = doc_result.metadata.copy()
+    doc_metadata["source_url"] = url
+    doc_metadata["status_code"] = status_code
+
+    metadata = PageMetadata(
+        title=doc_metadata.get("title", ""),
+        source_url=url,
+        status_code=status_code,
+        word_count=doc_result.word_count,
+    )
+
+    duration = time.time() - start_time
+    scrape_duration_seconds.observe(duration)
+
+    return ScrapeData(
+        markdown=doc_result.markdown if "markdown" in request.formats else None,
+        html=None,
+        metadata=metadata,
+        structured_data={"document_metadata": doc_result.metadata} if "structured_data" in request.formats else None,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Strategy: curl_cffi — Chrome TLS fingerprint impersonation
 # ---------------------------------------------------------------------------
 
@@ -420,47 +531,30 @@ async def _fetch_with_browser_stealth(
     proxy: dict | None = None,
     use_firefox: bool = False,
 ) -> tuple[str, int, str | None, list[str], dict[str, str]]:
-    """Browser fetch with stealth patches and warm-up navigation for hard sites."""
+    """Fast browser fetch: domcontentloaded + short networkidle."""
     screenshot_b64 = None
     action_screenshots = []
     status_code = 0
     response_headers: dict[str, str] = {}
 
-    nav_timeout = max(request.timeout, 45000) if _is_hard_site(url) else request.timeout
-
     async with browser_pool.get_page(proxy=proxy, use_firefox=use_firefox) as page:
         referrer = random.choice(_GOOGLE_REFERRERS)
 
-        # Warm-up: visit robots.txt first to establish cookies/session on hard sites
-        if _is_hard_site(url):
-            try:
-                parsed = urlparse(url)
-                warmup_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
-                await page.goto(warmup_url, wait_until="domcontentloaded", timeout=10000)
-                await page.wait_for_timeout(random.randint(500, 1500))
-            except Exception:
-                pass
-
-        # Main navigation
+        # Fast navigation: domcontentloaded first (doesn't hang on analytics)
         response = await page.goto(
-            url, wait_until="networkidle", timeout=nav_timeout, referer=referrer,
+            url, wait_until="domcontentloaded", timeout=15000, referer=referrer,
         )
         status_code = response.status if response else 0
         if response:
             response_headers = {k.lower(): v for k, v in response.headers.items()}
 
-        await page.wait_for_timeout(random.randint(1000, 2500))
+        # Short networkidle — give JS 5s to render, don't block forever
+        try:
+            await page.wait_for_load_state("networkidle", timeout=5000)
+        except Exception:
+            pass
 
-        # For hard sites: check if page is still a challenge and wait longer
-        if _is_hard_site(url):
-            html_check = await page.content()
-            if _looks_blocked(html_check):
-                logger.debug(f"Challenge detected for {url}, waiting for resolution...")
-                await page.wait_for_timeout(random.randint(3000, 5000))
-                try:
-                    await page.wait_for_load_state("networkidle", timeout=10000)
-                except Exception:
-                    pass
+        await page.wait_for_timeout(random.randint(500, 1000))
 
         if request.wait_for > 0:
             await page.wait_for_timeout(request.wait_for)
@@ -488,11 +582,8 @@ async def _fetch_with_browser_aggressive(
     proxy: dict | None = None,
 ) -> tuple[str, int, str | None, list[str], dict[str, str]]:
     """
-    Maximum anti-detection browser fetch:
-    - Warm-up to root domain to establish session
-    - Full human simulation (mouse, scroll, pauses)
-    - Challenge page wait loop (checks every 2-4s for up to 15s)
-    - Auto-click common overlays (cookie consent, etc.)
+    Last-resort browser fetch with human simulation.
+    Kept fast: ~10-15s max. Only used when stealth fails.
     """
     screenshot_b64 = None
     action_screenshots = []
@@ -502,90 +593,39 @@ async def _fetch_with_browser_aggressive(
     async with browser_pool.get_page(proxy=proxy) as page:
         referrer = random.choice(_GOOGLE_REFERRERS)
 
-        # Warm-up: visit root domain first
-        try:
-            parsed = urlparse(url)
-            root_url = f"{parsed.scheme}://{parsed.netloc}/"
-            if root_url != url:
-                await page.goto(root_url, wait_until="domcontentloaded", timeout=15000, referer=referrer)
-                await page.wait_for_timeout(random.randint(1000, 2000))
-                vp = page.viewport_size or {"width": 1920, "height": 1080}
-                await page.mouse.move(vp["width"] // 2, vp["height"] // 2, steps=10)
-                await page.wait_for_timeout(random.randint(500, 1000))
-        except Exception:
-            pass
-
         # Navigate to target
         response = await page.goto(
-            url, wait_until="domcontentloaded", timeout=60000, referer=referrer,
+            url, wait_until="domcontentloaded", timeout=15000, referer=referrer,
         )
         status_code = response.status if response else 0
         if response:
             response_headers = {k.lower(): v for k, v in response.headers.items()}
 
         try:
-            await page.wait_for_load_state("networkidle", timeout=20000)
-        except Exception:
-            pass
-
-        # --- Full human simulation ---
-        vp = page.viewport_size or {"width": 1920, "height": 1080}
-
-        # Move to center
-        await page.mouse.move(vp["width"] // 2, vp["height"] // 2, steps=random.randint(10, 20))
-        await page.wait_for_timeout(random.randint(300, 600))
-
-        # Random movements
-        for _ in range(random.randint(4, 8)):
-            x = random.randint(50, vp["width"] - 50)
-            y = random.randint(50, vp["height"] - 50)
-            await page.mouse.move(x, y, steps=random.randint(8, 25))
-            await page.wait_for_timeout(random.randint(50, 300))
-
-        # Smooth scroll down
-        for _ in range(random.randint(3, 5)):
-            await page.mouse.wheel(0, random.randint(80, 250))
-            await page.wait_for_timeout(random.randint(150, 400))
-
-        # Pause (reading)
-        await page.wait_for_timeout(random.randint(1000, 2500))
-
-        # Scroll back up
-        for _ in range(random.randint(2, 4)):
-            await page.mouse.wheel(0, random.randint(-200, -60))
-            await page.wait_for_timeout(random.randint(150, 350))
-
-        # --- Challenge wait loop: check every 2-4s up to ~15s ---
-        for attempt in range(5):
-            html_check = await page.content()
-            if not _looks_blocked(html_check):
-                break
-            logger.debug(f"Still blocked attempt {attempt + 1} for {url}, waiting...")
-            await page.wait_for_timeout(random.randint(2000, 4000))
-            x = random.randint(100, vp["width"] - 100)
-            y = random.randint(100, vp["height"] - 100)
-            await page.mouse.move(x, y, steps=random.randint(5, 15))
-
-        # Try clicking common overlay dismiss buttons
-        for selector in [
-            "button[id*='accept']", "button[id*='cookie']",
-            "button[class*='accept']", "button[class*='cookie']",
-            "[data-testid*='close']", "button:has-text('Accept')",
-            "button:has-text('I agree')", "button:has-text('Got it')",
-        ]:
-            try:
-                btn = page.locator(selector).first
-                if await btn.is_visible(timeout=500):
-                    await btn.click(timeout=1000)
-                    await page.wait_for_timeout(500)
-                    break
-            except Exception:
-                continue
-
-        try:
             await page.wait_for_load_state("networkidle", timeout=8000)
         except Exception:
             pass
+
+        # Quick human simulation
+        vp = page.viewport_size or {"width": 1920, "height": 1080}
+        await page.mouse.move(vp["width"] // 2, vp["height"] // 2, steps=10)
+        await page.wait_for_timeout(300)
+
+        # 2-3 random movements
+        for _ in range(random.randint(2, 3)):
+            x = random.randint(100, vp["width"] - 100)
+            y = random.randint(100, vp["height"] - 100)
+            await page.mouse.move(x, y, steps=random.randint(5, 10))
+            await page.wait_for_timeout(random.randint(100, 300))
+
+        # Quick scroll
+        await page.mouse.wheel(0, random.randint(100, 300))
+        await page.wait_for_timeout(500)
+
+        # Challenge check — one quick pass (3s)
+        html_check = await page.content()
+        if _looks_blocked(html_check):
+            await page.wait_for_timeout(3000)
 
         if request.wait_for > 0:
             await page.wait_for_timeout(request.wait_for)

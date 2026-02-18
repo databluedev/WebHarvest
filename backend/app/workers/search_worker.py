@@ -28,6 +28,7 @@ def process_search(self, job_id: str, config: dict):
         from app.schemas.scrape import ScrapeRequest
         from app.services.search import web_search
         from app.services.scraper import scrape_url
+        from app.services.dedup import deduplicate_urls
 
         session_factory, db_engine = create_worker_session_factory()
         request = SearchRequest(**config)
@@ -59,6 +60,7 @@ def process_search(self, job_id: str, config: dict):
                 engine=request.engine,
                 google_api_key=request.google_api_key,
                 google_cx=request.google_cx,
+                brave_api_key=request.brave_api_key,
             )
 
             if not search_results:
@@ -72,6 +74,20 @@ def process_search(self, job_id: str, config: dict):
                     await db.commit()
                 await db_engine.dispose()
                 return
+
+            # Deduplicate search result URLs
+            url_to_result = {sr.url: sr for sr in search_results}
+            deduped_urls = deduplicate_urls([sr.url for sr in search_results])
+            # Rebuild search_results in deduped order
+            deduped_results = []
+            seen_norm = set()
+            for url in deduped_urls:
+                for sr in search_results:
+                    if sr.url == url and sr.url not in seen_norm:
+                        deduped_results.append(sr)
+                        seen_norm.add(sr.url)
+                        break
+            search_results = deduped_results
 
             # Update total count
             async with session_factory() as db:
@@ -153,6 +169,30 @@ def process_search(self, job_id: str, config: dict):
                     job.completed_at = datetime.now(timezone.utc)
                 await db.commit()
 
+            # Send webhook if configured
+            if request.webhook_url:
+                try:
+                    from app.services.webhook import send_webhook
+                    async with session_factory() as db:
+                        job = await db.get(Job, UUID(job_id))
+                        if job:
+                            await send_webhook(
+                                url=request.webhook_url,
+                                payload={
+                                    "event": "job.completed",
+                                    "job_id": job_id,
+                                    "job_type": "search",
+                                    "status": job.status,
+                                    "total_pages": job.total_pages,
+                                    "completed_pages": job.completed_pages,
+                                    "created_at": job.created_at.isoformat() if job.created_at else None,
+                                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                                },
+                                secret=request.webhook_secret,
+                            )
+                except Exception as e:
+                    logger.warning(f"Webhook delivery failed for search {job_id}: {e}")
+
         except Exception as e:
             logger.error(f"Search job {job_id} failed: {e}")
             async with session_factory() as db:
@@ -161,6 +201,24 @@ def process_search(self, job_id: str, config: dict):
                     job.status = "failed"
                     job.error = str(e)
                 await db.commit()
+
+            # Send failure webhook
+            if request.webhook_url:
+                try:
+                    from app.services.webhook import send_webhook
+                    await send_webhook(
+                        url=request.webhook_url,
+                        payload={
+                            "event": "job.failed",
+                            "job_id": job_id,
+                            "job_type": "search",
+                            "status": "failed",
+                            "error": str(e),
+                        },
+                        secret=request.webhook_secret,
+                    )
+                except Exception:
+                    pass
         finally:
             await db_engine.dispose()
 

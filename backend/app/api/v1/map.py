@@ -1,13 +1,22 @@
+import csv
+import io
+import json
 import logging
+from datetime import datetime, timezone
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.core.exceptions import RateLimitError
+from app.core.exceptions import NotFoundError, RateLimitError
 from app.core.rate_limiter import check_rate_limit
 from app.config import settings
+from app.models.job import Job
+from app.models.job_result import JobResult
 from app.models.user import User
 from app.schemas.map import MapRequest, MapResponse
 from app.services.mapper import map_website
@@ -30,18 +39,139 @@ async def map_site(
     if not allowed:
         raise RateLimitError("Map rate limit exceeded. Try again in a minute.")
 
+    # Create job record
+    job = Job(
+        user_id=user.id,
+        type="map",
+        status="running",
+        config=request.model_dump(),
+        total_pages=0,
+        started_at=datetime.now(timezone.utc),
+    )
+    db.add(job)
+    await db.flush()
+
     try:
         links = await map_website(request)
+
+        # Store all discovered links as a single JobResult
+        links_data = [link.model_dump() for link in links]
+        job_result = JobResult(
+            job_id=job.id,
+            url=request.url,
+            links=links_data,
+        )
+        db.add(job_result)
+
+        job.status = "completed"
+        job.total_pages = len(links)
+        job.completed_pages = len(links)
+        job.completed_at = datetime.now(timezone.utc)
+
         return MapResponse(
             success=True,
             total=len(links),
             links=links,
+            job_id=str(job.id),
         )
     except Exception as e:
         logger.error(f"Map failed for {request.url}: {e}")
+        job.status = "failed"
+        job.error = str(e)
+        job.completed_at = datetime.now(timezone.utc)
         return MapResponse(
             success=False,
             total=0,
             links=[],
             error=str(e),
+            job_id=str(job.id),
         )
+
+
+@router.get("/{job_id}")
+async def get_map_status(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the status and results of a map job."""
+    job = await db.get(Job, UUID(job_id))
+    if not job or job.user_id != user.id or job.type != "map":
+        raise NotFoundError("Map job not found")
+
+    result = await db.execute(
+        select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+    )
+    results = result.scalars().all()
+
+    links = []
+    for r in results:
+        if r.links:
+            links = r.links
+
+    return {
+        "success": True,
+        "job_id": str(job.id),
+        "status": job.status,
+        "url": job.config.get("url", "") if job.config else "",
+        "total": job.total_pages,
+        "links": links,
+        "error": job.error,
+    }
+
+
+@router.get("/{job_id}/export")
+async def export_map(
+    job_id: str,
+    format: str = Query("json", pattern="^(json|csv)$"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export map results in various formats (json, csv)."""
+    job = await db.get(Job, UUID(job_id))
+    if not job or job.user_id != user.id or job.type != "map":
+        raise NotFoundError("Map job not found")
+
+    result = await db.execute(
+        select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+    )
+    results = result.scalars().all()
+
+    links = []
+    for r in results:
+        if r.links:
+            links = r.links
+
+    if not links:
+        raise NotFoundError("No results to export")
+
+    short_id = job_id[:8]
+
+    if format == "json":
+        content = json.dumps(links, indent=2, ensure_ascii=False)
+        return StreamingResponse(
+            io.BytesIO(content.encode("utf-8")),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="map-{short_id}.json"'},
+        )
+
+    # CSV format
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["url", "title", "description", "lastmod", "priority"])
+    for link in links:
+        if isinstance(link, dict):
+            writer.writerow([
+                link.get("url", ""),
+                link.get("title", ""),
+                link.get("description", ""),
+                link.get("lastmod", ""),
+                link.get("priority", ""),
+            ])
+        else:
+            writer.writerow([str(link), "", "", "", ""])
+    return StreamingResponse(
+        io.BytesIO(buf.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="map-{short_id}.csv"'},
+    )

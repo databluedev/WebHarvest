@@ -7,12 +7,66 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
-import { Globe, Search, Map, Zap, ArrowRight, Key } from "lucide-react";
+import { Globe, Search, Map, Zap, ArrowRight, Key, Clock, FileText, Activity } from "lucide-react";
 import Link from "next/link";
+
+function getJobDetailPath(job: any): string {
+  switch (job.type) {
+    case "scrape": return `/scrape/${job.id}`;
+    case "crawl": return `/crawl/${job.id}`;
+    case "batch": return `/batch/${job.id}`;
+    case "search": return `/search/${job.id}`;
+    case "map": return `/map/${job.id}`;
+    default: return `/crawl/${job.id}`;
+  }
+}
+
+function getJobUrl(job: any): string {
+  if (!job.config) return "";
+  if (job.config.url) return job.config.url;
+  if (job.config.query) return job.config.query;
+  if (job.config.urls?.length === 1) return job.config.urls[0];
+  if (job.config.urls?.length > 1) return `${job.config.urls.length} URLs`;
+  return "";
+}
+
+function getStatusVariant(status: string): "success" | "destructive" | "warning" | "secondary" {
+  switch (status) {
+    case "completed": return "success";
+    case "failed": return "destructive";
+    case "running": return "warning";
+    default: return "secondary";
+  }
+}
+
+function getTypeIcon(type: string) {
+  switch (type) {
+    case "scrape": return Search;
+    case "crawl": return Globe;
+    case "map": return Map;
+    case "search": return Search;
+    default: return FileText;
+  }
+}
+
+function timeAgo(dateStr: string): string {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [recentJobs, setRecentJobs] = useState<any[]>([]);
 
   useEffect(() => {
     const token = api.getToken();
@@ -21,6 +75,7 @@ export default function Dashboard() {
       return;
     }
     api.getMe().then(setUser).catch(() => router.push("/auth/login"));
+    api.getUsageHistory({ per_page: 6 }).then((res) => setRecentJobs(res.jobs)).catch(() => {});
   }, [router]);
 
   if (!user) return null;
@@ -87,6 +142,63 @@ export default function Dashboard() {
               </Link>
             </Card>
           </div>
+
+          {/* Recent Activity */}
+          {recentJobs.length > 0 && (
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
+                  Recent Activity
+                </h2>
+                <Link href="/jobs">
+                  <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground">
+                    View All
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {recentJobs.map((job) => {
+                  const Icon = getTypeIcon(job.type);
+                  const jobUrl = getJobUrl(job);
+                  return (
+                    <Link key={job.id} href={getJobDetailPath(job)}>
+                      <Card className="cursor-pointer transition-colors hover:border-primary/50 h-full">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="capitalize text-xs gap-1">
+                                <Icon className="h-3 w-3" />
+                                {job.type}
+                              </Badge>
+                              <Badge variant={getStatusVariant(job.status)} className="text-xs">
+                                {job.status}
+                              </Badge>
+                            </div>
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {timeAgo(job.created_at)}
+                            </span>
+                          </div>
+                          {jobUrl && (
+                            <p className="text-sm truncate text-foreground" title={jobUrl}>
+                              {jobUrl}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
+                            {job.total_pages > 0 && (
+                              <span>{job.completed_pages}/{job.total_pages} pages</span>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Features */}
           <div className="grid gap-6 md:grid-cols-2">

@@ -18,7 +18,7 @@ def _run_async(coro):
 
 @celery_app.task(name="app.workers.crawl_worker.process_crawl", bind=True, max_retries=1)
 def process_crawl(self, job_id: str, config: dict):
-    """Process a crawl job using BFS crawler."""
+    """Process a crawl job using BFS crawler with concurrent scraping."""
 
     async def _do_crawl():
         from app.core.database import create_worker_session_factory
@@ -26,11 +26,13 @@ def process_crawl(self, job_id: str, config: dict):
         from app.models.job_result import JobResult
         from app.schemas.crawl import CrawlRequest
         from app.services.crawler import WebCrawler
+        from app.services.dedup import normalize_url
 
         # Create fresh DB connections for this event loop
         session_factory, db_engine = create_worker_session_factory()
 
         request = CrawlRequest(**config)
+        concurrency = max(1, min(request.concurrency, 10))
 
         # Load proxy manager if use_proxy is set
         proxy_manager = None
@@ -55,30 +57,68 @@ def process_crawl(self, job_id: str, config: dict):
 
         try:
             pages_crawled = 0
+            semaphore = asyncio.Semaphore(concurrency)
+            cancelled = False
 
-            while pages_crawled < request.max_pages:
-                next_item = await crawler.get_next_url()
-                if not next_item:
+            async def scrape_one(url: str, depth: int) -> dict | None:
+                """Scrape a single URL with semaphore-limited concurrency."""
+                async with semaphore:
+                    try:
+                        result = await crawler.scrape_page(url)
+                        return {
+                            "url": url,
+                            "depth": depth,
+                            "scrape_data": result["scrape_data"],
+                            "discovered_links": result["discovered_links"],
+                            "error": None,
+                        }
+                    except Exception as e:
+                        logger.warning(f"Failed to scrape {url}: {e}")
+                        return None
+
+            # BFS: process level by level (all URLs at current depth before moving to next)
+            while pages_crawled < request.max_pages and not cancelled:
+                # Collect a batch of URLs from the frontier
+                batch_items = []
+                remaining = request.max_pages - pages_crawled
+                batch_size = min(concurrency * 2, remaining)  # Fetch more than concurrency for efficiency
+
+                for _ in range(batch_size):
+                    next_item = await crawler.get_next_url()
+                    if not next_item:
+                        break
+                    url, depth = next_item
+
+                    # Use normalized URL for dedup check
+                    norm_url = normalize_url(url)
+                    if await crawler.is_visited(norm_url):
+                        continue
+
+                    await crawler.mark_visited(norm_url)
+                    batch_items.append((url, depth))
+
+                if not batch_items:
                     break
 
-                url, depth = next_item
+                # Process batch concurrently
+                tasks = [scrape_one(url, depth) for url, depth in batch_items]
+                results = await asyncio.gather(*tasks)
 
-                if await crawler.is_visited(url):
-                    continue
+                # Collect discovered links from all results, then add to frontier
+                all_discovered = []
+                for result in results:
+                    if result is None:
+                        continue
 
-                await crawler.mark_visited(url)
-
-                try:
-                    result = await crawler.scrape_page(url)
                     scrape_data = result["scrape_data"]
                     discovered_links = result["discovered_links"]
+                    url = result["url"]
+                    depth = result["depth"]
 
-                    # Build rich metadata with all new fields
+                    # Build rich metadata
                     metadata = {}
                     if scrape_data.metadata:
                         metadata = scrape_data.metadata.model_dump(exclude_none=True)
-
-                    # Merge extra data into metadata for storage
                     if scrape_data.structured_data:
                         metadata["structured_data"] = scrape_data.structured_data
                     if scrape_data.headings:
@@ -97,7 +137,7 @@ def process_crawl(self, job_id: str, config: dict):
                             html=scrape_data.html,
                             links=scrape_data.links if scrape_data.links else None,
                             metadata_=metadata if metadata else None,
-                            screenshot_url=scrape_data.screenshot,  # base64 screenshot
+                            screenshot_url=scrape_data.screenshot,
                         )
                         db.add(job_result)
 
@@ -107,28 +147,51 @@ def process_crawl(self, job_id: str, config: dict):
                         job = await db.get(Job, UUID(job_id))
                         if job:
                             job.completed_pages = pages_crawled
-                            # Check if cancelled
                             if job.status == "cancelled":
-                                await db.commit()
-                                break
+                                cancelled = True
                         await db.commit()
 
-                    # Add discovered links to frontier
-                    await crawler.add_to_frontier(discovered_links, depth + 1)
+                    # Collect discovered links with depth info
+                    for link in discovered_links:
+                        all_discovered.append((link, depth + 1))
 
-                except Exception as e:
-                    logger.warning(f"Failed to scrape {url}: {e}")
-                    continue
+                # Add all discovered links to frontier after batch
+                for link, link_depth in all_discovered:
+                    await crawler.add_to_frontier([link], link_depth)
 
             # Mark job as completed with actual page counts
             async with session_factory() as db:
                 job = await db.get(Job, UUID(job_id))
                 if job and job.status != "cancelled":
                     job.status = "completed"
-                    job.total_pages = pages_crawled  # Set to actual count
+                    job.total_pages = pages_crawled
                     job.completed_pages = pages_crawled
                     job.completed_at = datetime.now(timezone.utc)
                 await db.commit()
+
+            # Send webhook if configured
+            if request.webhook_url:
+                try:
+                    from app.services.webhook import send_webhook
+                    async with session_factory() as db:
+                        job = await db.get(Job, UUID(job_id))
+                        if job:
+                            await send_webhook(
+                                url=request.webhook_url,
+                                payload={
+                                    "event": "job.completed" if job.status == "completed" else "job.cancelled",
+                                    "job_id": job_id,
+                                    "job_type": "crawl",
+                                    "status": job.status,
+                                    "total_pages": job.total_pages,
+                                    "completed_pages": job.completed_pages,
+                                    "created_at": job.created_at.isoformat() if job.created_at else None,
+                                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                                },
+                                secret=request.webhook_secret,
+                            )
+                except Exception as e:
+                    logger.warning(f"Webhook delivery failed for crawl {job_id}: {e}")
 
         except Exception as e:
             logger.error(f"Crawl job {job_id} failed: {e}")
@@ -138,6 +201,24 @@ def process_crawl(self, job_id: str, config: dict):
                     job.status = "failed"
                     job.error = str(e)
                 await db.commit()
+
+            # Send failure webhook
+            if request.webhook_url:
+                try:
+                    from app.services.webhook import send_webhook
+                    await send_webhook(
+                        url=request.webhook_url,
+                        payload={
+                            "event": "job.failed",
+                            "job_id": job_id,
+                            "job_type": "crawl",
+                            "status": "failed",
+                            "error": str(e),
+                        },
+                        secret=request.webhook_secret,
+                    )
+                except Exception:
+                    pass
         finally:
             await crawler.cleanup()
             await db_engine.dispose()

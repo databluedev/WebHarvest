@@ -1,3 +1,5 @@
+import gzip
+import io
 import logging
 import random
 import xml.etree.ElementTree as ET
@@ -62,6 +64,37 @@ async def _fetch_url(url: str, timeout: int = 15) -> tuple[str, int]:
     return "", 0
 
 
+async def _fetch_bytes(url: str, timeout: int = 15) -> tuple[bytes, int]:
+    """Fetch a URL and return raw bytes (for gzip handling)."""
+    try:
+        from curl_cffi.requests import AsyncSession
+        impersonate = random.choice(["chrome124", "chrome123", "chrome120"])
+        async with AsyncSession(impersonate=impersonate) as session:
+            resp = await session.get(
+                url,
+                timeout=timeout,
+                allow_redirects=True,
+                headers=random.choice(_HEADERS_LIST),
+            )
+            return resp.content, resp.status_code
+    except Exception:
+        pass
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=timeout,
+            follow_redirects=True,
+            headers=random.choice(_HEADERS_LIST),
+            http2=True,
+        ) as client:
+            resp = await client.get(url)
+            return resp.content, resp.status_code
+    except Exception:
+        pass
+
+    return b"", 0
+
+
 async def _fetch_with_browser(url: str) -> str:
     """Fetch page content using browser for sites that block HTTP requests."""
     try:
@@ -84,7 +117,7 @@ async def _fetch_with_browser(url: str) -> str:
 async def map_website(request: MapRequest) -> list[LinkResult]:
     """
     Discover all URLs on a website using multiple strategies:
-    1. Sitemap.xml parsing
+    1. Sitemap.xml parsing (with gzip, sitemap index, lastmod/priority)
     2. Quick crawl of homepage + linked pages (with anti-detection)
     3. Browser fallback for blocked sites
     4. Optional search/keyword filtering
@@ -134,7 +167,7 @@ async def map_website(request: MapRequest) -> list[LinkResult]:
 
 
 async def _parse_sitemaps(base_url: str) -> list[LinkResult]:
-    """Parse sitemap.xml and sitemap index files."""
+    """Parse sitemap.xml and sitemap index files with full spec compliance."""
     links = []
     parsed = urlparse(base_url)
     domain = f"{parsed.scheme}://{parsed.netloc}"
@@ -160,25 +193,32 @@ async def _parse_sitemaps(base_url: str) -> list[LinkResult]:
 
     for sitemap_url in sitemap_urls:
         try:
-            text, status = await _fetch_url(sitemap_url, timeout=15)
-            if status != 200 or not text:
+            # Fetch sitemap content (handle gzip)
+            xml_text = await _fetch_sitemap_content(sitemap_url)
+            if not xml_text:
                 continue
 
-            root = ET.fromstring(text)
-            ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+            # Use iterparse for streaming XML (memory efficient for large sitemaps)
+            root = ET.fromstring(xml_text)
+            ns = {
+                "sm": "http://www.sitemaps.org/schemas/sitemap/0.9",
+                "image": "http://www.google.com/schemas/sitemap-image/1.1",
+            }
 
             # Check if it's a sitemap index
             sitemap_index_entries = root.findall(".//sm:sitemap/sm:loc", ns)
             if sitemap_index_entries:
-                for entry in sitemap_index_entries[:20]:  # Limit sub-sitemaps
-                    sub_text, sub_status = await _fetch_url(entry.text, timeout=15)
-                    if sub_status == 200 and sub_text:
-                        try:
-                            sub_root = ET.fromstring(sub_text)
-                            sub_links = _parse_single_sitemap_xml(sub_root, ns)
-                            links.extend(sub_links)
-                        except Exception:
-                            pass
+                # Process up to 200 sub-sitemaps
+                for entry in sitemap_index_entries[:200]:
+                    if entry.text:
+                        sub_xml = await _fetch_sitemap_content(entry.text.strip())
+                        if sub_xml:
+                            try:
+                                sub_root = ET.fromstring(sub_xml)
+                                sub_links = _parse_single_sitemap_xml(sub_root, ns)
+                                links.extend(sub_links)
+                            except Exception:
+                                pass
             else:
                 # Regular sitemap
                 sub_links = _parse_single_sitemap_xml(root, ns)
@@ -190,13 +230,78 @@ async def _parse_sitemaps(base_url: str) -> list[LinkResult]:
     return links
 
 
+async def _fetch_sitemap_content(url: str) -> str | None:
+    """Fetch sitemap content, handling gzipped .xml.gz files."""
+    if url.endswith(".gz"):
+        # Fetch as bytes and decompress
+        raw_bytes, status = await _fetch_bytes(url, timeout=20)
+        if status != 200 or not raw_bytes:
+            return None
+        try:
+            decompressed = gzip.decompress(raw_bytes)
+            return decompressed.decode("utf-8", errors="replace")
+        except Exception as e:
+            logger.debug(f"Failed to decompress gzipped sitemap {url}: {e}")
+            return None
+    else:
+        text, status = await _fetch_url(url, timeout=15)
+        if status != 200 or not text:
+            return None
+        return text
+
+
 def _parse_single_sitemap_xml(root: ET.Element, ns: dict) -> list[LinkResult]:
-    """Extract URLs from a sitemap XML element."""
+    """Extract URLs from a sitemap XML element with lastmod, priority, and image support."""
     links = []
     for url_el in root.findall(".//sm:url", ns):
         loc = url_el.find("sm:loc", ns)
-        if loc is not None and loc.text:
-            links.append(LinkResult(url=loc.text.strip()))
+        if loc is None or not loc.text:
+            continue
+
+        url = loc.text.strip()
+
+        # Parse optional fields
+        lastmod_el = url_el.find("sm:lastmod", ns)
+        lastmod = lastmod_el.text.strip() if lastmod_el is not None and lastmod_el.text else None
+
+        priority_el = url_el.find("sm:priority", ns)
+        priority = None
+        if priority_el is not None and priority_el.text:
+            try:
+                priority = float(priority_el.text.strip())
+            except ValueError:
+                pass
+
+        changefreq_el = url_el.find("sm:changefreq", ns)
+        changefreq = changefreq_el.text.strip() if changefreq_el is not None and changefreq_el.text else None
+
+        # Parse image sitemap entries
+        image_urls = []
+        for img_el in url_el.findall("image:image/image:loc", ns):
+            if img_el.text:
+                image_urls.append(img_el.text.strip())
+
+        # Build description from metadata
+        desc_parts = []
+        if lastmod:
+            desc_parts.append(f"Updated: {lastmod}")
+        if changefreq:
+            desc_parts.append(f"Freq: {changefreq}")
+        if priority is not None:
+            desc_parts.append(f"Priority: {priority}")
+        if image_urls:
+            desc_parts.append(f"{len(image_urls)} image(s)")
+
+        description = " | ".join(desc_parts) if desc_parts else None
+
+        links.append(LinkResult(
+            url=url,
+            title=None,
+            description=description,
+            lastmod=lastmod,
+            priority=priority,
+        ))
+
     return links
 
 

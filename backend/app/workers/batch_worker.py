@@ -27,6 +27,7 @@ def process_batch(self, job_id: str, config: dict):
         from app.schemas.batch import BatchScrapeRequest
         from app.schemas.scrape import ScrapeRequest
         from app.services.scraper import scrape_url
+        from app.services.dedup import deduplicate_urls
 
         session_factory, db_engine = create_worker_session_factory()
         request = BatchScrapeRequest(**config)
@@ -34,7 +35,14 @@ def process_batch(self, job_id: str, config: dict):
         # Build URL list with per-URL overrides
         url_configs = []
         if request.items:
+            # Deduplicate items by URL
+            seen_urls = set()
             for item in request.items:
+                from app.services.dedup import normalize_url
+                norm = normalize_url(item.url)
+                if norm in seen_urls:
+                    continue
+                seen_urls.add(norm)
                 url_configs.append({
                     "url": item.url,
                     "formats": item.formats or request.formats,
@@ -43,16 +51,16 @@ def process_batch(self, job_id: str, config: dict):
                     "timeout": item.timeout if item.timeout is not None else request.timeout,
                 })
         elif request.urls:
-            for url in request.urls:
-                url = url.strip()
-                if url:
-                    url_configs.append({
-                        "url": url,
-                        "formats": request.formats,
-                        "only_main_content": request.only_main_content,
-                        "wait_for": request.wait_for,
-                        "timeout": request.timeout,
-                    })
+            # Deduplicate URL list
+            deduped = deduplicate_urls(request.urls)
+            for url in deduped:
+                url_configs.append({
+                    "url": url,
+                    "formats": request.formats,
+                    "only_main_content": request.only_main_content,
+                    "wait_for": request.wait_for,
+                    "timeout": request.timeout,
+                })
 
         if not url_configs:
             async with session_factory() as db:
@@ -152,6 +160,30 @@ def process_batch(self, job_id: str, config: dict):
                     job.completed_at = datetime.now(timezone.utc)
                 await db.commit()
 
+            # Send webhook if configured
+            if request.webhook_url:
+                try:
+                    from app.services.webhook import send_webhook
+                    async with session_factory() as db:
+                        job = await db.get(Job, UUID(job_id))
+                        if job:
+                            await send_webhook(
+                                url=request.webhook_url,
+                                payload={
+                                    "event": "job.completed",
+                                    "job_id": job_id,
+                                    "job_type": "batch",
+                                    "status": job.status,
+                                    "total_pages": job.total_pages,
+                                    "completed_pages": job.completed_pages,
+                                    "created_at": job.created_at.isoformat() if job.created_at else None,
+                                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                                },
+                                secret=request.webhook_secret,
+                            )
+                except Exception as e:
+                    logger.warning(f"Webhook delivery failed for batch {job_id}: {e}")
+
         except Exception as e:
             logger.error(f"Batch job {job_id} failed: {e}")
             async with session_factory() as db:
@@ -160,6 +192,24 @@ def process_batch(self, job_id: str, config: dict):
                     job.status = "failed"
                     job.error = str(e)
                 await db.commit()
+
+            # Send failure webhook
+            if request.webhook_url:
+                try:
+                    from app.services.webhook import send_webhook
+                    await send_webhook(
+                        url=request.webhook_url,
+                        payload={
+                            "event": "job.failed",
+                            "job_id": job_id,
+                            "job_type": "batch",
+                            "status": "failed",
+                            "error": str(e),
+                        },
+                        secret=request.webhook_secret,
+                    )
+                except Exception:
+                    pass
         finally:
             await db_engine.dispose()
 

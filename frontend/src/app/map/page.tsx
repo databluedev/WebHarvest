@@ -37,7 +37,10 @@ export default function MapPage() {
         search: search || undefined,
         limit,
       });
-      if (res.success) {
+      if (res.success && res.job_id) {
+        router.push(`/map/${res.job_id}`);
+        return;
+      } else if (res.success) {
         setResult(res);
       } else {
         setError("Map failed");

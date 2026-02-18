@@ -76,7 +76,10 @@ export default function ScrapePage() {
         params.extract = { prompt: extractPrompt };
       }
       const res = await api.scrape(params);
-      if (res.success) {
+      if (res.success && res.job_id) {
+        router.push(`/scrape/${res.job_id}`);
+        return;
+      } else if (res.success) {
         setResult(res.data);
         // Auto-select first available tab
         if (res.data.markdown) setActiveTab("markdown");
