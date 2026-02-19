@@ -569,8 +569,34 @@ async def _race_strategies(
 
     # Wrap each coro to include its name in the return value
     async def _named_wrapper(name: str, coro):
-        result = await coro
-        return name, result
+        try:
+            result = await coro
+            return name, result
+        except asyncio.CancelledError:
+            logger.debug(f"Race: {name} cancelled for {url}")
+            raise
+        except Exception as e:
+            logger.debug(f"Race: {name} exception for {url}: {e}")
+            raise
+
+    # Suppress expected TargetClosedError warnings from Playwright when
+    # we cancel browser strategies mid-navigation
+    loop = asyncio.get_running_loop()
+    _original_handler = loop.get_exception_handler()
+
+    def _suppress_playwright_errors(loop, context):
+        exc = context.get("exception")
+        if exc and "Target" in type(exc).__name__ and "closed" in str(exc).lower():
+            logger.debug(f"Suppressed expected Playwright error during race: {exc}")
+            return
+        if exc and "TargetClosedError" in str(type(exc)):
+            return
+        if _original_handler:
+            _original_handler(loop, context)
+        else:
+            loop.default_exception_handler(context)
+
+    loop.set_exception_handler(_suppress_playwright_errors)
 
     tasks = [
         asyncio.create_task(_named_wrapper(name, coro), name=name)
@@ -598,15 +624,17 @@ async def _race_strategies(
                         break
                     else:
                         logger.debug(f"Race: {name} failed validation for {url}")
-                except Exception as e:
+                except (asyncio.CancelledError, Exception) as e:
                     logger.debug(f"Race: strategy exception for {url}: {e}")
     finally:
         # Ensure all pending tasks are cancelled
         for task in pending:
             task.cancel()
-        # Wait for cancellations to settle
+        # Wait for cancellations to settle (shielded cleanup continues in background)
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
+        # Restore original exception handler
+        loop.set_exception_handler(_original_handler)
 
     if winner_name:
         return winner_name, winner_result

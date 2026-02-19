@@ -976,19 +976,37 @@ class BrowserPool:
                 try:
                     yield page
                 finally:
-                    # Save cookies before closing
-                    if target_url:
-                        await self._save_cookies(context, target_url)
+                    # Shield cleanup from cancellation to prevent resource leaks.
+                    # CancelledError is BaseException in Python 3.9+, so bare
+                    # `except Exception` would miss it and leak page/context.
                     try:
-                        await page.close()
-                    except Exception:
-                        pass
-                    try:
-                        await context.close()
-                    except Exception:
+                        await asyncio.shield(
+                            self._safe_cleanup_page(page, context, target_url)
+                        )
+                    except (asyncio.CancelledError, Exception):
+                        # shield raises CancelledError if outer task was cancelled,
+                        # but the shielded cleanup task keeps running in background
                         pass
             finally:
                 active_browser_contexts.dec()
+
+    async def _safe_cleanup_page(
+        self, page: Page, context: BrowserContext, target_url: str | None
+    ):
+        """Cleanup page and context, safe against cancellation."""
+        if target_url:
+            try:
+                await self._save_cookies(context, target_url)
+            except BaseException:
+                pass
+        try:
+            await page.close()
+        except BaseException:
+            pass
+        try:
+            await context.close()
+        except BaseException:
+            pass
 
     async def execute_actions(self, page: Page, actions: list[dict]) -> list[str]:
         """Execute a list of browser actions on the page."""
