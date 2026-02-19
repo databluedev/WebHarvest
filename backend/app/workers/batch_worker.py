@@ -27,6 +27,7 @@ def process_batch(self, job_id: str, config: dict):
         from app.schemas.batch import BatchScrapeRequest
         from app.schemas.scrape import ScrapeRequest
         from app.services.scraper import scrape_url
+        from app.services.llm_extract import extract_with_llm
         from app.services.dedup import deduplicate_urls
 
         session_factory, db_engine = create_worker_session_factory()
@@ -90,12 +91,14 @@ def process_batch(self, job_id: str, config: dict):
                 if job:
                     proxy_manager = await ProxyManager.from_user(db, job.user_id)
 
-        # Update job to running
+        # Update job to running and capture user_id
+        user_id = None
         async with session_factory() as db:
             job = await db.get(Job, UUID(job_id))
             if not job:
                 await db_engine.dispose()
                 return
+            user_id = job.user_id
             job.status = "running"
             job.total_pages = len(url_configs)
             job.started_at = datetime.now(timezone.utc)
@@ -123,12 +126,28 @@ def process_batch(self, job_id: str, config: dict):
                     if result.links_detail:
                         metadata["links_detail"] = result.links_detail
 
+                    # LLM extraction if configured
+                    extract_data = None
+                    if request.extract and result.markdown:
+                        try:
+                            async with session_factory() as llm_db:
+                                extract_data = await extract_with_llm(
+                                    db=llm_db,
+                                    user_id=user_id,
+                                    content=result.markdown,
+                                    prompt=request.extract.prompt,
+                                    schema=request.extract.schema_,
+                                )
+                        except Exception as e:
+                            logger.warning(f"LLM extraction failed for {url_config['url']}: {e}")
+
                     return {
                         "url": url_config["url"],
                         "markdown": result.markdown,
                         "html": result.html,
                         "links": result.links if result.links else None,
                         "screenshot": result.screenshot,
+                        "extract": extract_data,
                         "metadata": metadata,
                         "error": None,
                     }
@@ -140,6 +159,7 @@ def process_batch(self, job_id: str, config: dict):
                         "html": None,
                         "links": None,
                         "screenshot": None,
+                        "extract": None,
                         "metadata": {"error": str(e)},
                         "error": str(e),
                     }
@@ -157,6 +177,7 @@ def process_batch(self, job_id: str, config: dict):
                         markdown=r["markdown"],
                         html=r["html"],
                         links=r["links"],
+                        extract=r.get("extract"),
                         metadata_=r["metadata"] if r["metadata"] else None,
                         screenshot_url=r["screenshot"],
                     )

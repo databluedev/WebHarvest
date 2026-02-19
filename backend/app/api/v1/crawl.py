@@ -187,6 +187,7 @@ async def get_crawl_status(
                     structured_data=structured_data,
                     headings=headings,
                     images=images,
+                    extract=r.extract,
                     metadata=page_metadata,
                 )
             )

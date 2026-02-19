@@ -28,6 +28,7 @@ def process_search(self, job_id: str, config: dict):
         from app.schemas.scrape import ScrapeRequest
         from app.services.search import web_search
         from app.services.scraper import scrape_url
+        from app.services.llm_extract import extract_with_llm
         from app.services.dedup import deduplicate_urls
 
         session_factory, db_engine = create_worker_session_factory()
@@ -42,12 +43,14 @@ def process_search(self, job_id: str, config: dict):
                 if job:
                     proxy_manager = await ProxyManager.from_user(db, job.user_id)
 
-        # Update job to running
+        # Update job to running and capture user_id
+        user_id = None
         async with session_factory() as db:
             job = await db.get(Job, UUID(job_id))
             if not job:
                 await db_engine.dispose()
                 return
+            user_id = job.user_id
             job.status = "running"
             job.started_at = datetime.now(timezone.utc)
             await db.commit()
@@ -128,6 +131,21 @@ def process_search(self, job_id: str, config: dict):
                     if result.links_detail:
                         metadata["links_detail"] = result.links_detail
 
+                    # LLM extraction if configured
+                    extract_data = None
+                    if request.extract and result.markdown:
+                        try:
+                            async with session_factory() as llm_db:
+                                extract_data = await extract_with_llm(
+                                    db=llm_db,
+                                    user_id=user_id,
+                                    content=result.markdown,
+                                    prompt=request.extract.prompt,
+                                    schema=request.extract.schema_,
+                                )
+                        except Exception as e:
+                            logger.warning(f"LLM extraction failed for {sr.url}: {e}")
+
                     async with session_factory() as db:
                         job_result = JobResult(
                             job_id=UUID(job_id),
@@ -135,6 +153,7 @@ def process_search(self, job_id: str, config: dict):
                             markdown=result.markdown,
                             html=result.html,
                             links=result.links if result.links else None,
+                            extract=extract_data,
                             screenshot_url=result.screenshot,
                             metadata_=metadata,
                         )

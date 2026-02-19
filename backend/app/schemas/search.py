@@ -1,8 +1,9 @@
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.schemas.scrape import PageMetadata
+from app.schemas.scrape import ExtractConfig, PageMetadata
 
 
 class SearchRequest(BaseModel):
@@ -19,6 +20,7 @@ class SearchRequest(BaseModel):
     cookies: dict[str, str] | None = None
     mobile: bool = False
     mobile_device: str | None = None
+    extract: ExtractConfig | None = None  # LLM extraction config applied to each result
     webhook_url: str | None = None
     webhook_secret: str | None = None
 
@@ -43,6 +45,7 @@ class SearchResultItem(BaseModel):
     structured_data: dict | None = None
     headings: list[dict] | None = None
     images: list[dict] | None = None
+    extract: dict[str, Any] | list[Any] | None = None
     metadata: PageMetadata | None = None
     error: str | None = None
 

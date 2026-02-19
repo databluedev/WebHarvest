@@ -31,6 +31,7 @@ def process_crawl(self, job_id: str, config: dict):
         from app.schemas.crawl import CrawlRequest
         from app.services.crawler import WebCrawler
         from app.services.dedup import normalize_url
+        from app.services.llm_extract import extract_with_llm
         from app.services.scraper import extract_content
 
         # Create fresh DB connections for this event loop
@@ -55,10 +56,16 @@ def process_crawl(self, job_id: str, config: dict):
             job = await db.get(Job, UUID(job_id))
             if not job:
                 return
+            user_id = job.user_id
             job.status = "running"
             job.total_pages = request.max_pages
             job.started_at = datetime.now(timezone.utc)
             await db.commit()
+
+        # Determine extract config from scrape_options
+        extract_config = None
+        if request.scrape_options and request.scrape_options.extract:
+            extract_config = request.scrape_options.extract
 
         try:
             pages_crawled = 0
@@ -195,6 +202,21 @@ def process_crawl(self, job_id: str, config: dict):
                         if scrape_data.links_detail:
                             metadata["links_detail"] = scrape_data.links_detail
 
+                        # LLM extraction if configured
+                        extract_data = None
+                        if extract_config and scrape_data.markdown:
+                            try:
+                                async with session_factory() as llm_db:
+                                    extract_data = await extract_with_llm(
+                                        db=llm_db,
+                                        user_id=user_id,
+                                        content=scrape_data.markdown,
+                                        prompt=extract_config.prompt,
+                                        schema=extract_config.schema_,
+                                    )
+                            except Exception as e:
+                                logger.warning(f"LLM extraction failed for {url}: {e}")
+
                         # Store result
                         async with session_factory() as db:
                             job_result = JobResult(
@@ -203,6 +225,7 @@ def process_crawl(self, job_id: str, config: dict):
                                 markdown=scrape_data.markdown,
                                 html=scrape_data.html,
                                 links=scrape_data.links if scrape_data.links else None,
+                                extract=extract_data,
                                 metadata_=metadata if metadata else None,
                                 screenshot_url=scrape_data.screenshot,
                             )

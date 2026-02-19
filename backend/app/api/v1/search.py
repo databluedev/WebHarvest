@@ -172,6 +172,7 @@ async def get_search_status(
                     structured_data=meta.get("structured_data"),
                     headings=meta.get("headings"),
                     images=meta.get("images"),
+                    extract=r.extract,
                     metadata=page_metadata,
                     error=meta.get("error"),
                 )

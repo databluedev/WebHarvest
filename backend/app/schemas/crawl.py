@@ -52,6 +52,7 @@ class CrawlPageData(BaseModel):
     structured_data: dict | None = None
     headings: list[dict] | None = None
     images: list[dict] | None = None
+    extract: dict[str, Any] | list[Any] | None = None
     metadata: PageMetadata | None = None
 
 

@@ -186,6 +186,7 @@ async def get_batch_status(
                     structured_data=r.metadata_.get("structured_data") if r.metadata_ else None,
                     headings=r.metadata_.get("headings") if r.metadata_ else None,
                     images=r.metadata_.get("images") if r.metadata_ else None,
+                    extract=r.extract,
                     metadata=page_metadata,
                     error=error,
                 )
