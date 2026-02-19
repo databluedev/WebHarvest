@@ -656,6 +656,11 @@ class BrowserPool:
         "--enable-features=NetworkService,NetworkServiceInProcess",
         "--disable-web-security",
         "--allow-running-insecure-content",
+        # Memory-saving flags for containerized environments
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        "--renderer-process-limit=2",
+        "--js-flags=--max-old-space-size=256",
     ]
 
     def __init__(self):
@@ -717,16 +722,25 @@ class BrowserPool:
                 args=self._CHROMIUM_ARGS,
             )
 
-            # Firefox — different engine, different TLS fingerprint
-            try:
-                self._firefox = await self._playwright.firefox.launch(headless=True)
-                logger.info("Firefox browser initialized")
-            except Exception as e:
-                logger.warning(f"Firefox launch failed (Chromium only): {e}")
-                self._firefox = None
+            # Firefox is lazy-initialized on first use to save memory
+            self._firefox = None
 
             self._initialized = True
             logger.info(f"Browser pool initialized (pool_size={settings.BROWSER_POOL_SIZE})")
+
+    async def _ensure_firefox(self):
+        """Lazy-launch Firefox on first use."""
+        if self._firefox and self._firefox.is_connected():
+            return
+        async with self._get_init_lock():
+            if self._firefox and self._firefox.is_connected():
+                return
+            try:
+                self._firefox = await self._playwright.firefox.launch(headless=True)
+                logger.info("Firefox browser lazy-initialized")
+            except Exception as e:
+                logger.warning(f"Firefox launch failed: {e}")
+                self._firefox = None
 
     async def _relaunch_browser(self, use_firefox: bool = False):
         """Relaunch a crashed browser. Must be called under _init_lock."""
@@ -845,6 +859,10 @@ class BrowserPool:
             target_url: Target URL (used for cookie restoration)
         """
         await self.initialize()
+
+        # Lazy-launch Firefox only when actually needed
+        if use_firefox and (not self._firefox or not self._firefox.is_connected()):
+            await self._ensure_firefox()
 
         from app.core.metrics import active_browser_contexts
 

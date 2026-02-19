@@ -19,10 +19,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
-    # Startup
+    # Startup — browsers are lazy-initialized on first scrape request
+    # to avoid spawning 8 browser processes across 4 Uvicorn workers
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    await browser_pool.initialize()
-    logger.info("Browser pool initialized")
 
     yield
 
