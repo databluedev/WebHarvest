@@ -1,11 +1,15 @@
 import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from uuid import UUID
 
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+# Shared thread pool for CPU-bound content extraction in crawl pipeline
+_extraction_executor = ThreadPoolExecutor(max_workers=4)
 
 
 def _run_async(coro):
@@ -18,7 +22,7 @@ def _run_async(coro):
 
 @celery_app.task(name="app.workers.crawl_worker.process_crawl", bind=True, max_retries=1)
 def process_crawl(self, job_id: str, config: dict):
-    """Process a crawl job using BFS crawler with concurrent scraping."""
+    """Process a crawl job using BFS crawler with producer-consumer pipeline."""
 
     async def _do_crawl():
         from app.core.database import create_worker_session_factory
@@ -27,6 +31,7 @@ def process_crawl(self, job_id: str, config: dict):
         from app.schemas.crawl import CrawlRequest
         from app.services.crawler import WebCrawler
         from app.services.dedup import normalize_url
+        from app.services.scraper import extract_content
 
         # Create fresh DB connections for this event loop
         session_factory, db_engine = create_worker_session_factory()
@@ -51,7 +56,7 @@ def process_crawl(self, job_id: str, config: dict):
             if not job:
                 return
             job.status = "running"
-            job.total_pages = request.max_pages  # Set upper bound for progress tracking
+            job.total_pages = request.max_pages
             job.started_at = datetime.now(timezone.utc)
             await db.commit()
 
@@ -59,107 +64,158 @@ def process_crawl(self, job_id: str, config: dict):
             pages_crawled = 0
             semaphore = asyncio.Semaphore(concurrency)
             cancelled = False
+            loop = asyncio.get_running_loop()
 
-            async def scrape_one(url: str, depth: int) -> dict | None:
-                """Scrape a single URL with semaphore-limited concurrency."""
-                async with semaphore:
-                    try:
-                        result = await crawler.scrape_page(url)
-                        return {
-                            "url": url,
-                            "depth": depth,
-                            "scrape_data": result["scrape_data"],
-                            "discovered_links": result["discovered_links"],
-                            "error": None,
-                        }
-                    except Exception as e:
-                        logger.warning(f"Failed to scrape {url}: {e}")
-                        return None
+            # Producer-consumer pipeline queue
+            extract_queue = asyncio.Queue(maxsize=concurrency * 2)
+            extract_done = asyncio.Event()
 
-            # BFS: process level by level (all URLs at current depth before moving to next)
-            while pages_crawled < request.max_pages and not cancelled:
-                # Collect a batch of URLs from the frontier
-                batch_items = []
-                remaining = request.max_pages - pages_crawled
-                batch_size = min(concurrency * 2, remaining)  # Fetch more than concurrency for efficiency
+            async def fetch_producer():
+                """BFS loop: fetch pages, put raw results on extract_queue."""
+                nonlocal pages_crawled, cancelled
 
-                for _ in range(batch_size):
-                    next_item = await crawler.get_next_url()
-                    if not next_item:
+                while pages_crawled < request.max_pages and not cancelled:
+                    batch_items = []
+                    remaining = request.max_pages - pages_crawled
+                    batch_size = min(concurrency * 2, remaining)
+
+                    for _ in range(batch_size):
+                        next_item = await crawler.get_next_url()
+                        if not next_item:
+                            break
+                        url, depth = next_item
+
+                        norm_url = normalize_url(url)
+                        if await crawler.is_visited(norm_url):
+                            continue
+
+                        await crawler.mark_visited(norm_url)
+                        batch_items.append((url, depth))
+
+                    if not batch_items:
                         break
-                    url, depth = next_item
 
-                    # Use normalized URL for dedup check
-                    norm_url = normalize_url(url)
-                    if await crawler.is_visited(norm_url):
+                    async def fetch_one(url: str, depth: int) -> dict | None:
+                        async with semaphore:
+                            try:
+                                fetch_result = await crawler.fetch_page_only(url)
+                                if fetch_result:
+                                    return {
+                                        "url": url,
+                                        "depth": depth,
+                                        "fetch_result": fetch_result,
+                                    }
+                                # Fallback to full scrape for documents, etc.
+                                result = await crawler.scrape_page(url)
+                                return {
+                                    "url": url,
+                                    "depth": depth,
+                                    "scrape_data": result["scrape_data"],
+                                    "discovered_links": result["discovered_links"],
+                                }
+                            except Exception as e:
+                                logger.warning(f"Failed to fetch {url}: {e}")
+                                return None
+
+                    tasks = [fetch_one(url, depth) for url, depth in batch_items]
+                    results = await asyncio.gather(*tasks)
+
+                    for result in results:
+                        if result is None:
+                            continue
+                        await extract_queue.put(result)
+
+                extract_done.set()
+
+            async def extract_consumer():
+                """Extract content from fetched pages, save to DB."""
+                nonlocal pages_crawled, cancelled
+
+                while True:
+                    try:
+                        item = await asyncio.wait_for(extract_queue.get(), timeout=5)
+                    except asyncio.TimeoutError:
+                        if extract_done.is_set() and extract_queue.empty():
+                            break
                         continue
 
-                    await crawler.mark_visited(norm_url)
-                    batch_items.append((url, depth))
+                    try:
+                        url = item["url"]
+                        depth = item["depth"]
 
-                if not batch_items:
-                    break
+                        if "scrape_data" in item:
+                            # Already fully extracted (fallback path)
+                            scrape_data = item["scrape_data"]
+                            discovered_links = item.get("discovered_links", [])
+                        else:
+                            # Pipeline path: extract content in thread pool
+                            fetch_result = item["fetch_result"]
+                            req = fetch_result["request"]
 
-                # Process batch concurrently
-                tasks = [scrape_one(url, depth) for url, depth in batch_items]
-                results = await asyncio.gather(*tasks)
+                            scrape_data = await loop.run_in_executor(
+                                _extraction_executor,
+                                extract_content,
+                                fetch_result["raw_html"],
+                                url,
+                                req,
+                                fetch_result["status_code"],
+                                fetch_result["response_headers"],
+                                fetch_result["screenshot_b64"],
+                                fetch_result.get("action_screenshots", []),
+                            )
+                            discovered_links = scrape_data.links or []
 
-                # Collect discovered links from all results, then add to frontier
-                all_discovered = []
-                for result in results:
-                    if result is None:
-                        continue
+                        # Build rich metadata
+                        metadata = {}
+                        if scrape_data.metadata:
+                            metadata = scrape_data.metadata.model_dump(exclude_none=True)
+                        if scrape_data.structured_data:
+                            metadata["structured_data"] = scrape_data.structured_data
+                        if scrape_data.headings:
+                            metadata["headings"] = scrape_data.headings
+                        if scrape_data.images:
+                            metadata["images"] = scrape_data.images
+                        if scrape_data.links_detail:
+                            metadata["links_detail"] = scrape_data.links_detail
 
-                    scrape_data = result["scrape_data"]
-                    discovered_links = result["discovered_links"]
-                    url = result["url"]
-                    depth = result["depth"]
+                        # Store result
+                        async with session_factory() as db:
+                            job_result = JobResult(
+                                job_id=UUID(job_id),
+                                url=url,
+                                markdown=scrape_data.markdown,
+                                html=scrape_data.html,
+                                links=scrape_data.links if scrape_data.links else None,
+                                metadata_=metadata if metadata else None,
+                                screenshot_url=scrape_data.screenshot,
+                            )
+                            db.add(job_result)
 
-                    # Build rich metadata
-                    metadata = {}
-                    if scrape_data.metadata:
-                        metadata = scrape_data.metadata.model_dump(exclude_none=True)
-                    if scrape_data.structured_data:
-                        metadata["structured_data"] = scrape_data.structured_data
-                    if scrape_data.headings:
-                        metadata["headings"] = scrape_data.headings
-                    if scrape_data.images:
-                        metadata["images"] = scrape_data.images
-                    if scrape_data.links_detail:
-                        metadata["links_detail"] = scrape_data.links_detail
+                            pages_crawled += 1
 
-                    # Store result
-                    async with session_factory() as db:
-                        job_result = JobResult(
-                            job_id=UUID(job_id),
-                            url=url,
-                            markdown=scrape_data.markdown,
-                            html=scrape_data.html,
-                            links=scrape_data.links if scrape_data.links else None,
-                            metadata_=metadata if metadata else None,
-                            screenshot_url=scrape_data.screenshot,
-                        )
-                        db.add(job_result)
+                            job = await db.get(Job, UUID(job_id))
+                            if job:
+                                job.completed_pages = pages_crawled
+                                if job.status == "cancelled":
+                                    cancelled = True
+                            await db.commit()
 
-                        pages_crawled += 1
+                        # Add discovered links to frontier
+                        if discovered_links:
+                            await crawler.add_to_frontier(discovered_links, depth + 1)
 
-                        # Update job progress
-                        job = await db.get(Job, UUID(job_id))
-                        if job:
-                            job.completed_pages = pages_crawled
-                            if job.status == "cancelled":
-                                cancelled = True
-                        await db.commit()
+                    except Exception as e:
+                        logger.warning(f"Extract/save failed for {item.get('url', '?')}: {e}")
+                    finally:
+                        extract_queue.task_done()
 
-                    # Collect discovered links with depth info
-                    for link in discovered_links:
-                        all_discovered.append((link, depth + 1))
+            # Run producer and consumer concurrently
+            await asyncio.gather(
+                fetch_producer(),
+                extract_consumer(),
+            )
 
-                # Add all discovered links to frontier after batch
-                for link, link_depth in all_discovered:
-                    await crawler.add_to_frontier([link], link_depth)
-
-            # Mark job as completed with actual page counts
+            # Mark job as completed
             async with session_factory() as db:
                 job = await db.get(Job, UUID(job_id))
                 if job and job.status != "cancelled":

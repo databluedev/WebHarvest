@@ -674,6 +674,7 @@ async def _race_strategies(
 async def scrape_url(
     request: ScrapeRequest,
     proxy_manager=None,
+    crawl_session=None,
 ) -> ScrapeData:
     """
     Scrape a URL with parallel tier architecture for maximum speed.
@@ -809,6 +810,25 @@ async def scrape_url(
         except Exception as e:
             logger.debug(f"Strategy cache hit attempt failed for {url}: {e}")
 
+    # === Tier 0.5: Cookie HTTP — curl_cffi with browser cookies (crawl mode) ===
+    if not fetched and crawl_session and not needs_browser:
+        tier_start = time.time()
+        try:
+            cookies = await crawl_session.get_cookies_for_http()
+            if cookies:
+                result = await _fetch_with_cookie_http(url, request.timeout, cookies, proxy_url=proxy_url)
+                html, sc, hdrs = result
+                if html and sc < 400 and not _looks_blocked(html):
+                    raw_html, status_code, response_headers = html, sc, hdrs
+                    fetched = True
+                    winning_strategy = "cookie_http"
+                    winning_tier = 0
+                    elapsed_ms = (time.time() - tier_start) * 1000
+                    await record_strategy_result(url, "cookie_http", 0, True, elapsed_ms)
+                    logger.info(f"Cookie HTTP hit for {url}")
+        except Exception as e:
+            logger.debug(f"Cookie HTTP failed for {url}: {e}")
+
     # Helper to accumulate best HTML from race losers
     def _update_best(race: RaceResult):
         nonlocal raw_html_best
@@ -849,10 +869,16 @@ async def scrape_url(
     if not fetched and starting_tier <= 2:
         tier_start = time.time()
 
-        browser_coros = [
-            ("chromium_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright)),
-            ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
-        ]
+        if crawl_session:
+            # Use persistent CrawlSession — no context creation overhead
+            browser_coros = [
+                ("chromium_stealth", _fetch_with_browser_session(url, request, crawl_session)),
+            ]
+        else:
+            browser_coros = [
+                ("chromium_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright)),
+                ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
+            ]
 
         race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=30)
         _update_best(race)
@@ -1213,6 +1239,44 @@ async def _fetch_with_httpx(
 
 
 # ---------------------------------------------------------------------------
+# Strategy: Cookie-enhanced HTTP (uses browser cookies with curl_cffi)
+# ---------------------------------------------------------------------------
+
+async def _fetch_with_cookie_http(
+    url: str, timeout: int, cookies: list[dict],
+    proxy_url: str | None = None,
+) -> tuple[str, int, dict[str, str]]:
+    """HTTP fetch using cookies harvested from browser sessions."""
+    from curl_cffi.requests import AsyncSession
+
+    if not cookies:
+        return "", 0, {}
+
+    # Build cookie header string from Playwright cookie format
+    cookie_header = "; ".join(f"{c['name']}={c['value']}" for c in cookies if c.get("name") and c.get("value"))
+    if not cookie_header:
+        return "", 0, {}
+
+    timeout_seconds = timeout / 1000
+    headers = _get_headers_for_profile("chrome124", url)
+    headers["Cookie"] = cookie_header
+
+    async with AsyncSession(impersonate="chrome124") as session:
+        kwargs: dict[str, Any] = dict(
+            timeout=timeout_seconds,
+            allow_redirects=True,
+            headers=headers,
+        )
+        if proxy_url:
+            kwargs["proxy"] = proxy_url
+
+        response = await session.get(url, **kwargs)
+        resp_headers = {k.lower(): v for k, v in response.headers.items()}
+        resp_headers["x-webharvest-strategy"] = "cookie_http"
+        return response.text, response.status_code, resp_headers
+
+
+# ---------------------------------------------------------------------------
 # Strategy 3/4: Browser with stealth + request interception + warm-up
 # ---------------------------------------------------------------------------
 
@@ -1281,6 +1345,60 @@ async def _fetch_with_browser_stealth(
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
         raw_html = await page.content()
+
+    return raw_html, status_code, screenshot_b64, action_screenshots, response_headers
+
+
+async def _fetch_with_browser_session(
+    url: str,
+    request: ScrapeRequest,
+    crawl_session,
+) -> tuple[str, int, str | None, list[str], dict[str, str]]:
+    """Browser fetch reusing a persistent CrawlSession context."""
+    screenshot_b64 = None
+    action_screenshots = []
+    status_code = 0
+    response_headers: dict[str, str] = {}
+
+    page = await crawl_session.new_page()
+    try:
+        await _setup_request_interception(page, url)
+
+        referrer = random.choice(_GOOGLE_REFERRERS)
+
+        response = await page.goto(
+            url, wait_until="domcontentloaded", timeout=15000, referer=referrer,
+        )
+        status_code = response.status if response else 0
+        if response:
+            response_headers = {k.lower(): v for k, v in response.headers.items()}
+
+        try:
+            await page.wait_for_load_state("networkidle", timeout=5000)
+        except Exception:
+            pass
+
+        if _is_hard_site(url):
+            await page.wait_for_timeout(random.randint(500, 1000))
+        else:
+            await page.wait_for_timeout(random.randint(200, 500))
+
+        await _try_accept_cookies(page)
+
+        if request.wait_for > 0:
+            await page.wait_for_timeout(request.wait_for)
+
+        if request.actions:
+            actions_dicts = [a.model_dump() for a in request.actions]
+            action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
+
+        if "screenshot" in request.formats:
+            screenshot_bytes = await page.screenshot(type="png", full_page=True)
+            screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
+
+        raw_html = await page.content()
+    finally:
+        await crawl_session.close_page(page)
 
     return raw_html, status_code, screenshot_b64, action_screenshots, response_headers
 
@@ -1729,3 +1847,275 @@ async def _fetch_from_wayback_machine(
         resp_headers = {k.lower(): v for k, v in resp2.headers.items()}
         resp_headers["x-webharvest-source"] = "wayback-machine"
         return html, 200, resp_headers
+
+
+# ---------------------------------------------------------------------------
+# Split functions for pipeline extraction (crawl mode)
+# ---------------------------------------------------------------------------
+
+async def scrape_url_fetch_only(
+    request: ScrapeRequest,
+    proxy_manager=None,
+    crawl_session=None,
+) -> dict | None:
+    """Fetch phase only — returns raw HTML + metadata without content extraction.
+
+    Returns dict with keys: raw_html, status_code, response_headers, screenshot_b64,
+    action_screenshots, winning_strategy, winning_tier. Returns None on total failure.
+    """
+    from app.services.document import detect_document_type
+
+    url = request.url
+    start_time = time.time()
+
+    # Check if URL points to a document — delegate to full scrape_url for these
+    doc_type = detect_document_type(url, content_type=None, raw_bytes=b"")
+    if doc_type in ("pdf", "docx"):
+        return None  # Caller should fall back to scrape_url()
+
+    raw_html = ""
+    status_code = 0
+    screenshot_b64 = None
+    action_screenshots = []
+    response_headers: dict[str, str] = {}
+    raw_html_best = ""
+
+    proxy_url = None
+    proxy_playwright = None
+    if proxy_manager:
+        proxy_obj = proxy_manager.get_random()
+        if proxy_obj:
+            proxy_url = proxy_manager.to_httpx(proxy_obj)
+            proxy_playwright = proxy_manager.to_playwright(proxy_obj)
+
+    hard_site = _is_hard_site(url)
+    needs_browser = bool(
+        request.actions
+        or "screenshot" in request.formats
+        or request.wait_for > 0
+    )
+
+    fetched = False
+    winning_strategy = None
+    winning_tier = None
+
+    strategy_data = await get_domain_strategy(url)
+    starting_tier = get_starting_tier(strategy_data, hard_site)
+
+    # === Tier 0: Strategy cache hit ===
+    if starting_tier == 0 and strategy_data and not needs_browser:
+        last_strategy = strategy_data.get("last_success_strategy", "")
+        tier_start = time.time()
+        try:
+            if last_strategy.startswith("curl_cffi:"):
+                profile = last_strategy.split(":", 1)[1]
+                result = await _fetch_with_curl_cffi_single(url, request.timeout, profile=profile, proxy_url=proxy_url)
+                html, sc, hdrs = result
+                if html and sc < 400 and not _looks_blocked(html):
+                    raw_html, status_code, response_headers = html, sc, hdrs
+                    fetched = True
+                    winning_strategy = last_strategy
+                    winning_tier = 0
+            elif last_strategy == "httpx":
+                result = await _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)
+                html, sc, hdrs = result
+                if html and sc < 400 and not _looks_blocked(html):
+                    raw_html, status_code, response_headers = html, sc, hdrs
+                    fetched = True
+                    winning_strategy = last_strategy
+                    winning_tier = 0
+            elif last_strategy == "cookie_http" and crawl_session:
+                cookies = await crawl_session.get_cookies_for_http()
+                if cookies:
+                    result = await _fetch_with_cookie_http(url, request.timeout, cookies, proxy_url=proxy_url)
+                    html, sc, hdrs = result
+                    if html and sc < 400 and not _looks_blocked(html):
+                        raw_html, status_code, response_headers = html, sc, hdrs
+                        fetched = True
+                        winning_strategy = last_strategy
+                        winning_tier = 0
+            if fetched:
+                elapsed_ms = (time.time() - tier_start) * 1000
+                await record_strategy_result(url, winning_strategy, 0, True, elapsed_ms)
+        except Exception:
+            pass
+
+    # === Tier 0.5: Cookie HTTP ===
+    if not fetched and crawl_session and not needs_browser:
+        tier_start = time.time()
+        try:
+            cookies = await crawl_session.get_cookies_for_http()
+            if cookies:
+                result = await _fetch_with_cookie_http(url, request.timeout, cookies, proxy_url=proxy_url)
+                html, sc, hdrs = result
+                if html and sc < 400 and not _looks_blocked(html):
+                    raw_html, status_code, response_headers = html, sc, hdrs
+                    fetched = True
+                    winning_strategy = "cookie_http"
+                    winning_tier = 0
+                    elapsed_ms = (time.time() - tier_start) * 1000
+                    await record_strategy_result(url, "cookie_http", 0, True, elapsed_ms)
+        except Exception:
+            pass
+
+    # === Tier 1: HTTP parallel ===
+    if not fetched and not needs_browser and starting_tier <= 1:
+        tier_start = time.time()
+        http_coros = [
+            ("curl_cffi_multi", _fetch_with_curl_cffi_multi(url, request.timeout, proxy_url=proxy_url)),
+        ]
+        if not hard_site:
+            http_coros.append(("httpx", _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)))
+
+        race = await _race_strategies(http_coros, url, timeout=15)
+        if race.best_html and len(race.best_html) > len(raw_html_best):
+            raw_html_best = race.best_html
+        if race.success:
+            html, sc, hdrs = race.winner_result
+            raw_html, status_code, response_headers = html, sc, hdrs
+            fetched = True
+            winning_strategy = "curl_cffi:chrome124" if race.winner_name == "curl_cffi_multi" else race.winner_name
+            winning_tier = 1
+            elapsed_ms = (time.time() - tier_start) * 1000
+            await record_strategy_result(url, winning_strategy, 1, True, elapsed_ms)
+
+    # === Tier 2: Browser ===
+    if not fetched and starting_tier <= 2:
+        tier_start = time.time()
+
+        def _validate_browser(result):
+            html = result[0] if isinstance(result, tuple) else result
+            return bool(html) and not _looks_blocked(html)
+
+        if crawl_session:
+            browser_coros = [("chromium_stealth", _fetch_with_browser_session(url, request, crawl_session))]
+        else:
+            browser_coros = [
+                ("chromium_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright)),
+                ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
+            ]
+
+        race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=30)
+        if race.best_html and len(race.best_html) > len(raw_html_best):
+            raw_html_best = race.best_html
+        if race.success:
+            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = race.winner_result
+            fetched = True
+            winning_strategy = race.winner_name
+            winning_tier = 2
+            elapsed_ms = (time.time() - tier_start) * 1000
+            await record_strategy_result(url, winning_strategy, 2, True, elapsed_ms)
+
+    # === Tier 3: Heavy race (hard sites) ===
+    if not fetched and hard_site and starting_tier <= 3:
+        tier_start = time.time()
+        heavy_coros = [
+            ("google_search_chain", _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)),
+            ("advanced_prewarm", _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)),
+        ]
+
+        def _validate_browser(result):
+            html = result[0] if isinstance(result, tuple) else result
+            return bool(html) and not _looks_blocked(html)
+
+        race = await _race_strategies(heavy_coros, url, validate_fn=_validate_browser, timeout=45)
+        if race.best_html and len(race.best_html) > len(raw_html_best):
+            raw_html_best = race.best_html
+        if race.success:
+            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = race.winner_result
+            fetched = True
+            winning_strategy = race.winner_name
+            winning_tier = 3
+
+    # === Tier 4: Fallback ===
+    if not fetched:
+        fallback_coros = [
+            ("google_cache", _fetch_from_google_cache(url, request.timeout, proxy_url=proxy_url)),
+            ("wayback", _fetch_from_wayback_machine(url, request.timeout, proxy_url=proxy_url)),
+        ]
+
+        def _validate_fallback(result):
+            html = result[0] if isinstance(result, tuple) else result
+            return bool(html) and len(html) > 500 and not _looks_blocked(html)
+
+        race = await _race_strategies(fallback_coros, url, validate_fn=_validate_fallback, timeout=20)
+        if race.best_html and len(race.best_html) > len(raw_html_best):
+            raw_html_best = race.best_html
+        if race.success:
+            html, sc, hdrs = race.winner_result
+            raw_html, status_code, response_headers = html, sc, hdrs
+            fetched = True
+            winning_strategy = race.winner_name
+            winning_tier = 4
+
+    # Use best available
+    if not fetched and raw_html_best:
+        raw_html = raw_html_best
+    if not raw_html:
+        return None
+
+    logger.info(f"Fetch-only {url} in {time.time() - start_time:.1f}s (tier={winning_tier}, strategy={winning_strategy})")
+
+    return {
+        "raw_html": raw_html,
+        "status_code": status_code,
+        "response_headers": response_headers,
+        "screenshot_b64": screenshot_b64,
+        "action_screenshots": action_screenshots or [],
+        "winning_strategy": winning_strategy,
+        "winning_tier": winning_tier,
+    }
+
+
+def extract_content(
+    raw_html: str,
+    url: str,
+    request: ScrapeRequest,
+    status_code: int,
+    response_headers: dict,
+    screenshot_b64: str | None,
+    action_screenshots: list[str] | None = None,
+) -> ScrapeData:
+    """CPU-bound content extraction — synchronous, designed for ThreadPoolExecutor."""
+    result_data: dict[str, Any] = {}
+
+    clean_html = extract_main_content(raw_html, url) if request.only_main_content else raw_html
+    if request.include_tags or request.exclude_tags:
+        clean_html = apply_tag_filters(clean_html, request.include_tags, request.exclude_tags)
+
+    if "markdown" in request.formats:
+        result_data["markdown"] = html_to_markdown(clean_html)
+    if "links" in request.formats:
+        result_data["links"] = extract_links(raw_html, url)
+        result_data["links_detail"] = extract_links_detailed(raw_html, url)
+    if "structured_data" in request.formats:
+        result_data["structured_data"] = extract_structured_data(raw_html)
+    if "headings" in request.formats:
+        result_data["headings"] = extract_headings(raw_html)
+    if "images" in request.formats:
+        result_data["images"] = extract_images(raw_html, url)
+    if "html" in request.formats:
+        result_data["html"] = clean_html
+    if "raw_html" in request.formats:
+        result_data["raw_html"] = raw_html
+    if "screenshot" in request.formats:
+        if screenshot_b64:
+            result_data["screenshot"] = screenshot_b64
+        elif action_screenshots:
+            result_data["screenshot"] = action_screenshots[-1]
+
+    metadata_dict = extract_metadata(raw_html, url, status_code, response_headers)
+    metadata = PageMetadata(**metadata_dict)
+
+    return ScrapeData(
+        markdown=result_data.get("markdown"),
+        html=result_data.get("html"),
+        raw_html=result_data.get("raw_html"),
+        links=result_data.get("links"),
+        links_detail=result_data.get("links_detail"),
+        screenshot=result_data.get("screenshot"),
+        structured_data=result_data.get("structured_data"),
+        headings=result_data.get("headings"),
+        images=result_data.get("images"),
+        metadata=metadata,
+    )

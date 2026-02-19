@@ -1043,5 +1043,180 @@ class BrowserPool:
         return screenshots
 
 
+class CrawlSession:
+    """Persistent browser context held for an entire crawl job.
+
+    Eliminates per-URL context creation overhead:
+    - Stealth script injected once
+    - Cookies accumulated across all pages
+    - Semaphore slot held for duration (no re-acquisition)
+    """
+
+    def __init__(self, pool: BrowserPool, use_firefox: bool = False):
+        self._pool = pool
+        self._use_firefox = use_firefox
+        self._context: BrowserContext | None = None
+        self._semaphore_acquired = False
+        self._cookies: list[dict] = []
+        self._semaphore: asyncio.Semaphore | None = None
+
+    async def start(self, proxy: dict | None = None, target_url: str | None = None):
+        """Acquire semaphore + create persistent context with stealth."""
+        await self._pool.initialize()
+
+        if self._use_firefox and (not self._pool._firefox or not self._pool._firefox.is_connected()):
+            await self._pool._ensure_firefox()
+
+        from app.core.metrics import active_browser_contexts
+
+        is_firefox = self._use_firefox and self._pool._firefox is not None
+        self._semaphore = self._pool._firefox_semaphore if is_firefox else self._pool._chromium_semaphore
+
+        await self._semaphore.acquire()
+        self._semaphore_acquired = True
+        active_browser_contexts.inc()
+
+        browser = self._pool._firefox if is_firefox else self._pool._chromium
+        if browser is None or not browser.is_connected():
+            await self._pool._relaunch_browser(use_firefox=is_firefox)
+            browser = self._pool._firefox if is_firefox else self._pool._chromium
+
+        vp = random.choice(VIEWPORTS)
+        tz = random.choice(TIMEZONES)
+        hw_concurrency = random.choice([4, 8, 12, 16])
+        device_mem = random.choice([4, 8, 16])
+        webgl_vendor, webgl_renderer = random.choice(WEBGL_RENDERERS)
+        color_depth = random.choice(COLOR_DEPTHS)
+
+        if is_firefox:
+            ua = random.choice(FIREFOX_USER_AGENTS)
+            context_kwargs = dict(
+                user_agent=ua,
+                viewport=vp,
+                locale="en-US",
+                timezone_id=tz,
+                ignore_https_errors=True,
+                java_script_enabled=True,
+                has_touch=False,
+                is_mobile=False,
+                color_scheme="light",
+                extra_http_headers={
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "DNT": "1",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1",
+                    "Upgrade-Insecure-Requests": "1",
+                },
+            )
+        else:
+            ua = random.choice(CHROME_USER_AGENTS)
+            context_kwargs = dict(
+                user_agent=ua,
+                viewport=vp,
+                locale="en-US",
+                timezone_id=tz,
+                ignore_https_errors=True,
+                java_script_enabled=True,
+                has_touch=False,
+                is_mobile=False,
+                color_scheme="light",
+                extra_http_headers={
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Sec-Ch-Ua": '"Chromium";v="125", "Google Chrome";v="125", "Not-A.Brand";v="99"',
+                    "Sec-Ch-Ua-Mobile": "?0",
+                    "Sec-Ch-Ua-Platform": '"Windows"' if "Win" in ua else '"macOS"' if "Mac" in ua else '"Linux"',
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1",
+                    "Upgrade-Insecure-Requests": "1",
+                },
+            )
+
+        if proxy:
+            context_kwargs["proxy"] = proxy
+
+        try:
+            self._context = await browser.new_context(**context_kwargs)
+        except Exception as e:
+            if self._pool._is_browser_closed_error(e):
+                await self._pool._relaunch_browser(use_firefox=is_firefox)
+                browser = self._pool._firefox if is_firefox else self._pool._chromium
+                if browser is None:
+                    raise RuntimeError(f"{'Firefox' if is_firefox else 'Chromium'} browser failed to relaunch") from e
+                self._context = await browser.new_context(**context_kwargs)
+            else:
+                raise
+
+        # Restore cookies from pool's cookie jar
+        if target_url:
+            await self._pool._restore_cookies(self._context, target_url)
+
+        # Inject stealth script once on the context — applies to all pages
+        if is_firefox:
+            script = _build_firefox_stealth(hw_concurrency)
+        else:
+            script = _build_chromium_stealth(
+                webgl_vendor, webgl_renderer, color_depth,
+                hw_concurrency, device_mem,
+            )
+        await self._context.add_init_script(script)
+
+        logger.info("CrawlSession started (persistent browser context)")
+
+    async def new_page(self) -> Page:
+        """Create a new page within the persistent context."""
+        if not self._context:
+            raise RuntimeError("CrawlSession not started")
+        return await self._context.new_page()
+
+    async def close_page(self, page: Page):
+        """Close a page but keep the context alive. Saves cookies."""
+        if self._context:
+            try:
+                cookies = await self._context.cookies()
+                if cookies:
+                    self._cookies = cookies
+            except Exception:
+                pass
+        try:
+            await page.close()
+        except Exception:
+            pass
+
+    async def get_cookies_for_http(self) -> list[dict]:
+        """Export cookies in a format usable by curl_cffi/httpx."""
+        if self._context:
+            try:
+                self._cookies = await self._context.cookies()
+            except Exception:
+                pass
+        return self._cookies
+
+    async def stop(self):
+        """Release resources: close context, release semaphore."""
+        from app.core.metrics import active_browser_contexts
+
+        if self._context:
+            try:
+                await self._context.close()
+            except Exception:
+                pass
+            self._context = None
+
+        if self._semaphore_acquired and self._semaphore:
+            self._semaphore.release()
+            self._semaphore_acquired = False
+            active_browser_contexts.dec()
+
+        logger.info("CrawlSession stopped")
+
+
 # Global browser pool instance
 browser_pool = BrowserPool()

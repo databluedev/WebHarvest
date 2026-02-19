@@ -10,7 +10,7 @@ from app.config import settings
 from app.schemas.crawl import CrawlRequest, ScrapeOptions
 from app.schemas.scrape import ScrapeRequest
 from app.services.content import extract_links
-from app.services.scraper import scrape_url
+from app.services.scraper import scrape_url, scrape_url_fetch_only, extract_content
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class WebCrawler:
         self._robots_cache: dict[str, RobotExclusionRulesParser] = {}
         self._redis: aioredis.Redis | None = None
         self._proxy_manager = proxy_manager
+        self._crawl_session = None
 
         # Redis keys for this crawl
         self._frontier_key = f"crawl:{job_id}:frontier"
@@ -33,7 +34,7 @@ class WebCrawler:
         self._depth_key = f"crawl:{job_id}:depth"
 
     async def initialize(self):
-        """Set up Redis connection and initial frontier with the start URL."""
+        """Set up Redis connection, initial frontier, and persistent browser session."""
         # Create a fresh Redis connection for this crawl task
         self._redis = aioredis.from_url(
             settings.REDIS_URL,
@@ -46,6 +47,16 @@ class WebCrawler:
         # Set TTL on all keys (24 hours)
         for key in [self._frontier_key, self._visited_key, self._depth_key]:
             await self._redis.expire(key, 86400)
+
+        # Create persistent browser session for this crawl
+        from app.services.browser import CrawlSession, browser_pool
+        self._crawl_session = CrawlSession(browser_pool)
+        proxy = None
+        if self._proxy_manager:
+            proxy_obj = self._proxy_manager.get_random()
+            if proxy_obj:
+                proxy = self._proxy_manager.to_playwright(proxy_obj)
+        await self._crawl_session.start(proxy=proxy, target_url=self.base_url)
 
     async def get_next_url(self) -> tuple[str, int] | None:
         """Pop the next URL from the frontier. Returns (url, depth) or None."""
@@ -172,7 +183,8 @@ class WebCrawler:
             exclude_tags=opts.exclude_tags,
         )
 
-        result = await scrape_url(request, proxy_manager=self._proxy_manager)
+        result = await scrape_url(request, proxy_manager=self._proxy_manager,
+                                  crawl_session=self._crawl_session)
 
         # Use extracted links for frontier expansion
         discovered_links = result.links or []
@@ -182,8 +194,37 @@ class WebCrawler:
             "discovered_links": discovered_links,
         }
 
+    async def fetch_page_only(self, url: str) -> dict | None:
+        """Fetch-only phase for pipeline mode — returns raw data without extraction."""
+        opts = self.config.scrape_options or ScrapeOptions()
+        formats = list(set(opts.formats) | {"links"})
+
+        request = ScrapeRequest(
+            url=url,
+            formats=formats,
+            only_main_content=opts.only_main_content,
+            wait_for=opts.wait_for,
+            timeout=opts.timeout,
+            include_tags=opts.include_tags,
+            exclude_tags=opts.exclude_tags,
+        )
+
+        fetch_result = await scrape_url_fetch_only(
+            request, proxy_manager=self._proxy_manager,
+            crawl_session=self._crawl_session,
+        )
+        if fetch_result:
+            fetch_result["request"] = request
+        return fetch_result
+
     async def cleanup(self):
-        """Remove Redis keys and close the connection."""
+        """Remove Redis keys, close browser session, and close the connection."""
+        if self._crawl_session:
+            try:
+                await self._crawl_session.stop()
+            except Exception:
+                pass
+            self._crawl_session = None
         if self._redis:
             await self._redis.delete(self._frontier_key, self._visited_key, self._depth_key)
             await self._redis.aclose()
