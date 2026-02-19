@@ -154,7 +154,7 @@ services:
       replicas: 1
       resources:
         limits:
-          memory: 1G
+          memory: 2G
 
   celery-beat:
     build:

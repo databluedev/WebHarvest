@@ -116,9 +116,12 @@ async def extract_with_llm(
                 return json.loads(json_match.strip())
             return {"raw_response": result_text}
 
+    except asyncio.TimeoutError:
+        logger.error(f"LLM extraction timed out for model={model}")
+        raise BadRequestError(f"LLM extraction timed out after 60s (model={model})")
     except Exception as e:
-        logger.error(f"LLM extraction failed: {e}")
-        raise BadRequestError(f"LLM extraction failed: {str(e)}")
+        logger.error(f"LLM extraction failed (model={model}, provider={llm_key.provider}): {type(e).__name__}: {e}", exc_info=True)
+        raise BadRequestError(f"LLM extraction failed: {type(e).__name__}: {e}")
 
 
 async def _get_user_llm_key(
