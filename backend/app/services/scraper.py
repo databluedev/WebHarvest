@@ -38,23 +38,39 @@ _extraction_executor = ThreadPoolExecutor(max_workers=4)
 # HTTP session pools — reuse connections across requests (saves TLS handshake)
 # ---------------------------------------------------------------------------
 _httpx_client: httpx.AsyncClient | None = None
+_httpx_loop_id: int | None = None  # Track which event loop the client belongs to
 _curl_sessions: dict[str, Any] = {}  # profile -> AsyncSession
+_curl_loop_id: int | None = None  # Track which event loop curl sessions belong to
 
 
 async def _get_httpx_client(proxy_url: str | None = None) -> httpx.AsyncClient:
-    """Get or create a reusable httpx client (no proxy variant)."""
-    global _httpx_client
+    """Get or create a reusable httpx client (no proxy variant).
+
+    Recreates the client when running in a different event loop (Celery workers
+    create a fresh loop per task).
+    """
+    global _httpx_client, _httpx_loop_id
     if proxy_url:
         # Proxied requests need fresh clients (different proxy per request)
         return httpx.AsyncClient(follow_redirects=True, http2=True, timeout=30, proxy=proxy_url)
-    if _httpx_client is None or _httpx_client.is_closed:
+    current_loop_id = id(asyncio.get_running_loop())
+    if _httpx_client is None or _httpx_client.is_closed or _httpx_loop_id != current_loop_id:
         _httpx_client = httpx.AsyncClient(follow_redirects=True, http2=True, timeout=30)
+        _httpx_loop_id = current_loop_id
     return _httpx_client
 
 
 def _get_curl_session(profile: str = "chrome124"):
-    """Get or create a reusable curl_cffi session for a given TLS profile."""
+    """Get or create a reusable curl_cffi session for a given TLS profile.
+
+    Recreates sessions when running in a different event loop.
+    """
+    global _curl_loop_id
     from curl_cffi.requests import AsyncSession as CurlAsyncSession
+    current_loop_id = id(asyncio.get_running_loop())
+    if _curl_loop_id != current_loop_id:
+        _curl_sessions.clear()
+        _curl_loop_id = current_loop_id
     if profile not in _curl_sessions:
         _curl_sessions[profile] = CurlAsyncSession(impersonate=profile)
     return _curl_sessions[profile]
@@ -1087,8 +1103,8 @@ async def scrape_url(
         extraction_futures.append(loop.run_in_executor(_extraction_executor, extract_images, raw_html, url))
         extraction_keys.append("images")
 
-    # metadata extraction always runs
-    extraction_futures.append(loop.run_in_executor(_extraction_executor, extract_metadata, raw_html, url, status_code, response_headers))
+    # metadata extraction always runs — guard against None response_headers
+    extraction_futures.append(loop.run_in_executor(_extraction_executor, extract_metadata, raw_html, url, status_code, response_headers or {}))
     extraction_keys.append("_metadata")
 
     # Await all extractions concurrently
@@ -1261,8 +1277,9 @@ async def _fetch_with_curl_cffi_single(
         session = _get_curl_session(profile)
         kwargs: dict[str, Any] = dict(timeout=timeout_seconds, allow_redirects=True, headers=headers)
         response = await session.get(url, **kwargs)
-        resp_headers = {k.lower(): v for k, v in response.headers.items()}
-        return response.text, response.status_code, resp_headers
+
+    resp_headers = {k.lower(): v for k, v in response.headers.items()}
+    return response.text or "", response.status_code, resp_headers
 
 
 async def _fetch_with_curl_cffi_multi(
@@ -1925,22 +1942,23 @@ async def _fetch_from_google_cache(
         session = _get_curl_session("chrome124")
         kwargs: dict[str, Any] = dict(timeout=timeout_seconds, allow_redirects=True, headers=cache_headers)
         response = await session.get(cache_url, **kwargs)
-        html = response.text
 
-        if not html or response.status_code >= 400:
-            return "", response.status_code, {}
+    html = response.text or ""
 
-        html = _strip_google_cache_banner(html)
+    if not html or response.status_code >= 400:
+        return "", response.status_code, {}
 
-        if len(html.strip()) < 500:
-            return "", response.status_code, {}
+    html = _strip_google_cache_banner(html)
 
-        if _looks_blocked(html):
-            return "", response.status_code, {}
+    if len(html.strip()) < 500:
+        return "", response.status_code, {}
 
-        resp_headers = {k.lower(): v for k, v in response.headers.items()}
-        resp_headers["x-webharvest-source"] = "google-cache"
-        return html, response.status_code, resp_headers
+    if _looks_blocked(html):
+        return "", response.status_code, {}
+
+    resp_headers = {k.lower(): v for k, v in response.headers.items()}
+    resp_headers["x-webharvest-source"] = "google-cache"
+    return html, response.status_code, resp_headers
 
 
 # ---------------------------------------------------------------------------
@@ -2274,7 +2292,7 @@ def extract_content(
         elif action_screenshots:
             result_data["screenshot"] = action_screenshots[-1]
 
-    metadata_dict = extract_metadata(raw_html, url, status_code, response_headers)
+    metadata_dict = extract_metadata(raw_html, url, status_code, response_headers or {})
     metadata = PageMetadata(**metadata_dict)
 
     return ScrapeData(

@@ -88,12 +88,14 @@ def process_scrape(self, job_id: str, url: str, config: dict):
                 await db.commit()
 
         except Exception as e:
-            logger.error(f"Scrape job {job_id} failed: {e}")
+            import traceback
+            tb = traceback.format_exc()
+            logger.error(f"Scrape job {job_id} failed: {e}\n{tb}")
             async with session_factory() as db:
                 job = await db.get(Job, UUID(job_id))
                 if job:
                     job.status = "failed"
-                    job.error = str(e)
+                    job.error = f"{e}\n{tb[-500:]}"
                     await db.commit()
             raise
         finally:

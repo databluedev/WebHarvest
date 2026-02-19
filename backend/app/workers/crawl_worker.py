@@ -172,12 +172,12 @@ def process_crawl(self, job_id: str, config: dict):
                             scrape_data = await loop.run_in_executor(
                                 _extraction_executor,
                                 extract_content,
-                                fetch_result["raw_html"],
+                                fetch_result.get("raw_html", ""),
                                 url,
                                 req,
-                                fetch_result["status_code"],
-                                fetch_result["response_headers"],
-                                fetch_result["screenshot_b64"],
+                                fetch_result.get("status_code", 0),
+                                fetch_result.get("response_headers") or {},
+                                fetch_result.get("screenshot_b64"),
                                 fetch_result.get("action_screenshots", []),
                             )
                             discovered_links = scrape_data.links or []
