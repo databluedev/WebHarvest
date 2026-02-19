@@ -4,7 +4,7 @@ import random
 import re
 import time
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlparse
 
 import httpx
 
@@ -76,13 +76,18 @@ _HARD_SITES = {
     "craigslist.org", "yelp.com",
 }
 
-_HTTPX_HEADERS_LIST = [
+# ---------------------------------------------------------------------------
+# Header rotation pool — 10 realistic browser header sets
+# ---------------------------------------------------------------------------
+
+_HEADER_ROTATION_POOL = [
+    # 0: Chrome 123 on Windows
     {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate, br",
-        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua": '"Chromium";v="123", "Google Chrome";v="123", "Not:A-Brand";v="8"',
         "Sec-Ch-Ua-Mobile": "?0",
         "Sec-Ch-Ua-Platform": '"Windows"',
         "Sec-Fetch-Dest": "document",
@@ -92,6 +97,7 @@ _HTTPX_HEADERS_LIST = [
         "Upgrade-Insecure-Requests": "1",
         "Cache-Control": "max-age=0",
     },
+    # 1: Chrome 124 on macOS
     {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -106,7 +112,161 @@ _HTTPX_HEADERS_LIST = [
         "Sec-Fetch-User": "?1",
         "Upgrade-Insecure-Requests": "1",
     },
+    # 2: Chrome 125 on Linux
+    {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Ch-Ua": '"Chromium";v="125", "Google Chrome";v="125", "Not.A/Brand";v="24"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Linux"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    },
+    # 3: Firefox 125 on Windows
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "DNT": "1",
+    },
+    # 4: Firefox 126 on macOS
+    {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:126.0) Gecko/20100101 Firefox/126.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    },
+    # 5: Safari 17.4 on macOS
+    {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+    },
+    # 6: Edge 124 on Windows
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Microsoft Edge";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    },
+    # 7: Chrome with en-IN locale (for Indian sites)
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-IN,en;q=0.9,hi;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    },
+    # 8: Chrome with Google cross-site referrer
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "cross-site",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "Referer": "https://www.google.com/",
+    },
+    # 9: Chrome 124 on Windows (en-GB variant)
+    {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-GB,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    },
 ]
+
+# ---------------------------------------------------------------------------
+# curl_cffi TLS fingerprint profiles
+# ---------------------------------------------------------------------------
+
+_CURL_CFFI_PROFILES = ["chrome124", "chrome120", "safari17_0", "safari15_5", "edge101"]
+
+_LOCALE_MAP = {
+    ".in": "en-IN,en;q=0.9,hi;q=0.8",
+    ".co.uk": "en-GB,en;q=0.9",
+    ".de": "de-DE,de;q=0.9,en;q=0.8",
+    ".fr": "fr-FR,fr;q=0.9,en;q=0.8",
+    ".co.jp": "ja-JP,ja;q=0.9,en;q=0.8",
+    ".es": "es-ES,es;q=0.9,en;q=0.8",
+    ".it": "it-IT,it;q=0.9,en;q=0.8",
+    ".com.au": "en-AU,en;q=0.9",
+    ".ca": "en-CA,en;q=0.9",
+}
+
+# ---------------------------------------------------------------------------
+# Bot detection script patterns (for request interception)
+# ---------------------------------------------------------------------------
+
+_BOT_DETECTION_PATTERNS = [
+    r"fls-na\.amazon\.",
+    r"unagi\.amazon\.",
+    r".*\.akstat\.io",
+    r".*\.akamaized\.net",
+    r"px-captcha",
+    r".*\.perimeterx\.",
+    r"js\.datadome\.co",
+    r"api\.datadome\.co",
+    r"challenges\.cloudflare\.com",
+    r"cdn-cgi/challenge-platform",
+    r".*\.kasada\.io",
+    r".*\.shape\.ag",
+    r"fingerprintjs",
+    r"recaptcha",
+]
+
+_BOT_DETECTION_REGEX: re.Pattern | None = None
 
 _GOOGLE_REFERRERS = [
     "https://www.google.com/",
@@ -137,6 +297,85 @@ def _get_homepage(url: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Locale / header helpers
+# ---------------------------------------------------------------------------
+
+def _get_locale_for_url(url: str) -> str:
+    """Return locale-aware Accept-Language based on domain TLD."""
+    try:
+        domain = urlparse(url).netloc.lower()
+        # Check longest suffixes first to match .com.au before .au
+        for suffix, locale in sorted(_LOCALE_MAP.items(), key=lambda x: -len(x[0])):
+            if domain.endswith(suffix):
+                return locale
+    except Exception:
+        pass
+    return "en-US,en;q=0.9"
+
+
+def _get_headers_for_profile(profile: str, url: str) -> dict[str, str]:
+    """Return appropriate HTTP headers for a curl_cffi TLS profile."""
+    locale = _get_locale_for_url(url)
+    base: dict[str, str] = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": locale,
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "Cache-Control": "max-age=0",
+    }
+
+    if profile.startswith("safari"):
+        # Safari doesn't send Sec-Ch-Ua headers
+        base.pop("Sec-Fetch-User", None)
+        base["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    elif profile.startswith("edge"):
+        base["Sec-Ch-Ua"] = '"Chromium";v="101", "Microsoft Edge";v="101", "Not A;Brand";v="99"'
+        base["Sec-Ch-Ua-Mobile"] = "?0"
+        base["Sec-Ch-Ua-Platform"] = '"Windows"'
+    elif profile.startswith("chrome"):
+        version = profile.replace("chrome", "")
+        base["Sec-Ch-Ua"] = f'"Chromium";v="{version}", "Google Chrome";v="{version}", "Not-A.Brand";v="99"'
+        base["Sec-Ch-Ua-Mobile"] = "?0"
+        base["Sec-Ch-Ua-Platform"] = '"Windows"'
+
+    return base
+
+
+# ---------------------------------------------------------------------------
+# Bot detection request interception
+# ---------------------------------------------------------------------------
+
+def _get_bot_detection_regex() -> re.Pattern:
+    """Compile and cache the bot detection URL regex."""
+    global _BOT_DETECTION_REGEX
+    if _BOT_DETECTION_REGEX is None:
+        combined = "|".join(f"({p})" for p in _BOT_DETECTION_PATTERNS)
+        _BOT_DETECTION_REGEX = re.compile(combined, re.IGNORECASE)
+    return _BOT_DETECTION_REGEX
+
+
+async def _setup_request_interception(page, url: str) -> None:
+    """Block bot detection scripts via request interception. Only active for hard sites."""
+    if not _is_hard_site(url):
+        return
+
+    regex = _get_bot_detection_regex()
+
+    async def _handle_route(route):
+        req_url = route.request.url
+        if regex.search(req_url):
+            await route.abort()
+        else:
+            await route.continue_()
+
+    await page.route("**/*", _handle_route)
+
+
+# ---------------------------------------------------------------------------
 # Cookie consent acceptance
 # ---------------------------------------------------------------------------
 
@@ -161,6 +400,27 @@ async def _try_accept_cookies(page) -> None:
             if el and await el.is_visible():
                 await el.click()
                 await page.wait_for_timeout(random.randint(300, 600))
+                return
+        except Exception:
+            continue
+
+
+_GOOGLE_CONSENT_SELECTORS = [
+    "button:has-text('Accept all')",
+    "button:has-text('Accept')",
+    "#L2AGLb",
+    "button:has-text('I agree')",
+]
+
+
+async def _try_accept_google_consent(page) -> None:
+    """Best-effort click on Google GDPR/consent buttons."""
+    for selector in _GOOGLE_CONSENT_SELECTORS:
+        try:
+            btn = await page.query_selector(selector)
+            if btn and await btn.is_visible():
+                await btn.click()
+                await page.wait_for_timeout(random.randint(500, 1000))
                 return
         except Exception:
             continue
@@ -201,6 +461,40 @@ def _looks_blocked(html: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Cache/archive content strippers
+# ---------------------------------------------------------------------------
+
+def _strip_google_cache_banner(html: str) -> str:
+    """Remove Google's cache header/banner from cached HTML."""
+    html = re.sub(
+        r'<div[^>]*(?:id|class)=["\']google-cache-hdr["\'][^>]*>.*?</div>\s*(?:</div>)*',
+        "", html, count=1, flags=re.DOTALL | re.IGNORECASE,
+    )
+    html = re.sub(
+        r'<div[^>]*style=["\'][^"\']*text-align:\s*center[^"\']*["\'][^>]*>.*?This is Google\'s cache.*?</div>',
+        "", html, count=1, flags=re.DOTALL | re.IGNORECASE,
+    )
+    return html
+
+
+def _strip_wayback_toolbar(html: str) -> str:
+    """Remove Wayback Machine injected toolbar and scripts."""
+    html = re.sub(
+        r'<!-- BEGIN WAYBACK TOOLBAR INSERT -->.*?<!-- END WAYBACK TOOLBAR INSERT -->',
+        "", html, flags=re.DOTALL,
+    )
+    html = re.sub(
+        r'<script[^>]*(?:wombat|archive\.org)[^>]*>.*?</script>',
+        "", html, flags=re.DOTALL | re.IGNORECASE,
+    )
+    html = re.sub(
+        r'<(?:link|style)[^>]*(?:archive\.org|wayback)[^>]*(?:/>|>.*?</(?:link|style)>)',
+        "", html, flags=re.DOTALL | re.IGNORECASE,
+    )
+    return html
+
+
+# ---------------------------------------------------------------------------
 # Main scrape
 # ---------------------------------------------------------------------------
 
@@ -209,15 +503,17 @@ async def scrape_url(
     proxy_manager=None,
 ) -> ScrapeData:
     """
-    Scrape a URL with maximum anti-detection.
+    Scrape a URL with maximum anti-detection — 8-strategy cascade.
 
     Pipeline:
-    0. Check if URL is a document (PDF, DOCX) — handle separately
-    1. curl_cffi with Chrome TLS impersonation (ALL sites including hard sites)
-    2. httpx HTTP/2 fallback (non-hard sites only)
-    3. Chromium browser with stealth + warm-up navigation
-    4. Firefox browser if available (different engine/TLS)
-    5. Chromium aggressive: human simulation + challenge wait loop
+    1. curl_cffi multi-profile (5 TLS fingerprints)
+    2. httpx HTTP/2 with 10+ header rotation (non-hard sites)
+    3. Chromium stealth + request interception
+    4. Firefox stealth + request interception
+    5. Google Search referrer chain (hard sites only)
+    6. Advanced session pre-warming (hard sites only)
+    7. Google Cache fallback
+    8. Wayback Machine fallback (last resort)
     """
     from app.core.cache import get_cached_scrape, set_cached_scrape
     from app.core.metrics import scrape_duration_seconds
@@ -264,24 +560,24 @@ async def scrape_url(
 
     fetched = False
 
-    # === Strategy 1: curl_cffi with Chrome TLS fingerprint (ALL sites) ===
+    # === Strategy 1: curl_cffi multi-profile (ALL sites) ===
     if not needs_browser:
         try:
-            raw_html, status_code, response_headers = await _fetch_with_curl_cffi(
+            raw_html, status_code, response_headers = await _fetch_with_curl_cffi_multi(
                 url, request.timeout, proxy_url=proxy_url
             )
             if raw_html and status_code < 400 and not _looks_blocked(raw_html):
                 fetched = True
-                logger.info(f"curl_cffi succeeded for {url}")
+                logger.info(f"curl_cffi multi succeeded for {url}")
             else:
                 if raw_html and len(raw_html) > len(raw_html_best):
                     raw_html_best = raw_html
                 raw_html = ""
-                logger.info(f"curl_cffi blocked/failed for {url} (status={status_code}, best={len(raw_html_best)}), escalating")
+                logger.info(f"curl_cffi multi blocked/failed for {url} (status={status_code}, best={len(raw_html_best)}), escalating")
         except Exception as e:
-            logger.warning(f"curl_cffi exception for {url}: {e}")
+            logger.warning(f"curl_cffi multi exception for {url}: {e}")
 
-    # === Strategy 1b: httpx HTTP/2 (non-hard sites only) ===
+    # === Strategy 2: httpx HTTP/2 with header rotation (non-hard sites) ===
     if not fetched and not needs_browser and not hard_site:
         try:
             raw_html, status_code, response_headers = await _fetch_with_httpx(
@@ -289,6 +585,7 @@ async def scrape_url(
             )
             if raw_html and status_code < 400 and not _looks_blocked(raw_html):
                 fetched = True
+                logger.info(f"httpx succeeded for {url}")
             else:
                 if raw_html and len(raw_html) > len(raw_html_best):
                     raw_html_best = raw_html
@@ -296,7 +593,7 @@ async def scrape_url(
         except Exception as e:
             logger.warning(f"httpx exception for {url}: {e}")
 
-    # === Strategy 2: Chromium browser with stealth ===
+    # === Strategy 3: Chromium stealth + request interception ===
     if not fetched:
         try:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
@@ -313,7 +610,7 @@ async def scrape_url(
         except Exception as e:
             logger.warning(f"Chromium stealth exception for {url}: {e}")
 
-    # === Strategy 3: Firefox browser (only if no usable content yet) ===
+    # === Strategy 4: Firefox stealth + request interception ===
     if not fetched:
         try:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
@@ -329,21 +626,69 @@ async def scrape_url(
         except Exception as e:
             logger.warning(f"Firefox exception for {url}: {e}")
 
-    # === Strategy 4: Aggressive browser — only if we truly have nothing good ===
-    if not fetched:
+    # === Strategy 5: Google Search referrer chain (hard sites only) ===
+    if not fetched and hard_site:
         try:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
-                await _fetch_with_browser_aggressive(url, request, proxy=proxy_playwright)
+                await _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)
             )
             if raw_html and not _looks_blocked(raw_html):
                 fetched = True
-                logger.info(f"Aggressive browser succeeded for {url} ({len(raw_html)} chars)")
+                logger.info(f"Google Search chain succeeded for {url} ({len(raw_html)} chars)")
             else:
                 if raw_html and len(raw_html) > len(raw_html_best):
                     raw_html_best = raw_html
-                logger.warning(f"Aggressive browser blocked for {url} (html={len(raw_html or '')})")
+                raw_html = ""
         except Exception as e:
-            logger.warning(f"Aggressive browser exception for {url}: {e}")
+            logger.warning(f"Google Search chain exception for {url}: {e}")
+
+    # === Strategy 6: Advanced session pre-warming (hard sites only) ===
+    if not fetched and hard_site:
+        try:
+            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
+                await _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)
+            )
+            if raw_html and not _looks_blocked(raw_html):
+                fetched = True
+                logger.info(f"Advanced prewarm succeeded for {url} ({len(raw_html)} chars)")
+            else:
+                if raw_html and len(raw_html) > len(raw_html_best):
+                    raw_html_best = raw_html
+                raw_html = ""
+        except Exception as e:
+            logger.warning(f"Advanced prewarm exception for {url}: {e}")
+
+    # === Strategy 7: Google Cache fallback (all sites) ===
+    if not fetched:
+        try:
+            raw_html, status_code, response_headers = await _fetch_from_google_cache(
+                url, request.timeout, proxy_url=proxy_url
+            )
+            if raw_html and not _looks_blocked(raw_html):
+                fetched = True
+                logger.info(f"Google Cache succeeded for {url} ({len(raw_html)} chars)")
+            else:
+                if raw_html and len(raw_html) > len(raw_html_best):
+                    raw_html_best = raw_html
+                raw_html = ""
+        except Exception as e:
+            logger.warning(f"Google Cache exception for {url}: {e}")
+
+    # === Strategy 8: Wayback Machine fallback (all sites, last resort) ===
+    if not fetched:
+        try:
+            raw_html, status_code, response_headers = await _fetch_from_wayback_machine(
+                url, request.timeout, proxy_url=proxy_url
+            )
+            if raw_html and len(raw_html) > 500:
+                fetched = True
+                logger.info(f"Wayback Machine succeeded for {url} ({len(raw_html)} chars)")
+            else:
+                if raw_html and len(raw_html) > len(raw_html_best):
+                    raw_html_best = raw_html
+                raw_html = ""
+        except Exception as e:
+            logger.warning(f"Wayback Machine exception for {url}: {e}")
 
     # --- Final fallback: use best available content even if blocked ---
     if not fetched:
@@ -525,49 +870,63 @@ async def _handle_document_url(
 
 
 # ---------------------------------------------------------------------------
-# Strategy: curl_cffi — Chrome TLS fingerprint impersonation
+# Strategy 1: curl_cffi — multi-profile TLS fingerprint impersonation
 # ---------------------------------------------------------------------------
 
-async def _fetch_with_curl_cffi(
+async def _fetch_with_curl_cffi_multi(
     url: str, timeout: int, proxy_url: str | None = None
 ) -> tuple[str, int, dict[str, str]]:
-    """HTTP fetch with curl_cffi impersonating Chrome's exact TLS/JA3/HTTP2 fingerprint."""
+    """HTTP fetch trying 5 TLS fingerprints in sequence. Early exit on success."""
     from curl_cffi.requests import AsyncSession
 
     timeout_seconds = timeout / 1000
-    async with AsyncSession(impersonate="chrome124") as session:
-        kwargs: dict[str, Any] = dict(
-            timeout=timeout_seconds,
-            allow_redirects=True,
-            headers={
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
-                "Upgrade-Insecure-Requests": "1",
-                "Cache-Control": "max-age=0",
-            },
-        )
-        if proxy_url:
-            kwargs["proxy"] = proxy_url
+    best_html = ""
+    best_status = 0
+    best_headers: dict[str, str] = {}
 
-        response = await session.get(url, **kwargs)
-        resp_headers = {k.lower(): v for k, v in response.headers.items()}
-        return response.text, response.status_code, resp_headers
+    for profile in _CURL_CFFI_PROFILES:
+        try:
+            headers = _get_headers_for_profile(profile, url)
+            async with AsyncSession(impersonate=profile) as session:
+                kwargs: dict[str, Any] = dict(
+                    timeout=timeout_seconds,
+                    allow_redirects=True,
+                    headers=headers,
+                )
+                if proxy_url:
+                    kwargs["proxy"] = proxy_url
+
+                response = await session.get(url, **kwargs)
+                resp_headers = {k.lower(): v for k, v in response.headers.items()}
+                html = response.text
+
+                if html and response.status_code < 400 and not _looks_blocked(html):
+                    logger.info(f"curl_cffi profile {profile} succeeded for {url} ({len(html)} chars)")
+                    return html, response.status_code, resp_headers
+
+                # Track best result for fallback
+                if html and len(html) > len(best_html):
+                    best_html = html
+                    best_status = response.status_code
+                    best_headers = resp_headers
+
+                logger.debug(f"curl_cffi profile {profile} blocked/failed for {url} (status={response.status_code})")
+        except Exception as e:
+            logger.debug(f"curl_cffi profile {profile} exception for {url}: {e}")
+            continue
+
+    return best_html, best_status, best_headers
 
 
 # ---------------------------------------------------------------------------
-# Strategy: httpx with HTTP/2
+# Strategy 2: httpx with HTTP/2 + header rotation
 # ---------------------------------------------------------------------------
 
 async def _fetch_with_httpx(
     url: str, timeout: int, proxy_url: str | None = None
 ) -> tuple[str, int, dict[str, str]]:
     timeout_seconds = timeout / 1000
-    headers = random.choice(_HTTPX_HEADERS_LIST).copy()
+    headers = random.choice(_HEADER_ROTATION_POOL).copy()
     client_kwargs: dict[str, Any] = dict(
         follow_redirects=True, timeout=timeout_seconds, headers=headers, http2=True,
     )
@@ -580,7 +939,7 @@ async def _fetch_with_httpx(
 
 
 # ---------------------------------------------------------------------------
-# Strategy: Browser with stealth + warm-up
+# Strategy 3/4: Browser with stealth + request interception + warm-up
 # ---------------------------------------------------------------------------
 
 async def _fetch_with_browser_stealth(
@@ -589,13 +948,16 @@ async def _fetch_with_browser_stealth(
     proxy: dict | None = None,
     use_firefox: bool = False,
 ) -> tuple[str, int, str | None, list[str], dict[str, str]]:
-    """Fast browser fetch: domcontentloaded + short networkidle."""
+    """Fast browser fetch: domcontentloaded + short networkidle + request interception."""
     screenshot_b64 = None
     action_screenshots = []
     status_code = 0
     response_headers: dict[str, str] = {}
 
     async with browser_pool.get_page(proxy=proxy, use_firefox=use_firefox, target_url=url) as page:
+        # Set up request interception (blocks bot detection scripts on hard sites)
+        await _setup_request_interception(page, url)
+
         referrer = random.choice(_GOOGLE_REFERRERS)
 
         # Warm-up navigation for hard sites: visit homepage first to build session
@@ -643,95 +1005,332 @@ async def _fetch_with_browser_stealth(
 
 
 # ---------------------------------------------------------------------------
-# Strategy: Aggressive browser — full human simulation + challenge busting
+# Strategy 5: Google Search referrer chain
 # ---------------------------------------------------------------------------
 
-async def _fetch_with_browser_aggressive(
+async def _fetch_with_google_search_chain(
+    url: str,
+    request: ScrapeRequest,
+    proxy: dict | None = None,
+) -> tuple[str, int, str | None, list[str], dict[str, str]]:
+    """Navigate to target via Google search results for organic referrer chain."""
+    screenshot_b64 = None
+    action_screenshots = []
+    status_code = 0
+    response_headers: dict[str, str] = {}
+
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower()
+    if domain.startswith("www."):
+        domain = domain[4:]
+
+    # Build search query
+    path_parts = [p for p in parsed.path.strip("/").split("/") if p]
+    if path_parts:
+        last_segment = path_parts[-1].replace("-", " ").replace("_", " ")
+        query = f"site:{domain} {last_segment}"
+    else:
+        query = domain
+
+    async with browser_pool.get_page(proxy=proxy, target_url=url) as page:
+        await _setup_request_interception(page, url)
+
+        # 1. Navigate to Google
+        try:
+            await page.goto("https://www.google.com/", wait_until="domcontentloaded", timeout=10000)
+        except Exception:
+            # Google blocked too — fall back to direct navigation
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            status_code = response.status if response else 0
+            if response:
+                response_headers = {k.lower(): v for k, v in response.headers.items()}
+            raw_html = await page.content()
+            return raw_html, status_code, screenshot_b64, action_screenshots, response_headers
+
+        await page.wait_for_timeout(random.randint(1000, 2000))
+
+        # 2. Accept Google consent (GDPR)
+        await _try_accept_google_consent(page)
+
+        # 3. Type search query character-by-character with human-like delays
+        search_input = await page.query_selector("textarea[name='q'], input[name='q']")
+        if not search_input:
+            # Fallback: direct navigation
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            status_code = response.status if response else 0
+            if response:
+                response_headers = {k.lower(): v for k, v in response.headers.items()}
+            raw_html = await page.content()
+            return raw_html, status_code, screenshot_b64, action_screenshots, response_headers
+
+        await search_input.click()
+        for char in query:
+            await search_input.type(char, delay=random.randint(50, 150))
+            if random.random() < 0.1:  # Occasional pause
+                await page.wait_for_timeout(random.randint(200, 500))
+
+        await page.wait_for_timeout(random.randint(300, 700))
+        await page.keyboard.press("Enter")
+
+        # 4. Wait for results
+        try:
+            await page.wait_for_selector("#search", timeout=8000)
+        except Exception:
+            pass
+        await page.wait_for_timeout(random.randint(1000, 2000))
+
+        # 5. Find and click link matching target domain
+        links = await page.query_selector_all(f"a[href*='{domain}']")
+        clicked = False
+        for link in links[:5]:
+            try:
+                href = await link.get_attribute("href")
+                if href and domain in href:
+                    # Scroll into view
+                    await link.scroll_into_view_if_needed()
+                    await page.wait_for_timeout(random.randint(300, 600))
+
+                    # Move mouse naturally to the link
+                    box = await link.bounding_box()
+                    if box:
+                        target_x = box["x"] + box["width"] / 2 + random.randint(-10, 10)
+                        target_y = box["y"] + box["height"] / 2 + random.randint(-3, 3)
+                        await page.mouse.move(target_x, target_y, steps=random.randint(10, 20))
+                        await page.wait_for_timeout(random.randint(100, 300))
+
+                    await link.click()
+                    clicked = True
+                    break
+            except Exception:
+                continue
+
+        if not clicked:
+            # Direct navigation as fallback
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            status_code = response.status if response else 0
+            if response:
+                response_headers = {k.lower(): v for k, v in response.headers.items()}
+        else:
+            # Wait for navigation after click
+            try:
+                await page.wait_for_load_state("domcontentloaded", timeout=15000)
+            except Exception:
+                pass
+
+        await page.wait_for_timeout(random.randint(1500, 3000))
+        await _try_accept_cookies(page)
+
+        # 6. If landed on domain but not exact page, navigate internally
+        current_url = page.url
+        if domain in current_url and current_url != url:
+            try:
+                response = await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                status_code = response.status if response else 0
+                if response:
+                    response_headers = {k.lower(): v for k, v in response.headers.items()}
+                await page.wait_for_timeout(random.randint(1000, 2000))
+            except Exception:
+                pass
+
+        try:
+            await page.wait_for_load_state("networkidle", timeout=5000)
+        except Exception:
+            pass
+
+        await _try_accept_cookies(page)
+
+        if request.wait_for > 0:
+            await page.wait_for_timeout(request.wait_for)
+
+        if request.actions:
+            actions_dicts = [a.model_dump() for a in request.actions]
+            action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
+
+        if "screenshot" in request.formats:
+            screenshot_bytes = await page.screenshot(type="png", full_page=True)
+            screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
+
+        raw_html = await page.content()
+        if not status_code:
+            status_code = 200 if raw_html and len(raw_html) > 500 else 0
+
+    return raw_html, status_code, screenshot_b64, action_screenshots, response_headers
+
+
+# ---------------------------------------------------------------------------
+# Strategy 6: Advanced session pre-warming
+# ---------------------------------------------------------------------------
+
+async def _fetch_with_advanced_prewarm(
     url: str,
     request: ScrapeRequest,
     proxy: dict | None = None,
 ) -> tuple[str, int, str | None, list[str], dict[str, str]]:
     """
-    Last-resort browser fetch with human simulation.
-    Kept fast: ~10-15s max. Only used when stealth fails.
+    Full pre-warming: Google session → search & click-through → browse naturally → target.
+    Creates an organic referrer chain that mimics a real user journey.
     """
     screenshot_b64 = None
     action_screenshots = []
     status_code = 0
     response_headers: dict[str, str] = {}
 
-    async with browser_pool.get_page(proxy=proxy, target_url=url) as page:
-        referrer = random.choice(_GOOGLE_REFERRERS)
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower()
+    if domain.startswith("www."):
+        domain = domain[4:]
 
-        # Warm-up navigation for hard sites
-        if _is_hard_site(url):
-            homepage = _get_homepage(url)
-            if homepage:
+    # Build a natural search term for the site
+    site_name = domain.split(".")[0].title()
+    tld_parts = domain.split(".")
+    if len(tld_parts) > 2:
+        country_map = {
+            "in": "india", "uk": "uk", "de": "germany", "fr": "france",
+            "jp": "japan", "ca": "canada", "au": "australia", "es": "spain", "it": "italy",
+        }
+        country = country_map.get(tld_parts[-1], tld_parts[-1])
+        search_term = f"{site_name} {country}"
+    else:
+        search_term = site_name
+
+    async with browser_pool.get_page(proxy=proxy, target_url=url) as page:
+        await _setup_request_interception(page, url)
+
+        # --- Phase 1: Google session ---
+        try:
+            await page.goto("https://www.google.com/", wait_until="domcontentloaded", timeout=10000)
+            await page.wait_for_timeout(random.randint(1000, 2000))
+
+            await _try_accept_google_consent(page)
+
+            # Brief mouse interaction on Google (builds cookies)
+            vp = page.viewport_size or {"width": 1920, "height": 1080}
+            for _ in range(2):
+                await page.mouse.move(
+                    random.randint(200, vp["width"] - 200),
+                    random.randint(100, vp["height"] - 200),
+                    steps=random.randint(8, 15),
+                )
+                await page.wait_for_timeout(random.randint(200, 500))
+        except Exception:
+            pass
+
+        # --- Phase 2: Search & click-through ---
+        try:
+            search_input = await page.query_selector("textarea[name='q'], input[name='q']")
+            if search_input:
+                await search_input.click()
+                for char in search_term:
+                    await search_input.type(char, delay=random.randint(50, 150))
+                    if random.random() < 0.1:
+                        await page.wait_for_timeout(random.randint(200, 400))
+
+                await page.wait_for_timeout(random.randint(300, 600))
+                await page.keyboard.press("Enter")
+
                 try:
-                    await page.goto(homepage, wait_until="domcontentloaded", timeout=10000, referer=referrer)
-                    await page.wait_for_timeout(random.randint(1500, 3000))
-                    await _try_accept_cookies(page)
-                    await page.wait_for_timeout(random.randint(500, 1000))
+                    await page.wait_for_selector("#search", timeout=8000)
                 except Exception:
                     pass
+                await page.wait_for_timeout(random.randint(1000, 2000))
 
-        # Navigate to target
-        response = await page.goto(
-            url, wait_until="domcontentloaded", timeout=15000, referer=referrer,
-        )
-        status_code = response.status if response else 0
-        if response:
-            response_headers = {k.lower(): v for k, v in response.headers.items()}
+                # Click first matching result
+                links = await page.query_selector_all(f"a[href*='{domain}']")
+                for link in links[:5]:
+                    try:
+                        href = await link.get_attribute("href")
+                        if href and domain in href:
+                            await link.scroll_into_view_if_needed()
+                            await page.wait_for_timeout(random.randint(300, 600))
+                            box = await link.bounding_box()
+                            if box:
+                                await page.mouse.move(
+                                    box["x"] + box["width"] / 2 + random.randint(-10, 10),
+                                    box["y"] + box["height"] / 2 + random.randint(-3, 3),
+                                    steps=random.randint(10, 20),
+                                )
+                            await link.click()
+                            try:
+                                await page.wait_for_load_state("domcontentloaded", timeout=15000)
+                            except Exception:
+                                pass
+                            break
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+        await page.wait_for_timeout(random.randint(1500, 3000))
+        await _try_accept_cookies(page)
+
+        # --- Phase 3: Browse naturally (2-3 internal pages) ---
+        current = page.url
+        if domain in current:
+            try:
+                vp = page.viewport_size or {"width": 1920, "height": 1080}
+                for _ in range(random.randint(2, 3)):
+                    # Mouse movements
+                    for _ in range(random.randint(2, 3)):
+                        await page.mouse.move(
+                            random.randint(100, vp["width"] - 100),
+                            random.randint(100, vp["height"] - 100),
+                            steps=random.randint(8, 15),
+                        )
+                        await page.wait_for_timeout(random.randint(200, 400))
+
+                    # Scroll
+                    await page.mouse.wheel(0, random.randint(200, 500))
+                    await page.wait_for_timeout(random.randint(500, 1000))
+
+                    # Click a random internal link
+                    internal_links = await page.query_selector_all(f"a[href*='{domain}']")
+                    if internal_links:
+                        link = random.choice(internal_links[:10])
+                        try:
+                            await link.scroll_into_view_if_needed()
+                            await page.wait_for_timeout(random.randint(200, 400))
+                            await link.click()
+                            await page.wait_for_load_state("domcontentloaded", timeout=8000)
+                        except Exception:
+                            pass
+
+                    await page.wait_for_timeout(random.randint(1000, 2000))
+                    await _try_accept_cookies(page)
+            except Exception:
+                pass
+
+        # --- Phase 4: Navigate to actual target URL ---
+        try:
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            status_code = response.status if response else 0
+            if response:
+                response_headers = {k.lower(): v for k, v in response.headers.items()}
+        except Exception:
+            pass
 
         try:
             await page.wait_for_load_state("networkidle", timeout=8000)
         except Exception:
             pass
 
-        # Human simulation — realistic browsing behavior
+        # Final human interaction
         vp = page.viewport_size or {"width": 1920, "height": 1080}
-
-        # Move to a natural starting point (top area, like reading page header)
-        await page.mouse.move(
-            vp["width"] // 2 + random.randint(-100, 100),
-            random.randint(80, 200),
-            steps=random.randint(15, 25),
-        )
-        await page.wait_for_timeout(random.randint(300, 700))
-
-        # 4-6 random mouse movements across the page
-        for _ in range(random.randint(4, 6)):
-            x = random.randint(100, vp["width"] - 100)
-            y = random.randint(100, vp["height"] - 100)
-            await page.mouse.move(x, y, steps=random.randint(10, 20))
-            await page.wait_for_timeout(random.randint(200, 600))
-
-        # Try cookie acceptance
-        await _try_accept_cookies(page)
-
-        # Multiple scrolls down
-        for _ in range(random.randint(2, 3)):
-            await page.mouse.wheel(0, random.randint(200, 500))
-            await page.wait_for_timeout(random.randint(400, 800))
-
-        # Scroll back up (humans don't only scroll down)
-        await page.mouse.wheel(0, -random.randint(100, 200))
-        await page.wait_for_timeout(random.randint(300, 600))
-
-        # More mouse movement after scrolling
-        for _ in range(random.randint(2, 3)):
-            x = random.randint(100, vp["width"] - 100)
-            y = random.randint(100, vp["height"] - 100)
-            await page.mouse.move(x, y, steps=random.randint(8, 15))
+        for _ in range(random.randint(3, 5)):
+            await page.mouse.move(
+                random.randint(100, vp["width"] - 100),
+                random.randint(100, vp["height"] - 100),
+                steps=random.randint(8, 15),
+            )
             await page.wait_for_timeout(random.randint(200, 500))
 
-        # Challenge check with re-check
-        html_check = await page.content()
-        if _looks_blocked(html_check):
+        await _try_accept_cookies(page)
+
+        # Challenge re-check loop
+        for _ in range(2):
+            html_check = await page.content()
+            if not _looks_blocked(html_check):
+                break
             await page.wait_for_timeout(random.randint(3000, 5000))
-            html_check2 = await page.content()
-            if _looks_blocked(html_check2):
-                await page.wait_for_timeout(random.randint(3000, 5000))
 
         if request.wait_for > 0:
             await page.wait_for_timeout(request.wait_for)
@@ -747,3 +1346,105 @@ async def _fetch_with_browser_aggressive(
         raw_html = await page.content()
 
     return raw_html, status_code, screenshot_b64, action_screenshots, response_headers
+
+
+# ---------------------------------------------------------------------------
+# Strategy 7: Google Cache fallback
+# ---------------------------------------------------------------------------
+
+async def _fetch_from_google_cache(
+    url: str, timeout: int, proxy_url: str | None = None
+) -> tuple[str, int, dict[str, str]]:
+    """Fetch content from Google's cache — bypasses all site-level protection."""
+    from curl_cffi.requests import AsyncSession
+
+    cache_url = f"https://webcache.googleusercontent.com/search?q=cache:{quote_plus(url)}"
+    timeout_seconds = timeout / 1000
+
+    async with AsyncSession(impersonate="chrome124") as session:
+        kwargs: dict[str, Any] = dict(
+            timeout=timeout_seconds,
+            allow_redirects=True,
+            headers={
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "same-origin",
+                "Referer": "https://www.google.com/",
+                "Upgrade-Insecure-Requests": "1",
+            },
+        )
+        if proxy_url:
+            kwargs["proxy"] = proxy_url
+
+        response = await session.get(cache_url, **kwargs)
+        html = response.text
+
+        if not html or response.status_code >= 400:
+            return "", response.status_code, {}
+
+        html = _strip_google_cache_banner(html)
+
+        if len(html.strip()) < 500:
+            return "", response.status_code, {}
+
+        if _looks_blocked(html):
+            return "", response.status_code, {}
+
+        resp_headers = {k.lower(): v for k, v in response.headers.items()}
+        resp_headers["x-webharvest-source"] = "google-cache"
+        return html, response.status_code, resp_headers
+
+
+# ---------------------------------------------------------------------------
+# Strategy 8: Wayback Machine fallback
+# ---------------------------------------------------------------------------
+
+async def _fetch_from_wayback_machine(
+    url: str, timeout: int, proxy_url: str | None = None
+) -> tuple[str, int, dict[str, str]]:
+    """Fetch from Wayback Machine — last resort, content may be stale."""
+    timeout_seconds = timeout / 1000
+
+    client_kwargs: dict[str, Any] = dict(
+        follow_redirects=True, timeout=timeout_seconds,
+    )
+    if proxy_url:
+        client_kwargs["proxy"] = proxy_url
+
+    async with httpx.AsyncClient(**client_kwargs) as client:
+        # 1. Check availability
+        api_url = f"https://archive.org/wayback/available?url={quote_plus(url)}&timestamp=20260219"
+        resp = await client.get(api_url)
+        if resp.status_code != 200:
+            return "", 0, {}
+
+        data = resp.json()
+        snapshots = data.get("archived_snapshots", {})
+        closest = snapshots.get("closest", {})
+        if not closest.get("available"):
+            return "", 0, {}
+
+        snapshot_url = closest["url"]
+        # Use id_ modifier for raw content without Wayback toolbar
+        if "/web/" in snapshot_url:
+            parts = snapshot_url.split("/web/", 1)
+            ts_and_url = parts[1]
+            slash_idx = ts_and_url.find("/")
+            if slash_idx > 0:
+                ts = ts_and_url[:slash_idx]
+                rest = ts_and_url[slash_idx:]
+                snapshot_url = f"{parts[0]}/web/{ts}id_{rest}"
+
+        # 2. Fetch snapshot
+        resp2 = await client.get(snapshot_url)
+        if resp2.status_code >= 400 or not resp2.text:
+            return "", resp2.status_code, {}
+
+        html = _strip_wayback_toolbar(resp2.text)
+
+        resp_headers = {k.lower(): v for k, v in resp2.headers.items()}
+        resp_headers["x-webharvest-source"] = "wayback-machine"
+        return html, 200, resp_headers
