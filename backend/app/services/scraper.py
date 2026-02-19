@@ -435,9 +435,16 @@ def _looks_blocked(html: str) -> bool:
 
     body_match = re.search(r"<body[^>]*>(.*?)</body>", html, re.DOTALL | re.IGNORECASE)
     body_html = body_match.group(1) if body_match else html
-    body_text = re.sub(r"<[^>]+>", " ", body_html).strip().lower()
 
-    # Pages with substantial text content are never block pages
+    # Strip <script> and <style> tags AND their content before measuring text
+    visible_html = re.sub(r"<script[^>]*>.*?</script>", " ", body_html, flags=re.DOTALL | re.IGNORECASE)
+    visible_html = re.sub(r"<style[^>]*>.*?</style>", " ", visible_html, flags=re.DOTALL | re.IGNORECASE)
+    visible_html = re.sub(r"<noscript[^>]*>.*?</noscript>", " ", visible_html, flags=re.DOTALL | re.IGNORECASE)
+    body_text = re.sub(r"<[^>]+>", " ", visible_html).strip().lower()
+    # Collapse whitespace for accurate length measurement
+    body_text = re.sub(r"\s+", " ", body_text)
+
+    # Pages with substantial visible text content are never block pages
     if len(body_text) > 5000:
         return False
 
