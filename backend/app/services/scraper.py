@@ -986,6 +986,18 @@ async def scrape_url(
             metadata=PageMetadata(source_url=url, status_code=status_code or 0),
         )
 
+    # === Fallback screenshot: render HTML in browser if we have content but no screenshot ===
+    if "screenshot" in request.formats and not screenshot_b64 and raw_html:
+        try:
+            async with browser_pool.get_page(target_url=url) as page:
+                await page.set_content(raw_html, wait_until="domcontentloaded")
+                await page.wait_for_timeout(500)
+                screenshot_bytes = await page.screenshot(type="png", full_page=True)
+                screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
+                logger.info(f"Fallback screenshot rendered for {url}")
+        except Exception as e:
+            logger.debug(f"Fallback screenshot failed for {url}: {e}")
+
     # === Parallel content extraction ===
     result_data: dict[str, Any] = {}
 
