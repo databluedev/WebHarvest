@@ -74,19 +74,26 @@ _BLOCK_PATTERNS = [
     "please click here if you are not redirected",
     "if you are not redirected within",
     "having trouble accessing google",
+    # Akamai Bot Manager
+    "your connection needs to be verified",
+    "connection is being verified",
+    "please verify your identity",
 ]
 
-_HARD_SITES = {
-    "amazon.com", "amazon.co.uk", "amazon.de", "amazon.fr", "amazon.co.jp",
-    "amazon.in", "amazon.ca", "amazon.com.au", "amazon.es", "amazon.it",
+# Exact domain matches
+_HARD_SITES_EXACT = {
     "google.com", "facebook.com", "instagram.com", "twitter.com", "x.com",
     "linkedin.com", "zillow.com", "indeed.com", "glassdoor.com",
-    "walmart.com", "target.com", "bestbuy.com", "ebay.com",
+    "walmart.com", "target.com", "bestbuy.com",
     "cloudflare.com", "netflix.com", "spotify.com",
     "ticketmaster.com", "stubhub.com",
-    "nike.com", "adidas.com",
-    "booking.com", "airbnb.com", "expedia.com",
     "craigslist.org", "yelp.com",
+}
+
+# Brand patterns — match any TLD variant (nike.com, nike.in, nike.co.uk, etc.)
+_HARD_SITE_BRANDS = {
+    "amazon", "nike", "adidas", "ebay", "booking", "airbnb", "expedia",
+    "flipkart", "myntra", "ajio", "zara", "hm",
 }
 
 # ---------------------------------------------------------------------------
@@ -291,7 +298,13 @@ def _is_hard_site(url: str) -> bool:
         domain = urlparse(url).netloc.lower()
         if domain.startswith("www."):
             domain = domain[4:]
-        return any(domain == d or domain.endswith("." + d) for d in _HARD_SITES)
+        # Exact match or subdomain match
+        if any(domain == d or domain.endswith("." + d) for d in _HARD_SITES_EXACT):
+            return True
+        # Brand pattern match: extract brand name (first part before TLD)
+        # e.g. "nike.in" → "nike", "amazon.co.uk" → "amazon"
+        brand = domain.split(".")[0]
+        return brand in _HARD_SITE_BRANDS
     except Exception:
         return False
 
@@ -895,7 +908,9 @@ async def scrape_url(
                 ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
             ]
 
-        race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=30)
+        # Hard sites need more time for warm-up + challenge resolution
+        t2_timeout = 45 if hard_site else 30
+        race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=t2_timeout)
         _update_best(race)
         if race.success:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(race.winner_result)
@@ -1383,6 +1398,21 @@ async def _fetch_with_browser_stealth(
             await page.mouse.wheel(0, random.randint(300, 600))
             await page.wait_for_timeout(random.randint(500, 1000))
             await _try_accept_cookies(page)
+
+            # Challenge re-check: Akamai/PerimeterX may serve a challenge that
+            # resolves after JS execution. Wait and re-check up to 2 times.
+            for _retry in range(2):
+                html_check = await page.content()
+                if not _looks_blocked(html_check):
+                    break
+                logger.debug(f"Challenge detected on {url}, waiting for resolution (attempt {_retry + 1})")
+                await page.wait_for_timeout(random.randint(3000, 5000))
+                # Interact to help solve visual challenges
+                await page.mouse.move(
+                    random.randint(200, vp["width"] - 200),
+                    random.randint(150, vp["height"] - 200),
+                    steps=random.randint(8, 15),
+                )
         else:
             await page.wait_for_timeout(random.randint(200, 500))
 
@@ -1442,6 +1472,18 @@ async def _fetch_with_browser_session(
             )
             await page.mouse.wheel(0, random.randint(300, 600))
             await page.wait_for_timeout(random.randint(500, 1000))
+
+            # Challenge re-check for Akamai/PerimeterX
+            for _retry in range(2):
+                html_check = await page.content()
+                if not _looks_blocked(html_check):
+                    break
+                await page.wait_for_timeout(random.randint(3000, 5000))
+                await page.mouse.move(
+                    random.randint(200, vp["width"] - 200),
+                    random.randint(150, vp["height"] - 200),
+                    steps=random.randint(8, 15),
+                )
         else:
             await page.wait_for_timeout(random.randint(200, 500))
 
@@ -2057,7 +2099,8 @@ async def scrape_url_fetch_only(
                 ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
             ]
 
-        race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=30)
+        t2_timeout = 45 if _is_hard_site(url) else 30
+        race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=t2_timeout)
         if race.best_html and len(race.best_html) > len(raw_html_best):
             raw_html_best = race.best_html
         if race.success:
