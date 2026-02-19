@@ -76,17 +76,18 @@ export default function ScrapePage() {
         params.extract = { prompt: extractPrompt };
       }
       const res = await api.scrape(params);
-      if (res.success && res.job_id) {
+      if (!res.success) {
+        setError(res.error || "Scrape failed — the site may be blocking requests.");
+        if (res.data) setResult(res.data);
+      } else if (res.job_id) {
         router.push(`/scrape/${res.job_id}`);
         return;
-      } else if (res.success) {
+      } else if (res.data) {
         setResult(res.data);
         // Auto-select first available tab
         if (res.data.markdown) setActiveTab("markdown");
         else if (res.data.screenshot) setActiveTab("screenshot");
         else setActiveTab("json");
-      } else {
-        setError(res.error || "Scrape failed");
       }
     } catch (err: any) {
       setError(err.message);

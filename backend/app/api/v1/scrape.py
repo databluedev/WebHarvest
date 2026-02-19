@@ -145,12 +145,29 @@ async def scrape(
         )
         db.add(job_result)
 
-        job.status = "completed"
-        job.completed_pages = 1
-        job.completed_at = datetime.now(timezone.utc)
+        # Check if we actually got any content
+        has_content = any([
+            result.markdown, result.html, result.raw_html,
+            result.screenshot, result.links,
+        ])
 
-        scrape_requests_total.labels(status="success").inc()
-        return ScrapeResponse(success=True, data=result, job_id=str(job.id))
+        if has_content:
+            job.status = "completed"
+            job.completed_pages = 1
+            job.completed_at = datetime.now(timezone.utc)
+            scrape_requests_total.labels(status="success").inc()
+            return ScrapeResponse(success=True, data=result, job_id=str(job.id))
+        else:
+            job.status = "failed"
+            job.error = "All scraping strategies failed — the site may be blocking requests from this server. Try enabling a residential proxy."
+            job.completed_at = datetime.now(timezone.utc)
+            scrape_requests_total.labels(status="error").inc()
+            return ScrapeResponse(
+                success=False,
+                data=result,
+                error=job.error,
+                job_id=str(job.id),
+            )
 
     except BadRequestError:
         job.status = "failed"
