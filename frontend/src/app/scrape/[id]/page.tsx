@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -49,14 +49,49 @@ export default function ScrapeDetailPage() {
     fetchStatus();
   }, [jobId]);
 
+  // SSE for real-time updates — falls back to polling on failure
+  const sseRef = useRef<EventSource | null>(null);
   useEffect(() => {
-    if (!polling) return;
+    if (!polling || !jobId) return;
     if (status && ["completed", "failed"].includes(status.status)) {
       setPolling(false);
       return;
     }
-    const interval = setInterval(fetchStatus, 1000);
-    return () => clearInterval(interval);
+
+    const token = api.getToken();
+    if (!token) return;
+
+    const { API_BASE_URL } = require("@/lib/api");
+    const url = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
+
+    try {
+      const es = new EventSource(url);
+      sseRef.current = es;
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.done || data.status === "completed" || data.status === "failed") {
+            fetchStatus();
+            setPolling(false);
+            es.close();
+          } else {
+            fetchStatus();
+          }
+        } catch {}
+      };
+      es.onerror = () => {
+        es.close();
+        sseRef.current = null;
+        // Fall back to polling
+        const interval = setInterval(fetchStatus, 2000);
+        return () => clearInterval(interval);
+      };
+      return () => { es.close(); sseRef.current = null; };
+    } catch {
+      // No SSE support — poll
+      const interval = setInterval(fetchStatus, 2000);
+      return () => clearInterval(interval);
+    }
   }, [polling, status?.status]);
 
   const fetchStatus = useCallback(async () => {
@@ -293,7 +328,7 @@ export default function ScrapeDetailPage() {
                       {activeTab === "screenshot" && result.screenshot && (
                         <div className="flex justify-center rounded-md bg-muted p-4">
                           <img
-                            src={`data:image/png;base64,${result.screenshot}`}
+                            src={`data:image/jpeg;base64,${result.screenshot}`}
                             alt={`Screenshot of ${result.url}`}
                             className="max-w-full rounded-md border border-border shadow-lg"
                             style={{ maxHeight: "600px" }}

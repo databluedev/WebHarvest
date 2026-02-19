@@ -177,7 +177,7 @@ const PageResultCard = memo(function PageResultCard({ page, index }: { page: any
             {activeTab === "screenshot" && hasScreenshot && (
               <div className="flex justify-center">
                 <img
-                  src={`data:image/png;base64,${page.screenshot}`}
+                  src={`data:image/jpeg;base64,${page.screenshot}`}
                   alt={`Screenshot of ${page.url}`}
                   className="max-w-full rounded-md border border-border shadow-lg"
                   style={{ maxHeight: "600px" }}
@@ -409,14 +409,42 @@ export default function CrawlStatusPage() {
     fetchStatus();
   }, [jobId]);
 
+  // SSE for real-time updates — falls back to polling on failure
   useEffect(() => {
-    if (!polling) return;
+    if (!polling || !jobId) return;
     if (status && ["completed", "failed", "cancelled"].includes(status.status)) {
       setPolling(false);
       return;
     }
-    const interval = setInterval(fetchStatus, 1000);
-    return () => clearInterval(interval);
+
+    const token = api.getToken();
+    if (!token) return;
+
+    const { API_BASE_URL } = require("@/lib/api");
+    const url = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
+
+    try {
+      const es = new EventSource(url);
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          fetchStatus();
+          if (data.done || ["completed", "failed", "cancelled"].includes(data.status)) {
+            setPolling(false);
+            es.close();
+          }
+        } catch {}
+      };
+      es.onerror = () => {
+        es.close();
+        const interval = setInterval(fetchStatus, 2000);
+        return () => clearInterval(interval);
+      };
+      return () => es.close();
+    } catch {
+      const interval = setInterval(fetchStatus, 2000);
+      return () => clearInterval(interval);
+    }
   }, [polling, status?.status]);
 
   const fetchStatus = useCallback(async () => {

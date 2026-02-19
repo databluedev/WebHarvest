@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.api.v1.router import api_router
 from app.api.v1.health import router as health_router
@@ -40,6 +41,9 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Gzip compression — 50-70% bandwidth savings on JSON/HTML responses
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # CORS
 app.add_middleware(

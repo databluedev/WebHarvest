@@ -273,7 +273,7 @@ async def export_batch(
                 zf.writestr(f"{folder}/content.html", p["html"])
             if p.get("screenshot_base64"):
                 try:
-                    zf.writestr(f"{folder}/screenshot.png", base64.b64decode(p["screenshot_base64"]))
+                    zf.writestr(f"{folder}/screenshot.jpg", base64.b64decode(p["screenshot_base64"]))
                 except Exception:
                     pass
             page_meta = {"url": p["url"], "success": p.get("success", True)}

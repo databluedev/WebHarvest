@@ -408,7 +408,7 @@ export default function ScrapePage() {
                       {activeTab === "screenshot" && result.screenshot && (
                         <div className="flex justify-center rounded-md bg-muted p-4">
                           <img
-                            src={`data:image/png;base64,${result.screenshot}`}
+                            src={`data:image/jpeg;base64,${result.screenshot}`}
                             alt={`Screenshot of ${url}`}
                             className="max-w-full rounded-md border border-border shadow-lg"
                             style={{ maxHeight: "600px" }}

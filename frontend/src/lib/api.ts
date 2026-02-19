@@ -493,6 +493,11 @@ class ApiClient {
       method: "POST",
     });
   }
+
+  getSSEUrl(jobId: string): string {
+    return `${API_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(this.getToken() || "")}`;
+  }
 }
 
+export const API_BASE_URL = API_URL;
 export const api = new ApiClient();

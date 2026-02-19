@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Integer, Text, DateTime, ForeignKey, VARCHAR
+from sqlalchemy import Index, String, Integer, Text, DateTime, ForeignKey, VARCHAR
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +10,10 @@ from app.core.database import Base
 
 class Job(Base):
     __tablename__ = "jobs"
+    __table_args__ = (
+        Index("ix_jobs_user_id_created_at", "user_id", "created_at"),
+        Index("ix_jobs_status", "status"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

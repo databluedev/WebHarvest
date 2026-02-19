@@ -35,6 +35,31 @@ logger = logging.getLogger(__name__)
 _extraction_executor = ThreadPoolExecutor(max_workers=4)
 
 # ---------------------------------------------------------------------------
+# HTTP session pools — reuse connections across requests (saves TLS handshake)
+# ---------------------------------------------------------------------------
+_httpx_client: httpx.AsyncClient | None = None
+_curl_sessions: dict[str, Any] = {}  # profile -> AsyncSession
+
+
+async def _get_httpx_client(proxy_url: str | None = None) -> httpx.AsyncClient:
+    """Get or create a reusable httpx client (no proxy variant)."""
+    global _httpx_client
+    if proxy_url:
+        # Proxied requests need fresh clients (different proxy per request)
+        return httpx.AsyncClient(follow_redirects=True, http2=True, timeout=30, proxy=proxy_url)
+    if _httpx_client is None or _httpx_client.is_closed:
+        _httpx_client = httpx.AsyncClient(follow_redirects=True, http2=True, timeout=30)
+    return _httpx_client
+
+
+def _get_curl_session(profile: str = "chrome124"):
+    """Get or create a reusable curl_cffi session for a given TLS profile."""
+    from curl_cffi.requests import AsyncSession as CurlAsyncSession
+    if profile not in _curl_sessions:
+        _curl_sessions[profile] = CurlAsyncSession(impersonate=profile)
+    return _curl_sessions[profile]
+
+# ---------------------------------------------------------------------------
 # Anti-bot detection patterns
 # ---------------------------------------------------------------------------
 
@@ -1025,7 +1050,7 @@ async def scrape_url(
             async with browser_pool.get_page(target_url=url) as page:
                 await page.set_content(raw_html, wait_until="domcontentloaded")
                 await page.wait_for_timeout(500)
-                screenshot_bytes = await page.screenshot(type="png", full_page=True)
+                screenshot_bytes = await page.screenshot(type="jpeg", quality=80, full_page=True)
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
                 logger.info(f"Fallback screenshot rendered for {url}")
         except Exception as e:
@@ -1222,20 +1247,19 @@ async def _handle_document_url(
 async def _fetch_with_curl_cffi_single(
     url: str, timeout: int, profile: str = "chrome124", proxy_url: str | None = None
 ) -> tuple[str, int, dict[str, str]]:
-    """HTTP fetch with a single TLS fingerprint profile."""
-    from curl_cffi.requests import AsyncSession
-
+    """HTTP fetch with a single TLS fingerprint profile (pooled session)."""
     timeout_seconds = timeout / 1000
     headers = _get_headers_for_profile(profile, url)
-    async with AsyncSession(impersonate=profile) as session:
-        kwargs: dict[str, Any] = dict(
-            timeout=timeout_seconds,
-            allow_redirects=True,
-            headers=headers,
-        )
-        if proxy_url:
-            kwargs["proxy"] = proxy_url
 
+    if proxy_url:
+        # Proxied requests use fresh sessions
+        from curl_cffi.requests import AsyncSession
+        async with AsyncSession(impersonate=profile) as session:
+            kwargs: dict[str, Any] = dict(timeout=timeout_seconds, allow_redirects=True, headers=headers, proxy=proxy_url)
+            response = await session.get(url, **kwargs)
+    else:
+        session = _get_curl_session(profile)
+        kwargs: dict[str, Any] = dict(timeout=timeout_seconds, allow_redirects=True, headers=headers)
         response = await session.get(url, **kwargs)
         resp_headers = {k.lower(): v for k, v in response.headers.items()}
         return response.text, response.status_code, resp_headers
@@ -1296,15 +1320,16 @@ async def _fetch_with_httpx(
 ) -> tuple[str, int, dict[str, str]]:
     timeout_seconds = timeout / 1000
     headers = random.choice(_HEADER_ROTATION_POOL).copy()
-    client_kwargs: dict[str, Any] = dict(
-        follow_redirects=True, timeout=timeout_seconds, headers=headers, http2=True,
-    )
+
     if proxy_url:
-        client_kwargs["proxy"] = proxy_url
-    async with httpx.AsyncClient(**client_kwargs) as client:
-        response = await client.get(url)
-        resp_headers = {k.lower(): v for k, v in response.headers.items()}
-        return response.text, response.status_code, resp_headers
+        async with httpx.AsyncClient(follow_redirects=True, timeout=timeout_seconds, headers=headers, http2=True, proxy=proxy_url) as client:
+            response = await client.get(url)
+    else:
+        client = await _get_httpx_client()
+        response = await client.get(url, headers=headers, timeout=timeout_seconds)
+
+    resp_headers = {k.lower(): v for k, v in response.headers.items()}
+    return response.text, response.status_code, resp_headers
 
 
 # ---------------------------------------------------------------------------
@@ -1316,8 +1341,6 @@ async def _fetch_with_cookie_http(
     proxy_url: str | None = None,
 ) -> tuple[str, int, dict[str, str]]:
     """HTTP fetch using cookies harvested from browser sessions."""
-    from curl_cffi.requests import AsyncSession
-
     if not cookies:
         return "", 0, {}
 
@@ -1330,19 +1353,19 @@ async def _fetch_with_cookie_http(
     headers = _get_headers_for_profile("chrome124", url)
     headers["Cookie"] = cookie_header
 
-    async with AsyncSession(impersonate="chrome124") as session:
-        kwargs: dict[str, Any] = dict(
-            timeout=timeout_seconds,
-            allow_redirects=True,
-            headers=headers,
-        )
-        if proxy_url:
-            kwargs["proxy"] = proxy_url
-
+    if proxy_url:
+        from curl_cffi.requests import AsyncSession
+        async with AsyncSession(impersonate="chrome124") as session:
+            kwargs: dict[str, Any] = dict(timeout=timeout_seconds, allow_redirects=True, headers=headers, proxy=proxy_url)
+            response = await session.get(url, **kwargs)
+    else:
+        session = _get_curl_session("chrome124")
+        kwargs: dict[str, Any] = dict(timeout=timeout_seconds, allow_redirects=True, headers=headers)
         response = await session.get(url, **kwargs)
-        resp_headers = {k.lower(): v for k, v in response.headers.items()}
-        resp_headers["x-webharvest-strategy"] = "cookie_http"
-        return response.text, response.status_code, resp_headers
+
+    resp_headers = {k.lower(): v for k, v in response.headers.items()}
+    resp_headers["x-webharvest-strategy"] = "cookie_http"
+    return response.text, response.status_code, resp_headers
 
 
 # ---------------------------------------------------------------------------
@@ -1444,7 +1467,7 @@ async def _fetch_with_browser_stealth(
             action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
 
         if "screenshot" in request.formats:
-            screenshot_bytes = await page.screenshot(type="png", full_page=True)
+            screenshot_bytes = await page.screenshot(type="jpeg", quality=80, full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
         raw_html = await page.content()
@@ -1517,7 +1540,7 @@ async def _fetch_with_browser_session(
             action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
 
         if "screenshot" in request.formats:
-            screenshot_bytes = await page.screenshot(type="png", full_page=True)
+            screenshot_bytes = await page.screenshot(type="jpeg", quality=80, full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
         raw_html = await page.content()
@@ -1670,7 +1693,7 @@ async def _fetch_with_google_search_chain(
             action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
 
         if "screenshot" in request.formats:
-            screenshot_bytes = await page.screenshot(type="png", full_page=True)
+            screenshot_bytes = await page.screenshot(type="jpeg", quality=80, full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
         raw_html = await page.content()
@@ -1863,7 +1886,7 @@ async def _fetch_with_advanced_prewarm(
             action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
 
         if "screenshot" in request.formats:
-            screenshot_bytes = await page.screenshot(type="png", full_page=True)
+            screenshot_bytes = await page.screenshot(type="jpeg", quality=80, full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
         raw_html = await page.content()
@@ -1879,29 +1902,28 @@ async def _fetch_from_google_cache(
     url: str, timeout: int, proxy_url: str | None = None
 ) -> tuple[str, int, dict[str, str]]:
     """Fetch content from Google's cache — bypasses all site-level protection."""
-    from curl_cffi.requests import AsyncSession
-
     cache_url = f"https://webcache.googleusercontent.com/search?q=cache:{quote_plus(url)}"
     timeout_seconds = timeout / 1000
 
-    async with AsyncSession(impersonate="chrome124") as session:
-        kwargs: dict[str, Any] = dict(
-            timeout=timeout_seconds,
-            allow_redirects=True,
-            headers={
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "same-origin",
-                "Referer": "https://www.google.com/",
-                "Upgrade-Insecure-Requests": "1",
-            },
-        )
-        if proxy_url:
-            kwargs["proxy"] = proxy_url
+    cache_headers = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "Referer": "https://www.google.com/",
+        "Upgrade-Insecure-Requests": "1",
+    }
 
+    if proxy_url:
+        from curl_cffi.requests import AsyncSession
+        async with AsyncSession(impersonate="chrome124") as session:
+            kwargs: dict[str, Any] = dict(timeout=timeout_seconds, allow_redirects=True, headers=cache_headers, proxy=proxy_url)
+            response = await session.get(cache_url, **kwargs)
+    else:
+        session = _get_curl_session("chrome124")
+        kwargs: dict[str, Any] = dict(timeout=timeout_seconds, allow_redirects=True, headers=cache_headers)
         response = await session.get(cache_url, **kwargs)
         html = response.text
 
@@ -1931,16 +1953,17 @@ async def _fetch_from_wayback_machine(
     """Fetch from Wayback Machine — last resort, content may be stale."""
     timeout_seconds = timeout / 1000
 
-    client_kwargs: dict[str, Any] = dict(
-        follow_redirects=True, timeout=timeout_seconds,
-    )
     if proxy_url:
-        client_kwargs["proxy"] = proxy_url
+        client = httpx.AsyncClient(follow_redirects=True, timeout=timeout_seconds, proxy=proxy_url)
+        _close_client = True
+    else:
+        client = await _get_httpx_client()
+        _close_client = False
 
-    async with httpx.AsyncClient(**client_kwargs) as client:
+    try:
         # 1. Check availability
         api_url = f"https://archive.org/wayback/available?url={quote_plus(url)}&timestamp=20260219"
-        resp = await client.get(api_url)
+        resp = await client.get(api_url, timeout=timeout_seconds)
         if resp.status_code != 200:
             return "", 0, {}
 
@@ -1971,6 +1994,9 @@ async def _fetch_from_wayback_machine(
         resp_headers = {k.lower(): v for k, v in resp2.headers.items()}
         resp_headers["x-webharvest-source"] = "wayback-machine"
         return html, 200, resp_headers
+    finally:
+        if _close_client:
+            await client.aclose()
 
 
 # ---------------------------------------------------------------------------

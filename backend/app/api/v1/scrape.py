@@ -362,7 +362,7 @@ async def export_scrape(
             if p.get("screenshot_base64"):
                 try:
                     img_data = base64.b64decode(p["screenshot_base64"])
-                    zf.writestr(f"{folder}/screenshot.png", img_data)
+                    zf.writestr(f"{folder}/screenshot.jpg", img_data)
                 except Exception:
                     pass
 
