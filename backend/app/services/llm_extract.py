@@ -33,6 +33,9 @@ DEFAULT_MODELS = {
     "together": "meta-llama/Llama-3.1-70B-Instruct-Turbo",
     "mistral": "mistral-large-latest",
     "deepseek": "deepseek-chat",
+    "openrouter": "google/gemma-2-9b-it:free",
+    "fireworks": "accounts/fireworks/models/llama-v3p1-70b-instruct",
+    "cohere": "command-r-plus",
 }
 
 
