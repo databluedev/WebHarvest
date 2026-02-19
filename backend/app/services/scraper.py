@@ -125,6 +125,47 @@ def _is_hard_site(url: str) -> bool:
         return False
 
 
+def _get_homepage(url: str) -> str | None:
+    """For hard sites, return the homepage URL for warm-up navigation."""
+    try:
+        parsed = urlparse(url)
+        if parsed.path.rstrip("/") == "" and not parsed.query:
+            return None  # Already on homepage
+        return f"{parsed.scheme}://{parsed.netloc}/"
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Cookie consent acceptance
+# ---------------------------------------------------------------------------
+
+_COOKIE_ACCEPT_SELECTORS = [
+    "#sp-cc-accept",                       # Amazon
+    "[data-action-type='DISMISS']",        # Amazon
+    "#onetrust-accept-btn-handler",        # OneTrust (common)
+    "#cookie-consent-accept",
+    "[aria-label*='Accept']",
+    "button:has-text('Accept')",
+    "button:has-text('Accept All')",
+    "button:has-text('Got it')",
+    "button:has-text('OK')",
+]
+
+
+async def _try_accept_cookies(page) -> None:
+    """Best-effort click on cookie consent buttons. Fails silently."""
+    for selector in _COOKIE_ACCEPT_SELECTORS:
+        try:
+            el = await page.query_selector(selector)
+            if el and await el.is_visible():
+                await el.click()
+                await page.wait_for_timeout(random.randint(300, 600))
+                return
+        except Exception:
+            continue
+
+
 def _looks_blocked(html: str) -> bool:
     if not html:
         return True
@@ -147,6 +188,14 @@ def _looks_blocked(html: str) -> bool:
 
     if len(body_text) < 300 and ("<noscript" in html.lower() or "captcha" in html.lower()):
         return True
+
+    # Amazon-style "no session" interstitial: very short body with specific combo
+    if len(body_text) < 500:
+        amazon_signals = sum(1 for p in [
+            "continue shopping", "conditions of use", "privacy notice",
+        ] if p in body_text)
+        if amazon_signals >= 2:
+            return True
 
     return False
 
@@ -537,8 +586,20 @@ async def _fetch_with_browser_stealth(
     status_code = 0
     response_headers: dict[str, str] = {}
 
-    async with browser_pool.get_page(proxy=proxy, use_firefox=use_firefox) as page:
+    async with browser_pool.get_page(proxy=proxy, use_firefox=use_firefox, target_url=url) as page:
         referrer = random.choice(_GOOGLE_REFERRERS)
+
+        # Warm-up navigation for hard sites: visit homepage first to build session
+        if _is_hard_site(url):
+            homepage = _get_homepage(url)
+            if homepage:
+                try:
+                    await page.goto(homepage, wait_until="domcontentloaded", timeout=10000, referer=referrer)
+                    await page.wait_for_timeout(random.randint(1500, 3000))
+                    await _try_accept_cookies(page)
+                    await page.wait_for_timeout(random.randint(500, 1000))
+                except Exception:
+                    pass  # Best-effort warm-up
 
         # Fast navigation: domcontentloaded first (doesn't hang on analytics)
         response = await page.goto(
@@ -590,8 +651,20 @@ async def _fetch_with_browser_aggressive(
     status_code = 0
     response_headers: dict[str, str] = {}
 
-    async with browser_pool.get_page(proxy=proxy) as page:
+    async with browser_pool.get_page(proxy=proxy, target_url=url) as page:
         referrer = random.choice(_GOOGLE_REFERRERS)
+
+        # Warm-up navigation for hard sites
+        if _is_hard_site(url):
+            homepage = _get_homepage(url)
+            if homepage:
+                try:
+                    await page.goto(homepage, wait_until="domcontentloaded", timeout=10000, referer=referrer)
+                    await page.wait_for_timeout(random.randint(1500, 3000))
+                    await _try_accept_cookies(page)
+                    await page.wait_for_timeout(random.randint(500, 1000))
+                except Exception:
+                    pass
 
         # Navigate to target
         response = await page.goto(
@@ -606,26 +679,50 @@ async def _fetch_with_browser_aggressive(
         except Exception:
             pass
 
-        # Quick human simulation
+        # Human simulation — realistic browsing behavior
         vp = page.viewport_size or {"width": 1920, "height": 1080}
-        await page.mouse.move(vp["width"] // 2, vp["height"] // 2, steps=10)
-        await page.wait_for_timeout(300)
 
-        # 2-3 random movements
+        # Move to a natural starting point (top area, like reading page header)
+        await page.mouse.move(
+            vp["width"] // 2 + random.randint(-100, 100),
+            random.randint(80, 200),
+            steps=random.randint(15, 25),
+        )
+        await page.wait_for_timeout(random.randint(300, 700))
+
+        # 4-6 random mouse movements across the page
+        for _ in range(random.randint(4, 6)):
+            x = random.randint(100, vp["width"] - 100)
+            y = random.randint(100, vp["height"] - 100)
+            await page.mouse.move(x, y, steps=random.randint(10, 20))
+            await page.wait_for_timeout(random.randint(200, 600))
+
+        # Try cookie acceptance
+        await _try_accept_cookies(page)
+
+        # Multiple scrolls down
+        for _ in range(random.randint(2, 3)):
+            await page.mouse.wheel(0, random.randint(200, 500))
+            await page.wait_for_timeout(random.randint(400, 800))
+
+        # Scroll back up (humans don't only scroll down)
+        await page.mouse.wheel(0, -random.randint(100, 200))
+        await page.wait_for_timeout(random.randint(300, 600))
+
+        # More mouse movement after scrolling
         for _ in range(random.randint(2, 3)):
             x = random.randint(100, vp["width"] - 100)
             y = random.randint(100, vp["height"] - 100)
-            await page.mouse.move(x, y, steps=random.randint(5, 10))
-            await page.wait_for_timeout(random.randint(100, 300))
+            await page.mouse.move(x, y, steps=random.randint(8, 15))
+            await page.wait_for_timeout(random.randint(200, 500))
 
-        # Quick scroll
-        await page.mouse.wheel(0, random.randint(100, 300))
-        await page.wait_for_timeout(500)
-
-        # Challenge check — one quick pass (3s)
+        # Challenge check with re-check
         html_check = await page.content()
         if _looks_blocked(html_check):
-            await page.wait_for_timeout(3000)
+            await page.wait_for_timeout(random.randint(3000, 5000))
+            html_check2 = await page.content()
+            if _looks_blocked(html_check2):
+                await page.wait_for_timeout(random.randint(3000, 5000))
 
         if request.wait_for > 0:
             await page.wait_for_timeout(request.wait_for)
