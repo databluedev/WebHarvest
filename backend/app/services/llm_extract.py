@@ -33,7 +33,7 @@ DEFAULT_MODELS = {
     "together": "meta-llama/Llama-3.1-70B-Instruct-Turbo",
     "mistral": "mistral-large-latest",
     "deepseek": "deepseek-chat",
-    "openrouter": "deepseek/deepseek-r1-0528:free",
+    "openrouter": "google/gemini-2.0-flash-001",
     "fireworks": "accounts/fireworks/models/llama-v3p1-70b-instruct",
     "cohere": "command-r-plus",
 }

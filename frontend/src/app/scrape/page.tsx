@@ -41,6 +41,7 @@ export default function ScrapePage() {
   const [formats, setFormats] = useState<string[]>(["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"]);
   const [onlyMainContent, setOnlyMainContent] = useState(true);
   const [waitFor, setWaitFor] = useState(0);
+  const [extractEnabled, setExtractEnabled] = useState(false);
   const [extractPrompt, setExtractPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -72,7 +73,7 @@ export default function ScrapePage() {
         only_main_content: onlyMainContent,
         wait_for: waitFor,
       };
-      if (extractPrompt) {
+      if (extractEnabled && extractPrompt) {
         params.extract = { prompt: extractPrompt };
       }
       const res = await api.scrape(params);
@@ -288,21 +289,35 @@ export default function ScrapePage() {
               {/* AI Extraction */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4" />
-                    AI Extraction (BYOK)
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4" />
+                      AI Extraction (BYOK)
+                    </CardTitle>
+                    <button
+                      onClick={() => setExtractEnabled(!extractEnabled)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                        extractEnabled
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {extractEnabled ? "On" : "Off"}
+                    </button>
+                  </div>
                   <CardDescription className="text-xs">Requires an LLM key in Settings</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <Textarea
-                    placeholder="e.g., Extract the product name, price, and description"
-                    value={extractPrompt}
-                    onChange={(e) => setExtractPrompt(e.target.value)}
-                    rows={3}
-                    className="text-sm"
-                  />
-                </CardContent>
+                {extractEnabled && (
+                  <CardContent>
+                    <Textarea
+                      placeholder="e.g., Extract the product name, price, and description"
+                      value={extractPrompt}
+                      onChange={(e) => setExtractPrompt(e.target.value)}
+                      rows={3}
+                      className="text-sm"
+                    />
+                  </CardContent>
+                )}
               </Card>
             </div>
 

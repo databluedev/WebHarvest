@@ -27,6 +27,7 @@ export default function CrawlPage() {
   const [excludePaths, setExcludePaths] = useState("");
   const [concurrency, setConcurrency] = useState(3);
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [extractEnabled, setExtractEnabled] = useState(false);
   const [extractPrompt, setExtractPrompt] = useState("");
 
   useEffect(() => {
@@ -66,7 +67,7 @@ export default function CrawlPage() {
         if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
         if (webhookUrl.trim()) params.webhook_url = webhookUrl.trim();
       }
-      if (extractPrompt.trim()) {
+      if (extractEnabled && extractPrompt.trim()) {
         params.scrape_options = { ...params.scrape_options, extract: { prompt: extractPrompt.trim() } };
       }
 
@@ -244,20 +245,34 @@ export default function CrawlPage() {
 
                   {/* AI Extraction */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium flex items-center gap-1.5">
-                      <Sparkles className="h-4 w-4" />
-                      AI Extraction (BYOK)
-                      <span className="text-xs text-muted-foreground font-normal">
-                        (requires LLM key in Settings)
-                      </span>
-                    </label>
-                    <Textarea
-                      placeholder="e.g., Extract the product name, price, and description from each page"
-                      value={extractPrompt}
-                      onChange={(e) => setExtractPrompt(e.target.value)}
-                      rows={3}
-                      className="text-sm"
-                    />
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4" />
+                        AI Extraction (BYOK)
+                        <span className="text-xs text-muted-foreground font-normal">
+                          (requires LLM key in Settings)
+                        </span>
+                      </label>
+                      <button
+                        onClick={() => setExtractEnabled(!extractEnabled)}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                          extractEnabled
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {extractEnabled ? "On" : "Off"}
+                      </button>
+                    </div>
+                    {extractEnabled && (
+                      <Textarea
+                        placeholder="e.g., Extract the product name, price, and description from each page"
+                        value={extractPrompt}
+                        onChange={(e) => setExtractPrompt(e.target.value)}
+                        rows={3}
+                        className="text-sm"
+                      />
+                    )}
                   </div>
 
                   <div className="flex items-start gap-2 rounded-md bg-muted/50 p-3">
