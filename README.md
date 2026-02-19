@@ -2,7 +2,7 @@
 
 > **Still in active development** — features may change, APIs may break, and some functionality is incomplete.
 
-**Open-source, self-hosted web scraping platform** with a modern dashboard, REST API, Python SDK, and background job processing. A self-hosted Firecrawl alternative.
+**Open-source, self-hosted web scraping platform** with a modern dashboard, REST API, Python SDK, and background job processing.
 
 Built with FastAPI + Next.js + PostgreSQL + Redis + Celery + Playwright.
 
