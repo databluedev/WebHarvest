@@ -1,65 +1,27 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import {
   Globe,
   Search,
   Map,
   ArrowRight,
-  Key,
   Clock,
   FileText,
   Activity,
-  Terminal,
-  Zap,
   Shield,
   Cpu,
   Layers,
+  Zap,
+  Lock,
+  Play,
 } from "lucide-react";
 import Link from "next/link";
-
-const ASCII_LOGO = `
- ██╗    ██╗███████╗██████╗ ██╗  ██╗ █████╗ ██████╗ ██╗   ██╗███████╗███████╗████████╗
- ██║    ██║██╔════╝██╔══██╗██║  ██║██╔══██╗██╔══██╗██║   ██║██╔════╝██╔════╝╚══██╔══╝
- ██║ █╗ ██║█████╗  ██████╔╝███████║███████║██████╔╝██║   ██║█████╗  ███████╗   ██║
- ██║███╗██║██╔══╝  ██╔══██╗██╔══██║██╔══██║██╔══██╗╚██╗ ██╔╝██╔══╝  ╚════██║   ██║
- ╚███╔███╔╝███████╗██████╔╝██║  ██║██║  ██║██║  ██║ ╚████╔╝ ███████╗███████║   ██║
-  ╚══╝╚══╝ ╚══════╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚══════╝╚══════╝   ╚═╝
-`.trimStart();
-
-/** Animated ASCII typing effect */
-function AsciiTyper({ text, className }: { text: string; className?: string }) {
-  const [displayed, setDisplayed] = useState("");
-  const [done, setDone] = useState(false);
-  const idx = useRef(0);
-
-  useEffect(() => {
-    if (idx.current >= text.length) { setDone(true); return; }
-    const speed = text[idx.current] === '\n' ? 5 : 1;
-    const timer = setTimeout(() => {
-      // Reveal line-by-line for speed — find next newline
-      const nextNl = text.indexOf('\n', idx.current);
-      const end = nextNl === -1 ? text.length : nextNl + 1;
-      idx.current = end;
-      setDisplayed(text.slice(0, end));
-      if (end >= text.length) setDone(true);
-    }, speed);
-    return () => clearTimeout(timer);
-  }, [displayed, text]);
-
-  return (
-    <pre className={className}>
-      {displayed}
-      {!done && <span className="animate-blink text-primary">_</span>}
-    </pre>
-  );
-}
 
 function getJobDetailPath(job: any): string {
   switch (job.type) {
@@ -115,6 +77,48 @@ function timeAgo(dateStr: string): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+const features = [
+  { icon: Cpu, label: "5-Tier engine" },
+  { icon: Shield, label: "Stealth mode" },
+  { icon: Lock, label: "Self-hosted" },
+];
+
+const metrics = [
+  { label: "Engine", value: "5-Tier", desc: "Parallel extraction" },
+  { label: "Strategies", value: "4+", desc: "Per page fallback" },
+  { label: "License", value: "OSS", desc: "No vendor lock-in" },
+];
+
+const actions = [
+  {
+    href: "/scrape",
+    icon: Search,
+    title: "Scrape",
+    subtitle: "Single Page",
+    desc: "Extract content from any URL with JS rendering and stealth mode",
+    color: "text-emerald-400",
+    bg: "bg-emerald-500/10",
+  },
+  {
+    href: "/crawl",
+    icon: Globe,
+    title: "Crawl",
+    subtitle: "Full Website",
+    desc: "Recursively crawl entire sites with BFS and persistent sessions",
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
+  },
+  {
+    href: "/map",
+    icon: Map,
+    title: "Map",
+    subtitle: "URL Discovery",
+    desc: "Fast sitemap discovery and URL mapping without content extraction",
+    color: "text-violet-400",
+    bg: "bg-violet-500/10",
+  },
+];
+
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -135,228 +139,232 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto grid-bg mesh-gradient">
-        <div className="p-8 max-w-6xl mx-auto">
-          {/* ASCII Art Hero */}
-          <div className="mb-10 animate-fade-in">
-            <div className="overflow-x-auto pb-2">
-              <AsciiTyper text={ASCII_LOGO} className="ascii-art text-primary/70 glow-green-sm select-none" />
-            </div>
-            <div className="flex items-center gap-3 mt-4">
-              <div className="h-px flex-1 bg-gradient-to-r from-primary/30 to-transparent" />
-              <span className="text-xs font-mono text-muted-foreground">
-                {user.name ? `Welcome back, ${user.name}` : "Welcome back"}
-              </span>
-              <span className="text-primary animate-blink font-mono">_</span>
-              <div className="h-px flex-1 bg-gradient-to-l from-primary/30 to-transparent" />
-            </div>
-          </div>
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
+          <div className="p-8 md:p-12 max-w-5xl mx-auto">
 
-          {/* Terminal Status Bar */}
-          <div className="mb-8 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-border/50 bg-card/50 backdrop-blur-sm font-mono text-xs">
-              <span className="text-primary">$</span>
-              <span className="text-muted-foreground">status</span>
-              <span className="text-foreground/70">--</span>
-              <span className="text-emerald-400">online</span>
-              <span className="mx-2 text-border">|</span>
-              <span className="text-muted-foreground">engine</span>
-              <span className="text-foreground/70">--</span>
-              <span className="text-cyan-400">5-tier parallel</span>
-              <span className="mx-2 text-border">|</span>
-              <span className="text-muted-foreground">mode</span>
-              <span className="text-foreground/70">--</span>
-              <span className="text-amber-400">stealth</span>
-            </div>
-          </div>
+            {/* Hero Section */}
+            <section className="mb-16 animate-fade-in">
+              {/* Glass pill badge */}
+              <div className="border-gradient inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 mb-6">
+                <div className="h-5 w-5 grid place-items-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                  <Shield className="h-3 w-3" />
+                </div>
+                <span className="text-xs text-foreground/60">Open source platform</span>
+              </div>
 
-          {/* Quick Actions */}
-          <div className="grid gap-4 md:grid-cols-3 mb-8">
-            {[
-              {
-                href: "/scrape",
-                icon: Search,
-                title: "Scrape",
-                subtitle: "Single Page",
-                desc: "Extract content from any URL with JS rendering",
-                color: "text-emerald-400",
-                glow: "group-hover:shadow-[0_0_30px_-5px_hsla(142,100%,50%,0.15)]",
-              },
-              {
-                href: "/crawl",
-                icon: Globe,
-                title: "Crawl",
-                subtitle: "Full Website",
-                desc: "Recursively crawl entire sites with BFS",
-                color: "text-cyan-400",
-                glow: "group-hover:shadow-[0_0_30px_-5px_hsla(187,100%,50%,0.15)]",
-              },
-              {
-                href: "/map",
-                icon: Map,
-                title: "Map",
-                subtitle: "URL Discovery",
-                desc: "Fast sitemap discovery without content scraping",
-                color: "text-violet-400",
-                glow: "group-hover:shadow-[0_0_30px_-5px_hsla(263,100%,60%,0.15)]",
-              },
-            ].map((item, i) => (
-              <Link key={item.href} href={item.href}>
-                <Card
-                  className={`group cursor-pointer transition-all duration-300 border-border/50 bg-card/50 backdrop-blur-sm ${item.glow} animate-fade-in`}
-                  style={{ animationDelay: `${0.15 + i * 0.05}s` }}
-                >
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full bg-current ${item.color} animate-pulse-glow`} />
-                      <CardTitle className="text-sm font-mono font-medium">{item.title}</CardTitle>
-                    </div>
-                    <item.icon className={`h-5 w-5 ${item.color} opacity-60 group-hover:opacity-100 transition-opacity`} />
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-xl font-bold font-mono">{item.subtitle}</p>
-                    <p className="text-xs text-muted-foreground mt-1 font-mono">
-                      {item.desc}
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+              {/* Large heading */}
+              <h1 className="text-5xl sm:text-6xl md:text-7xl font-semibold tracking-tight leading-[0.95]">
+                {user.name ? "Welcome back," : "Web scraping"}
+                <br />
+                <span className="gradient-text-white">
+                  {user.name ? `${user.name}.` : "made simple."}
+                </span>
+              </h1>
 
-          {/* Recent Activity */}
-          {recentJobs.length > 0 && (
-            <div className="mb-8 animate-fade-in" style={{ animationDelay: "0.3s" }}>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-mono font-semibold flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-primary" />
-                  <span className="text-muted-foreground">~/</span>recent-activity
-                </h2>
-                <Link href="/jobs">
-                  <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground font-mono text-xs">
-                    view all
-                    <ArrowRight className="h-3 w-3" />
+              {/* Description */}
+              <p className="text-sm sm:text-base text-foreground/50 max-w-lg mt-6 leading-relaxed">
+                A self-hosted web crawling platform with 5-tier parallel extraction,
+                stealth browsing, and AI-powered content analysis.
+              </p>
+
+              {/* Feature chips */}
+              <div className="mt-6 flex flex-wrap gap-2.5">
+                {features.map((f) => (
+                  <div
+                    key={f.label}
+                    className="border-gradient inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 hover:bg-foreground/[0.04] transition-colors cursor-default"
+                  >
+                    <f.icon className="h-3.5 w-3.5 text-foreground/50" />
+                    <span className="text-xs text-foreground/60">{f.label}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTAs */}
+              <div className="flex flex-col sm:flex-row gap-3 mt-8">
+                <Link href="/scrape">
+                  <Button size="lg" className="rounded-2xl px-6 gap-2 hover:-translate-y-0.5 transition-all">
+                    <Play className="h-4 w-4" />
+                    Start scraping
+                  </Button>
+                </Link>
+                <Link href="/api-keys">
+                  <Button variant="outline" size="lg" className="rounded-2xl px-6 gap-2 hover:bg-foreground/[0.04] hover:-translate-y-0.5 transition-all">
+                    <ArrowRight className="h-4 w-4" />
+                    Get API key
                   </Button>
                 </Link>
               </div>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 stagger-children">
-                {recentJobs.map((job) => {
-                  const Icon = getTypeIcon(job.type);
-                  const jobUrl = getJobUrl(job);
-                  return (
-                    <Link key={job.id} href={getJobDetailPath(job)}>
-                      <Card className="cursor-pointer h-full border-border/50 bg-card/50 backdrop-blur-sm">
-                        <CardContent className="p-4">
+
+              {/* Divider */}
+              <div className="mt-10 h-px w-full bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
+
+              {/* Mini metrics */}
+              <div className="mt-6 grid grid-cols-3 gap-4 max-w-md">
+                {metrics.map((m) => (
+                  <div key={m.label} className="border-gradient rounded-2xl p-4">
+                    <div className="text-xs text-foreground/50">{m.label}</div>
+                    <div className="mt-1 text-lg font-medium tracking-tight">{m.value}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Action Cards */}
+            <section className="mb-12">
+              <div className="grid gap-4 md:grid-cols-3 stagger-children">
+                {actions.map((item) => (
+                  <Link key={item.href} href={item.href}>
+                    <div className="group border-gradient rounded-2xl p-5 hover:bg-foreground/[0.03] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer h-full">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className={`h-8 w-8 rounded-xl ${item.bg} grid place-items-center`}>
+                          <item.icon className={`h-4 w-4 ${item.color}`} />
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-foreground/20 group-hover:text-foreground/50 group-hover:translate-x-0.5 transition-all" />
+                      </div>
+                      <h3 className="font-semibold tracking-tight">{item.title}</h3>
+                      <p className="text-xs text-foreground/50 mt-0.5">{item.subtitle}</p>
+                      <p className="text-xs text-foreground/40 mt-2 leading-relaxed">{item.desc}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+
+            {/* Recent Activity */}
+            {recentJobs.length > 0 && (
+              <section className="mb-12 animate-fade-in" style={{ animationDelay: "0.2s" }}>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-medium flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-foreground/40" />
+                    Recent activity
+                  </h2>
+                  <Link href="/jobs">
+                    <Button variant="ghost" size="sm" className="gap-1 text-foreground/50 text-xs">
+                      View all
+                      <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 stagger-children">
+                  {recentJobs.map((job) => {
+                    const Icon = getTypeIcon(job.type);
+                    const jobUrl = getJobUrl(job);
+                    return (
+                      <Link key={job.id} href={getJobDetailPath(job)}>
+                        <div className="border-gradient rounded-2xl p-4 hover:bg-foreground/[0.03] transition-all cursor-pointer h-full">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-1.5">
-                              <Badge variant="outline" className="capitalize text-[10px] gap-1 font-mono">
+                              <Badge variant="outline" className="capitalize text-[10px] gap-1">
                                 <Icon className="h-3 w-3" />
                                 {job.type}
                               </Badge>
-                              <Badge variant={getStatusVariant(job.status)} className="text-[10px] font-mono">
+                              <Badge variant={getStatusVariant(job.status)} className="text-[10px]">
                                 {job.status}
                               </Badge>
                             </div>
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-mono">
+                            <span className="text-[10px] text-foreground/40 flex items-center gap-1">
                               <Clock className="h-2.5 w-2.5" />
                               {timeAgo(job.created_at)}
                             </span>
                           </div>
                           {jobUrl && (
-                            <p className="text-xs font-mono truncate text-foreground/80" title={jobUrl}>
+                            <p className="text-xs font-mono truncate text-foreground/70" title={jobUrl}>
                               {jobUrl}
                             </p>
                           )}
                           {job.total_pages > 0 && (
-                            <div className="flex items-center gap-2 mt-1.5">
-                              <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                            <div className="flex items-center gap-2 mt-2">
+                              <div className="flex-1 h-1 bg-foreground/5 rounded-full overflow-hidden">
                                 <div
-                                  className="h-full bg-primary/60 rounded-full transition-all duration-500"
+                                  className="h-full bg-primary/50 rounded-full transition-all duration-500"
                                   style={{ width: `${Math.min(100, (job.completed_pages / job.total_pages) * 100)}%` }}
                                 />
                               </div>
-                              <span className="text-[10px] font-mono text-muted-foreground">
+                              <span className="text-[10px] font-mono text-foreground/40">
                                 {job.completed_pages}/{job.total_pages}
                               </span>
                             </div>
                           )}
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
-          {/* Features Grid */}
-          <div className="grid gap-4 md:grid-cols-2 animate-fade-in" style={{ animationDelay: "0.4s" }}>
-            <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm font-mono">
-                  <Zap className="h-4 w-4 text-primary" />
-                  <span className="text-muted-foreground">~/</span>capabilities
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {[
-                  { badge: "BYOK", icon: Key, title: "Bring Your Own Key", desc: "Use your own OpenAI, Anthropic, or Groq keys" },
-                  { badge: "FAST", icon: Cpu, title: "5-Tier Parallel Engine", desc: "HTTP race + browser stealth + fallback archive" },
-                  { badge: "OSS", icon: Shield, title: "Open Source", desc: "Self-hosted, no usage limits, no vendor lock-in" },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-accent/50 transition-colors">
-                    <Badge variant="success" className="mt-0.5 font-mono text-[10px]">{item.badge}</Badge>
-                    <div>
-                      <p className="text-xs font-mono font-medium">{item.title}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {item.desc}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm font-mono">
-                  <Terminal className="h-4 w-4 text-primary" />
-                  <span className="text-muted-foreground">~/</span>quickstart
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1.5">
-                {[
-                  { step: "01", label: "Generate an API key", desc: "For programmatic access", href: "/api-keys" },
-                  { step: "02", label: "Add your LLM key", desc: "For AI-powered extraction", href: "/settings" },
-                  { step: "03", label: "Start scraping", desc: "Try the scrape playground", href: "/scrape" },
-                ].map((item) => (
-                  <Link key={item.step} href={item.href}>
-                    <div className="flex items-center justify-between p-2.5 rounded-lg hover:bg-accent/50 transition-colors group">
-                      <div className="flex items-center gap-3">
-                        <span className="text-primary font-mono text-xs font-bold">{item.step}</span>
+            {/* Bottom Grid: Capabilities + Quickstart */}
+            <section className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
+              <div className="grid gap-4 md:grid-cols-2">
+                {/* Capabilities */}
+                <div className="border-gradient rounded-2xl p-6">
+                  <h3 className="text-sm font-medium flex items-center gap-2 mb-4">
+                    <Zap className="h-4 w-4 text-emerald-400" />
+                    Capabilities
+                  </h3>
+                  <div className="space-y-3">
+                    {[
+                      { label: "Bring Your Own Key", desc: "Use your own OpenAI, Anthropic, or Groq keys", tag: "BYOK" },
+                      { label: "5-Tier Parallel Engine", desc: "HTTP race, browser stealth, and archive fallback", tag: "FAST" },
+                      { label: "Open Source", desc: "Self-hosted, no limits, no vendor lock-in", tag: "OSS" },
+                    ].map((item) => (
+                      <div key={item.tag} className="flex items-start gap-3 p-2 rounded-xl hover:bg-foreground/[0.02] transition-colors">
+                        <Badge variant="outline" className="text-[10px] mt-0.5 text-emerald-400 border-emerald-500/20">
+                          {item.tag}
+                        </Badge>
                         <div>
-                          <p className="text-xs font-mono font-medium">{item.label}</p>
-                          <p className="text-[11px] text-muted-foreground">{item.desc}</p>
+                          <p className="text-xs font-medium">{item.label}</p>
+                          <p className="text-[11px] text-foreground/40 mt-0.5">{item.desc}</p>
                         </div>
                       </div>
-                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-                    </div>
-                  </Link>
-                ))}
-
-                <div className="mt-3 p-3 rounded-lg border border-border/50 bg-background/50">
-                  <p className="text-[11px] font-mono text-muted-foreground">
-                    <span className="text-primary">$</span> curl -X POST /api/v1/scrape \
-                  </p>
-                  <p className="text-[11px] font-mono text-muted-foreground pl-4">
-                    -H &quot;Authorization: Bearer wh_...&quot; \
-                  </p>
-                  <p className="text-[11px] font-mono text-muted-foreground pl-4">
-                    -d &apos;{`{"url": "https://example.com"}`}&apos;
-                  </p>
+                    ))}
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+
+                {/* Quickstart */}
+                <div className="border-gradient rounded-2xl p-6">
+                  <h3 className="text-sm font-medium flex items-center gap-2 mb-4">
+                    <Play className="h-4 w-4 text-blue-400" />
+                    Quickstart
+                  </h3>
+                  <div className="space-y-1.5">
+                    {[
+                      { step: "01", label: "Generate an API key", desc: "For programmatic access", href: "/api-keys" },
+                      { step: "02", label: "Add your LLM key", desc: "For AI-powered extraction", href: "/settings" },
+                      { step: "03", label: "Start scraping", desc: "Try the scrape playground", href: "/scrape" },
+                    ].map((item) => (
+                      <Link key={item.step} href={item.href}>
+                        <div className="flex items-center justify-between p-2.5 rounded-xl hover:bg-foreground/[0.02] transition-colors group">
+                          <div className="flex items-center gap-3">
+                            <span className="text-primary font-mono text-xs font-bold">{item.step}</span>
+                            <div>
+                              <p className="text-xs font-medium">{item.label}</p>
+                              <p className="text-[11px] text-foreground/40">{item.desc}</p>
+                            </div>
+                          </div>
+                          <ArrowRight className="h-3.5 w-3.5 text-foreground/20 group-hover:text-foreground/50 transition-colors" />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 p-3 rounded-xl bg-foreground/[0.03] border border-foreground/[0.06]">
+                    <p className="text-[11px] font-mono text-foreground/50">
+                      <span className="text-primary">$</span> curl -X POST /api/v1/scrape \
+                    </p>
+                    <p className="text-[11px] font-mono text-foreground/50 pl-4">
+                      -H &quot;Authorization: Bearer wh_...&quot; \
+                    </p>
+                    <p className="text-[11px] font-mono text-foreground/50 pl-4">
+                      -d &apos;{`{"url": "https://example.com"}`}&apos;
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
           </div>
         </div>
       </main>

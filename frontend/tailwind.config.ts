@@ -62,15 +62,15 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(24px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
-        "pulse-glow": {
-          "0%, 100%": { opacity: "0.4" },
+        "pulse-soft": {
+          "0%, 100%": { opacity: "0.5" },
           "50%": { opacity: "1" },
         },
       },
       animation: {
         "fade-in": "fade-in 0.5s ease-out forwards",
         "slide-up": "slide-up 0.6s ease-out forwards",
-        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "pulse-soft": "pulse-soft 2.5s ease-in-out infinite",
       },
     },
   },

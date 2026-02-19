@@ -15,7 +15,6 @@ import {
   Layers,
   Clock,
   BarChart3,
-  Terminal,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -43,22 +42,20 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm">
+    <aside className="flex h-screen w-64 flex-col border-r border-border/50 bg-card/80 backdrop-blur-sm">
       {/* Logo */}
       <div className="flex h-16 items-center gap-2.5 border-b border-border/50 px-5">
-        <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10 border border-primary/20">
-          <Terminal className="h-4 w-4 text-primary" />
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20">
+          <Globe className="h-4 w-4 text-primary" />
         </div>
         <div className="flex flex-col">
-          <span className="text-sm font-bold font-mono tracking-tight">
-            WebHarvest
-          </span>
-          <span className="text-[10px] text-muted-foreground font-mono">v0.1.0</span>
+          <span className="text-sm font-semibold tracking-tight">WebHarvest</span>
+          <span className="text-[10px] text-foreground/40">v0.1.0</span>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-0.5 stagger-children overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
           return (
@@ -66,17 +63,14 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200 group relative",
+                "flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200",
                 isActive
-                  ? "bg-primary/10 text-primary border border-primary/20"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground border border-transparent"
+                  ? "bg-primary/10 text-primary"
+                  : "text-foreground/50 hover:bg-foreground/[0.04] hover:text-foreground/80"
               )}
             >
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-primary rounded-r" />
-              )}
-              <item.icon className={cn("h-4 w-4 transition-colors", isActive && "text-primary")} />
-              <span className="font-mono">{item.label}</span>
+              <item.icon className={cn("h-4 w-4", isActive ? "text-primary" : "text-foreground/40")} />
+              <span>{item.label}</span>
             </Link>
           );
         })}
@@ -87,7 +81,7 @@ export function Sidebar() {
         <ThemeToggle />
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium font-mono text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-red-400 border border-transparent"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-foreground/50 transition-all duration-200 hover:bg-red-500/10 hover:text-red-400"
         >
           <LogOut className="h-4 w-4" />
           Logout

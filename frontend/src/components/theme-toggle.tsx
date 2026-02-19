@@ -49,7 +49,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={cycleTheme}
-      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium font-mono text-muted-foreground transition-all duration-200 hover:bg-accent hover:text-foreground border border-transparent"
+      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-foreground/50 transition-all duration-200 hover:bg-foreground/[0.04] hover:text-foreground/80"
       title={`Theme: ${label}`}
     >
       {icon}
