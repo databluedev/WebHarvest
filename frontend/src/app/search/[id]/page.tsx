@@ -340,7 +340,7 @@ export default function SearchStatusPage() {
       setPolling(false);
       return;
     }
-    const interval = setInterval(fetchStatus, 2000);
+    const interval = setInterval(fetchStatus, 1000);
     return () => clearInterval(interval);
   }, [polling, status?.status]);
 

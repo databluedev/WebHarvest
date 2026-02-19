@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ import Link from "next/link";
 
 type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "json";
 
-function BatchResultCard({ item, index }: { item: any; index: number }) {
+const BatchResultCard = memo(function BatchResultCard({ item, index }: { item: any; index: number }) {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("markdown");
 
@@ -342,7 +342,7 @@ function BatchResultCard({ item, index }: { item: any; index: number }) {
       )}
     </Card>
   );
-}
+});
 
 export default function BatchStatusPage() {
   const router = useRouter();
@@ -366,7 +366,7 @@ export default function BatchStatusPage() {
       setPolling(false);
       return;
     }
-    const interval = setInterval(fetchStatus, 2000);
+    const interval = setInterval(fetchStatus, 1000);
     return () => clearInterval(interval);
   }, [polling, status?.status]);
 
@@ -396,10 +396,10 @@ export default function BatchStatusPage() {
     status?.total_urls > 0
       ? Math.min(100, Math.round((status.completed_urls / status.total_urls) * 100))
       : 0;
-  const successCount = status?.data?.filter((d: any) => d.success)?.length || 0;
-  const failCount = status?.data?.filter((d: any) => !d.success)?.length || 0;
-  const totalWords = status?.data?.reduce((sum: number, d: any) => sum + (d.metadata?.word_count || 0), 0) || 0;
-  const screenshotCount = status?.data?.filter((d: any) => d.screenshot)?.length || 0;
+  const successCount = useMemo(() => status?.data?.filter((d: any) => d.success)?.length || 0, [status?.data]);
+  const failCount = useMemo(() => status?.data?.filter((d: any) => !d.success)?.length || 0, [status?.data]);
+  const totalWords = useMemo(() => status?.data?.reduce((sum: number, d: any) => sum + (d.metadata?.word_count || 0), 0) || 0, [status?.data]);
+  const screenshotCount = useMemo(() => status?.data?.filter((d: any) => d.screenshot)?.length || 0, [status?.data]);
 
   return (
     <div className="flex h-screen">

@@ -423,7 +423,7 @@ async def _try_accept_cookies(page) -> None:
             el = await page.query_selector(selector)
             if el and await el.is_visible():
                 await el.click()
-                await page.wait_for_timeout(random.randint(300, 600))
+                await page.wait_for_timeout(random.randint(100, 300))
                 return
         except Exception:
             continue
@@ -444,7 +444,7 @@ async def _try_accept_google_consent(page) -> None:
             btn = await page.query_selector(selector)
             if btn and await btn.is_visible():
                 await btn.click()
-                await page.wait_for_timeout(random.randint(500, 1000))
+                await page.wait_for_timeout(random.randint(200, 400))
                 return
         except Exception:
             continue
@@ -879,7 +879,7 @@ async def scrape_url(
                 ("httpx", _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)),
             )
 
-        race = await _race_strategies(http_coros, url, timeout=15)
+        race = await _race_strategies(http_coros, url, timeout=10)
         _update_best(race)
         if race.success:
             html, sc, hdrs = _unpack_http_result(race.winner_result)
@@ -894,6 +894,8 @@ async def scrape_url(
             await record_strategy_result(url, "tier1", 1, False, elapsed_ms)
 
     # === Tier 2: Browser race — race(chromium_stealth, firefox_stealth) ===
+    # For hard sites with starting_tier <= 2, combine Tier 2 + Tier 3 into one big race
+    _skip_tier3 = False
     if not fetched and starting_tier <= 2:
         tier_start = time.time()
 
@@ -908,23 +910,37 @@ async def scrape_url(
                 ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
             ]
 
-        # Hard sites need more time for warm-up + challenge resolution
-        t2_timeout = 45 if hard_site else 30
+        # For hard sites, race Tier 2 AND Tier 3 concurrently for massive speed win
+        if hard_site and starting_tier <= 3:
+            heavy_coros = [
+                ("google_search_chain", _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)),
+                ("advanced_prewarm", _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)),
+            ]
+            browser_coros.extend(heavy_coros)
+            _skip_tier3 = True
+            t2_timeout = 35  # Combined race timeout
+        else:
+            t2_timeout = 30 if hard_site else 20
+
         race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=t2_timeout)
         _update_best(race)
         if race.success:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(race.winner_result)
             fetched = True
             winning_strategy = race.winner_name
-            winning_tier = 2
+            # Determine correct tier based on which strategy won
+            if race.winner_name in ("google_search_chain", "advanced_prewarm"):
+                winning_tier = 3
+            else:
+                winning_tier = 2
             elapsed_ms = (time.time() - tier_start) * 1000
-            await record_strategy_result(url, winning_strategy, 2, True, elapsed_ms)
+            await record_strategy_result(url, winning_strategy, winning_tier, True, elapsed_ms)
         else:
             elapsed_ms = (time.time() - tier_start) * 1000
             await record_strategy_result(url, "tier2", 2, False, elapsed_ms)
 
     # === Tier 3: Heavy race (hard sites) — race(google_search, advanced_prewarm) ===
-    if not fetched and hard_site and starting_tier <= 3:
+    if not fetched and hard_site and starting_tier <= 3 and not _skip_tier3:
         tier_start = time.time()
 
         heavy_coros = [
@@ -932,7 +948,7 @@ async def scrape_url(
             ("advanced_prewarm", _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)),
         ]
 
-        race = await _race_strategies(heavy_coros, url, validate_fn=_validate_browser, timeout=45)
+        race = await _race_strategies(heavy_coros, url, validate_fn=_validate_browser, timeout=35)
         _update_best(race)
         if race.success:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(race.winner_result)
@@ -958,7 +974,7 @@ async def scrape_url(
             html = result[0] if isinstance(result, tuple) else result
             return bool(html) and len(html) > 500 and not _looks_blocked(html)
 
-        race = await _race_strategies(fallback_coros, url, validate_fn=_validate_fallback, timeout=20)
+        race = await _race_strategies(fallback_coros, url, validate_fn=_validate_fallback, timeout=12)
         _update_best(race)
         if race.success:
             html, sc, hdrs = _unpack_http_result(race.winner_result)
@@ -1356,8 +1372,8 @@ async def _fetch_with_browser_stealth(
             homepage = _get_homepage(url)
             if homepage and not has_cookies:
                 try:
-                    await page.goto(homepage, wait_until="domcontentloaded", timeout=12000, referer=referrer)
-                    await page.wait_for_timeout(random.randint(2000, 4000))
+                    await page.goto(homepage, wait_until="domcontentloaded", timeout=8000, referer=referrer)
+                    await page.wait_for_timeout(random.randint(800, 1500))
                     # Human-like interaction during warm-up
                     vp = page.viewport_size or {"width": 1920, "height": 1080}
                     await page.mouse.move(
@@ -1366,9 +1382,9 @@ async def _fetch_with_browser_stealth(
                         steps=random.randint(8, 15),
                     )
                     await page.mouse.wheel(0, random.randint(200, 500))
-                    await page.wait_for_timeout(random.randint(500, 1000))
+                    await page.wait_for_timeout(random.randint(200, 400))
                     await _try_accept_cookies(page)
-                    await page.wait_for_timeout(random.randint(500, 1000))
+                    await page.wait_for_timeout(random.randint(200, 400))
                 except Exception:
                     pass  # Best-effort warm-up
 
@@ -1382,13 +1398,13 @@ async def _fetch_with_browser_stealth(
 
         # Networkidle — give JS time to render; hard sites need more
         try:
-            await page.wait_for_load_state("networkidle", timeout=10000 if hard_site else 5000)
+            await page.wait_for_load_state("networkidle", timeout=6000 if hard_site else 3000)
         except Exception:
             pass
 
         if hard_site:
             # Human-like interaction after page load
-            await page.wait_for_timeout(random.randint(1000, 2000))
+            await page.wait_for_timeout(random.randint(500, 1000))
             vp = page.viewport_size or {"width": 1920, "height": 1080}
             await page.mouse.move(
                 random.randint(200, vp["width"] - 200),
@@ -1396,7 +1412,7 @@ async def _fetch_with_browser_stealth(
                 steps=random.randint(8, 15),
             )
             await page.mouse.wheel(0, random.randint(300, 600))
-            await page.wait_for_timeout(random.randint(500, 1000))
+            await page.wait_for_timeout(random.randint(200, 400))
             await _try_accept_cookies(page)
 
             # Challenge re-check: Akamai/PerimeterX may serve a challenge that
@@ -1406,7 +1422,7 @@ async def _fetch_with_browser_stealth(
                 if not _looks_blocked(html_check):
                     break
                 logger.debug(f"Challenge detected on {url}, waiting for resolution (attempt {_retry + 1})")
-                await page.wait_for_timeout(random.randint(3000, 5000))
+                await page.wait_for_timeout(random.randint(1500, 2500))
                 # Interact to help solve visual challenges
                 await page.mouse.move(
                     random.randint(200, vp["width"] - 200),
@@ -1414,7 +1430,7 @@ async def _fetch_with_browser_stealth(
                     steps=random.randint(8, 15),
                 )
         else:
-            await page.wait_for_timeout(random.randint(200, 500))
+            await page.wait_for_timeout(random.randint(100, 250))
 
         if request.wait_for > 0:
             await page.wait_for_timeout(request.wait_for)
@@ -1458,12 +1474,12 @@ async def _fetch_with_browser_session(
             response_headers = {k.lower(): v for k, v in response.headers.items()}
 
         try:
-            await page.wait_for_load_state("networkidle", timeout=10000 if hard_site else 5000)
+            await page.wait_for_load_state("networkidle", timeout=6000 if hard_site else 3000)
         except Exception:
             pass
 
         if hard_site:
-            await page.wait_for_timeout(random.randint(1000, 2000))
+            await page.wait_for_timeout(random.randint(500, 1000))
             vp = page.viewport_size or {"width": 1920, "height": 1080}
             await page.mouse.move(
                 random.randint(200, vp["width"] - 200),
@@ -1471,21 +1487,21 @@ async def _fetch_with_browser_session(
                 steps=random.randint(8, 15),
             )
             await page.mouse.wheel(0, random.randint(300, 600))
-            await page.wait_for_timeout(random.randint(500, 1000))
+            await page.wait_for_timeout(random.randint(200, 400))
 
             # Challenge re-check for Akamai/PerimeterX
             for _retry in range(2):
                 html_check = await page.content()
                 if not _looks_blocked(html_check):
                     break
-                await page.wait_for_timeout(random.randint(3000, 5000))
+                await page.wait_for_timeout(random.randint(1500, 2500))
                 await page.mouse.move(
                     random.randint(200, vp["width"] - 200),
                     random.randint(150, vp["height"] - 200),
                     steps=random.randint(8, 15),
                 )
         else:
-            await page.wait_for_timeout(random.randint(200, 500))
+            await page.wait_for_timeout(random.randint(100, 250))
 
         await _try_accept_cookies(page)
 
@@ -1550,7 +1566,7 @@ async def _fetch_with_google_search_chain(
             raw_html = await page.content()
             return raw_html, status_code, screenshot_b64, action_screenshots, response_headers
 
-        await page.wait_for_timeout(random.randint(1000, 2000))
+        await page.wait_for_timeout(random.randint(500, 1000))
 
         # 2. Accept Google consent (GDPR)
         await _try_accept_google_consent(page)
@@ -1580,7 +1596,7 @@ async def _fetch_with_google_search_chain(
             await page.wait_for_selector("#search", timeout=8000)
         except Exception:
             pass
-        await page.wait_for_timeout(random.randint(1000, 2000))
+        await page.wait_for_timeout(random.randint(500, 1000))
 
         # 5. Find and click link matching target domain
         links = await page.query_selector_all(f"a[href*='{domain}']")
@@ -1620,7 +1636,7 @@ async def _fetch_with_google_search_chain(
             except Exception:
                 pass
 
-        await page.wait_for_timeout(random.randint(1500, 3000))
+        await page.wait_for_timeout(random.randint(500, 1000))
         await _try_accept_cookies(page)
 
         # 6. If landed on domain but not exact page, navigate internally
@@ -1631,12 +1647,12 @@ async def _fetch_with_google_search_chain(
                 status_code = response.status if response else 0
                 if response:
                     response_headers = {k.lower(): v for k, v in response.headers.items()}
-                await page.wait_for_timeout(random.randint(1000, 2000))
+                await page.wait_for_timeout(random.randint(500, 1000))
             except Exception:
                 pass
 
         try:
-            await page.wait_for_load_state("networkidle", timeout=5000)
+            await page.wait_for_load_state("networkidle", timeout=3000)
         except Exception:
             pass
 
@@ -1702,7 +1718,7 @@ async def _fetch_with_advanced_prewarm(
         # --- Phase 1: Google session ---
         try:
             await page.goto("https://www.google.com/", wait_until="domcontentloaded", timeout=10000)
-            await page.wait_for_timeout(random.randint(1000, 2000))
+            await page.wait_for_timeout(random.randint(500, 1000))
 
             await _try_accept_google_consent(page)
 
@@ -1714,7 +1730,7 @@ async def _fetch_with_advanced_prewarm(
                     random.randint(100, vp["height"] - 200),
                     steps=random.randint(8, 15),
                 )
-                await page.wait_for_timeout(random.randint(200, 500))
+                await page.wait_for_timeout(random.randint(100, 200))
         except Exception:
             pass
 
@@ -1735,7 +1751,7 @@ async def _fetch_with_advanced_prewarm(
                     await page.wait_for_selector("#search", timeout=8000)
                 except Exception:
                     pass
-                await page.wait_for_timeout(random.randint(1000, 2000))
+                await page.wait_for_timeout(random.randint(500, 1000))
 
                 # Click first matching result
                 links = await page.query_selector_all(f"a[href*='{domain}']")
@@ -1763,7 +1779,7 @@ async def _fetch_with_advanced_prewarm(
         except Exception:
             pass
 
-        await page.wait_for_timeout(random.randint(1500, 3000))
+        await page.wait_for_timeout(random.randint(500, 1000))
         await _try_accept_cookies(page)
 
         # --- Phase 3: Browse naturally (1-2 internal pages, reduced delays) ---
@@ -1783,7 +1799,7 @@ async def _fetch_with_advanced_prewarm(
 
                     # Scroll
                     await page.mouse.wheel(0, random.randint(200, 500))
-                    await page.wait_for_timeout(random.randint(300, 600))
+                    await page.wait_for_timeout(random.randint(150, 300))
 
                     # Click a random internal link
                     internal_links = await page.query_selector_all(f"a[href*='{domain}']")
@@ -1791,13 +1807,13 @@ async def _fetch_with_advanced_prewarm(
                         link = random.choice(internal_links[:10])
                         try:
                             await link.scroll_into_view_if_needed()
-                            await page.wait_for_timeout(random.randint(150, 300))
+                            await page.wait_for_timeout(random.randint(80, 150))
                             await link.click()
                             await page.wait_for_load_state("domcontentloaded", timeout=8000)
                         except Exception:
                             pass
 
-                    await page.wait_for_timeout(random.randint(500, 1000))
+                    await page.wait_for_timeout(random.randint(200, 400))
                     await _try_accept_cookies(page)
             except Exception:
                 pass
@@ -1812,19 +1828,19 @@ async def _fetch_with_advanced_prewarm(
             pass
 
         try:
-            await page.wait_for_load_state("networkidle", timeout=8000)
+            await page.wait_for_load_state("networkidle", timeout=5000)
         except Exception:
             pass
 
         # Final human interaction
         vp = page.viewport_size or {"width": 1920, "height": 1080}
-        for _ in range(random.randint(3, 5)):
+        for _ in range(random.randint(2, 3)):
             await page.mouse.move(
                 random.randint(100, vp["width"] - 100),
                 random.randint(100, vp["height"] - 100),
                 steps=random.randint(8, 15),
             )
-            await page.wait_for_timeout(random.randint(200, 500))
+            await page.wait_for_timeout(random.randint(100, 200))
 
         await _try_accept_cookies(page)
 
@@ -1833,7 +1849,7 @@ async def _fetch_with_advanced_prewarm(
             html_check = await page.content()
             if not _looks_blocked(html_check):
                 break
-            await page.wait_for_timeout(random.randint(3000, 5000))
+            await page.wait_for_timeout(random.randint(1500, 2500))
 
         if request.wait_for > 0:
             await page.wait_for_timeout(request.wait_for)
@@ -2071,7 +2087,7 @@ async def scrape_url_fetch_only(
         if not hard_site:
             http_coros.append(("httpx", _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)))
 
-        race = await _race_strategies(http_coros, url, timeout=15)
+        race = await _race_strategies(http_coros, url, timeout=10)
         if race.best_html and len(race.best_html) > len(raw_html_best):
             raw_html_best = race.best_html
         if race.success:
@@ -2084,6 +2100,8 @@ async def scrape_url_fetch_only(
             await record_strategy_result(url, winning_strategy, 1, True, elapsed_ms)
 
     # === Tier 2: Browser ===
+    # For hard sites with starting_tier <= 2, combine Tier 2 + Tier 3 into one big race
+    _skip_tier3_fetch = False
     if not fetched and starting_tier <= 2:
         tier_start = time.time()
 
@@ -2099,7 +2117,18 @@ async def scrape_url_fetch_only(
                 ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
             ]
 
-        t2_timeout = 45 if _is_hard_site(url) else 30
+        # For hard sites, race Tier 2 AND Tier 3 concurrently for massive speed win
+        if hard_site and starting_tier <= 3:
+            heavy_coros = [
+                ("google_search_chain", _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)),
+                ("advanced_prewarm", _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)),
+            ]
+            browser_coros.extend(heavy_coros)
+            _skip_tier3_fetch = True
+            t2_timeout = 35  # Combined race timeout
+        else:
+            t2_timeout = 30 if hard_site else 20
+
         race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=t2_timeout)
         if race.best_html and len(race.best_html) > len(raw_html_best):
             raw_html_best = race.best_html
@@ -2107,12 +2136,16 @@ async def scrape_url_fetch_only(
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = race.winner_result
             fetched = True
             winning_strategy = race.winner_name
-            winning_tier = 2
+            # Determine correct tier based on which strategy won
+            if race.winner_name in ("google_search_chain", "advanced_prewarm"):
+                winning_tier = 3
+            else:
+                winning_tier = 2
             elapsed_ms = (time.time() - tier_start) * 1000
-            await record_strategy_result(url, winning_strategy, 2, True, elapsed_ms)
+            await record_strategy_result(url, winning_strategy, winning_tier, True, elapsed_ms)
 
     # === Tier 3: Heavy race (hard sites) ===
-    if not fetched and hard_site and starting_tier <= 3:
+    if not fetched and hard_site and starting_tier <= 3 and not _skip_tier3_fetch:
         tier_start = time.time()
         heavy_coros = [
             ("google_search_chain", _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)),
@@ -2123,7 +2156,7 @@ async def scrape_url_fetch_only(
             html = result[0] if isinstance(result, tuple) else result
             return bool(html) and not _looks_blocked(html)
 
-        race = await _race_strategies(heavy_coros, url, validate_fn=_validate_browser, timeout=45)
+        race = await _race_strategies(heavy_coros, url, validate_fn=_validate_browser, timeout=35)
         if race.best_html and len(race.best_html) > len(raw_html_best):
             raw_html_best = race.best_html
         if race.success:
@@ -2143,7 +2176,7 @@ async def scrape_url_fetch_only(
             html = result[0] if isinstance(result, tuple) else result
             return bool(html) and len(html) > 500 and not _looks_blocked(html)
 
-        race = await _race_strategies(fallback_coros, url, validate_fn=_validate_fallback, timeout=20)
+        race = await _race_strategies(fallback_coros, url, validate_fn=_validate_fallback, timeout=12)
         if race.best_html and len(race.best_html) > len(raw_html_best):
             raw_html_best = race.best_html
         if race.success:

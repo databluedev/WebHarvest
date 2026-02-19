@@ -39,6 +39,7 @@ export default function ScrapeDetailPage() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("markdown");
   const [copied, setCopied] = useState(false);
+  const [polling, setPolling] = useState(true);
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -48,12 +49,26 @@ export default function ScrapeDetailPage() {
     fetchStatus();
   }, [jobId]);
 
+  useEffect(() => {
+    if (!polling) return;
+    if (status && ["completed", "failed"].includes(status.status)) {
+      setPolling(false);
+      return;
+    }
+    const interval = setInterval(fetchStatus, 1000);
+    return () => clearInterval(interval);
+  }, [polling, status?.status]);
+
   const fetchStatus = useCallback(async () => {
     try {
       const res = await api.getScrapeStatus(jobId);
       setStatus(res);
+      if (["completed", "failed"].includes(res.status)) {
+        setPolling(false);
+      }
     } catch (err: any) {
       setError(err.message);
+      setPolling(false);
     }
   }, [jobId]);
 

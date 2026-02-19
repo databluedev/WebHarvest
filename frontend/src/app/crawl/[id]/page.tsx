@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ import Link from "next/link";
 
 type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "json";
 
-function PageResultCard({ page, index }: { page: any; index: number }) {
+const PageResultCard = memo(function PageResultCard({ page, index }: { page: any; index: number }) {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("markdown");
 
@@ -391,7 +391,7 @@ function PageResultCard({ page, index }: { page: any; index: number }) {
       )}
     </Card>
   );
-}
+});
 
 export default function CrawlStatusPage() {
   const router = useRouter();
@@ -415,7 +415,7 @@ export default function CrawlStatusPage() {
       setPolling(false);
       return;
     }
-    const interval = setInterval(fetchStatus, 2500);
+    const interval = setInterval(fetchStatus, 1000);
     return () => clearInterval(interval);
   }, [polling, status?.status]);
 
@@ -459,11 +459,11 @@ export default function CrawlStatusPage() {
       : 0;
 
   // Count screenshots
-  const screenshotCount = status?.data?.filter((p: any) => p.screenshot)?.length || 0;
-  const totalWords = status?.data?.reduce(
+  const screenshotCount = useMemo(() => status?.data?.filter((p: any) => p.screenshot)?.length || 0, [status?.data]);
+  const totalWords = useMemo(() => status?.data?.reduce(
     (sum: number, p: any) => sum + (p.metadata?.word_count || 0),
     0
-  ) || 0;
+  ) || 0, [status?.data]);
 
   return (
     <div className="flex h-screen">
