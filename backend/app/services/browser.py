@@ -667,7 +667,8 @@ class BrowserPool:
         self._playwright = None
         self._chromium: Browser | None = None
         self._firefox: Browser | None = None
-        self._semaphore: asyncio.Semaphore | None = None
+        self._chromium_semaphore: asyncio.Semaphore | None = None
+        self._firefox_semaphore: asyncio.Semaphore | None = None
         self._initialized = False
         self._loop = None
         self._init_lock: asyncio.Lock | None = None
@@ -713,7 +714,8 @@ class BrowserPool:
                 self._initialized = False
 
             self._loop = current_loop
-            self._semaphore = asyncio.Semaphore(settings.BROWSER_POOL_SIZE)
+            self._chromium_semaphore = asyncio.Semaphore(settings.CHROMIUM_POOL_SIZE)
+            self._firefox_semaphore = asyncio.Semaphore(settings.FIREFOX_POOL_SIZE)
             self._playwright = await async_playwright().start()
 
             # Chromium with anti-detection flags
@@ -726,7 +728,7 @@ class BrowserPool:
             self._firefox = None
 
             self._initialized = True
-            logger.info(f"Browser pool initialized (pool_size={settings.BROWSER_POOL_SIZE})")
+            logger.info(f"Browser pool initialized (chromium={settings.CHROMIUM_POOL_SIZE}, firefox={settings.FIREFOX_POOL_SIZE})")
 
     async def _ensure_firefox(self):
         """Lazy-launch Firefox on first use."""
@@ -867,8 +869,9 @@ class BrowserPool:
         from app.core.metrics import active_browser_contexts
 
         is_firefox = use_firefox and self._firefox is not None
+        semaphore = self._firefox_semaphore if is_firefox else self._chromium_semaphore
 
-        async with self._semaphore:
+        async with semaphore:
             active_browser_contexts.inc()
             try:
                 # Resolve the browser reference, relaunching if it crashed

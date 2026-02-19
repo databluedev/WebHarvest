@@ -28,8 +28,10 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
 
     # Browser Pool
-    BROWSER_POOL_SIZE: int = 5
+    BROWSER_POOL_SIZE: int = 8
     BROWSER_HEADLESS: bool = True
+    CHROMIUM_POOL_SIZE: int = 6
+    FIREFOX_POOL_SIZE: int = 2
 
     # Rate Limiting (per minute)
     RATE_LIMIT_SCRAPE: int = 100
@@ -53,6 +55,7 @@ class Settings(BaseSettings):
     # Cache
     CACHE_ENABLED: bool = True
     CACHE_TTL_SECONDS: int = 3600
+    STRATEGY_CACHE_TTL_SECONDS: int = 86400  # 24 hours
 
     # Metrics
     METRICS_ENABLED: bool = True

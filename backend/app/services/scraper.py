@@ -1,8 +1,10 @@
+import asyncio
 import base64
 import logging
 import random
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from urllib.parse import quote_plus, urlparse
 
@@ -21,8 +23,16 @@ from app.services.content import (
     extract_headings,
     extract_images,
 )
+from app.services.strategy_cache import (
+    get_domain_strategy,
+    record_strategy_result,
+    get_starting_tier,
+)
 
 logger = logging.getLogger(__name__)
+
+# Thread pool for CPU-bound content extraction
+_extraction_executor = ThreadPoolExecutor(max_workers=4)
 
 # ---------------------------------------------------------------------------
 # Anti-bot detection patterns
@@ -520,6 +530,90 @@ def _strip_wayback_toolbar(html: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Race helper — runs multiple strategy coroutines, returns first success
+# ---------------------------------------------------------------------------
+
+async def _race_strategies(
+    coros: list[tuple[str, Any]],
+    url: str,
+    validate_fn=None,
+) -> tuple[str, Any] | None:
+    """Run multiple strategy coroutines concurrently, return first success.
+
+    Args:
+        coros: List of (strategy_name, coroutine) tuples
+        url: URL being scraped (for logging)
+        validate_fn: Optional function to validate result. Receives the result
+                     and returns True if it's good. Defaults to checking
+                     non-empty HTML and not blocked.
+
+    Returns:
+        (strategy_name, result) tuple on first success, or None if all fail.
+    """
+    if not coros:
+        return None
+
+    if validate_fn is None:
+        def validate_fn(result):
+            # Result is a tuple; first element is always html
+            html = result[0] if isinstance(result, tuple) else result
+            if not html:
+                return False
+            # For HTTP strategies (html, status, headers)
+            if isinstance(result, tuple) and len(result) == 3:
+                return result[1] < 400 and not _looks_blocked(html)
+            # For browser strategies (html, status, screenshot, action_screenshots, headers)
+            if isinstance(result, tuple) and len(result) == 5:
+                return not _looks_blocked(html)
+            return not _looks_blocked(html)
+
+    # Wrap each coro to include its name in the return value
+    async def _named_wrapper(name: str, coro):
+        result = await coro
+        return name, result
+
+    tasks = [
+        asyncio.create_task(_named_wrapper(name, coro), name=name)
+        for name, coro in coros
+    ]
+
+    winner_name = None
+    winner_result = None
+
+    pending = set(tasks)
+    try:
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                try:
+                    name, result = task.result()
+                    if validate_fn(result):
+                        winner_name = name
+                        winner_result = result
+                        logger.info(f"Race winner: {name} for {url}")
+                        # Cancel all remaining
+                        for p in pending:
+                            p.cancel()
+                        pending = set()
+                        break
+                    else:
+                        logger.debug(f"Race: {name} failed validation for {url}")
+                except Exception as e:
+                    logger.debug(f"Race: strategy exception for {url}: {e}")
+    finally:
+        # Ensure all pending tasks are cancelled
+        for task in pending:
+            task.cancel()
+        # Wait for cancellations to settle
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    if winner_name:
+        return winner_name, winner_result
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Main scrape
 # ---------------------------------------------------------------------------
 
@@ -528,17 +622,13 @@ async def scrape_url(
     proxy_manager=None,
 ) -> ScrapeData:
     """
-    Scrape a URL with maximum anti-detection — 8-strategy cascade.
+    Scrape a URL with parallel tier architecture for maximum speed.
 
-    Pipeline:
-    1. curl_cffi multi-profile (5 TLS fingerprints)
-    2. httpx HTTP/2 with 10+ header rotation (non-hard sites)
-    3. Chromium stealth + request interception
-    4. Firefox stealth + request interception
-    5. Google Search referrer chain (hard sites only)
-    6. Advanced session pre-warming (hard sites only)
-    7. Google Cache fallback
-    8. Wayback Machine fallback (last resort)
+    Tier 0: Strategy cache hit → try last known working strategy
+    Tier 1: HTTP parallel → race(curl_cffi_multi, httpx)
+    Tier 2: Browser race → race(chromium_stealth, firefox_stealth)
+    Tier 3: Heavy race (hard sites) → race(google_search, advanced_prewarm)
+    Tier 4: Fallback parallel → race(google_cache, wayback)
     """
     from app.core.cache import get_cached_scrape, set_cached_scrape
     from app.core.metrics import scrape_duration_seconds
@@ -584,147 +674,198 @@ async def scrape_url(
     )
 
     fetched = False
+    winning_strategy = None
+    winning_tier = None
 
-    # === Strategy 1: curl_cffi multi-profile (ALL sites) ===
-    if not needs_browser:
+    # --- Strategy cache lookup ---
+    strategy_data = await get_domain_strategy(url)
+    starting_tier = get_starting_tier(strategy_data, hard_site)
+
+    # Helper to unpack race results and update state
+    def _unpack_http_result(result):
+        """Unpack (html, status, headers) tuple."""
+        return result[0], result[1], result[2]
+
+    def _unpack_browser_result(result):
+        """Unpack (html, status, screenshot, action_screenshots, headers) tuple."""
+        return result[0], result[1], result[2], result[3], result[4]
+
+    # === Tier 0: Strategy cache hit — try last known working strategy ===
+    if starting_tier == 0 and strategy_data and not needs_browser:
+        last_strategy = strategy_data.get("last_success_strategy", "")
+        last_tier = strategy_data.get("last_success_tier", 1)
+        tier_start = time.time()
+
         try:
-            raw_html, status_code, response_headers = await _fetch_with_curl_cffi_multi(
-                url, request.timeout, proxy_url=proxy_url
-            )
-            if raw_html and status_code < 400 and not _looks_blocked(raw_html):
-                fetched = True
-                logger.info(f"curl_cffi multi succeeded for {url}")
-            else:
-                if raw_html and len(raw_html) > len(raw_html_best):
-                    raw_html_best = raw_html
-                raw_html = ""
-                logger.info(f"curl_cffi multi blocked/failed for {url} (status={status_code}, best={len(raw_html_best)}), escalating")
-        except Exception as e:
-            logger.warning(f"curl_cffi multi exception for {url}: {e}")
+            if last_strategy.startswith("curl_cffi:"):
+                profile = last_strategy.split(":", 1)[1]
+                result = await _fetch_with_curl_cffi_single(
+                    url, request.timeout, profile=profile, proxy_url=proxy_url
+                )
+                html, sc, hdrs = result
+                if html and sc < 400 and not _looks_blocked(html):
+                    raw_html, status_code, response_headers = html, sc, hdrs
+                    fetched = True
+                    winning_strategy = last_strategy
+                    winning_tier = 0
+                    logger.info(f"Strategy cache hit for {url}: {last_strategy}")
+            elif last_strategy == "httpx":
+                result = await _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)
+                html, sc, hdrs = result
+                if html and sc < 400 and not _looks_blocked(html):
+                    raw_html, status_code, response_headers = html, sc, hdrs
+                    fetched = True
+                    winning_strategy = last_strategy
+                    winning_tier = 0
+                    logger.info(f"Strategy cache hit for {url}: {last_strategy}")
+            elif last_strategy in ("chromium_stealth", "firefox_stealth"):
+                use_ff = last_strategy == "firefox_stealth"
+                result = await _fetch_with_browser_stealth(
+                    url, request, proxy=proxy_playwright, use_firefox=use_ff
+                )
+                html = result[0]
+                if html and not _looks_blocked(html):
+                    raw_html, status_code, screenshot_b64, action_screenshots, response_headers = result
+                    fetched = True
+                    winning_strategy = last_strategy
+                    winning_tier = 0
+                    logger.info(f"Strategy cache hit for {url}: {last_strategy}")
+            elif last_strategy == "google_search_chain":
+                result = await _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)
+                html = result[0]
+                if html and not _looks_blocked(html):
+                    raw_html, status_code, screenshot_b64, action_screenshots, response_headers = result
+                    fetched = True
+                    winning_strategy = last_strategy
+                    winning_tier = 0
+                    logger.info(f"Strategy cache hit for {url}: {last_strategy}")
+            elif last_strategy == "advanced_prewarm":
+                result = await _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)
+                html = result[0]
+                if html and not _looks_blocked(html):
+                    raw_html, status_code, screenshot_b64, action_screenshots, response_headers = result
+                    fetched = True
+                    winning_strategy = last_strategy
+                    winning_tier = 0
+                    logger.info(f"Strategy cache hit for {url}: {last_strategy}")
 
-    # === Strategy 2: httpx HTTP/2 with header rotation (non-hard sites) ===
-    if not fetched and not needs_browser and not hard_site:
-        try:
-            raw_html, status_code, response_headers = await _fetch_with_httpx(
-                url, request.timeout, proxy_url=proxy_url
-            )
-            if raw_html and status_code < 400 and not _looks_blocked(raw_html):
-                fetched = True
-                logger.info(f"httpx succeeded for {url}")
-            else:
-                if raw_html and len(raw_html) > len(raw_html_best):
-                    raw_html_best = raw_html
-                raw_html = ""
+            if fetched:
+                elapsed_ms = (time.time() - tier_start) * 1000
+                await record_strategy_result(url, winning_strategy, 0, True, elapsed_ms)
         except Exception as e:
-            logger.warning(f"httpx exception for {url}: {e}")
+            logger.debug(f"Strategy cache hit attempt failed for {url}: {e}")
 
-    # === Strategy 3: Chromium stealth + request interception ===
+    # === Tier 1: HTTP parallel — race(curl_cffi_multi, httpx) ===
+    if not fetched and not needs_browser and starting_tier <= 1:
+        tier_start = time.time()
+
+        http_coros = [
+            ("curl_cffi_multi", _fetch_with_curl_cffi_multi(url, request.timeout, proxy_url=proxy_url)),
+        ]
+        if not hard_site:
+            http_coros.append(
+                ("httpx", _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)),
+            )
+
+        race_result = await _race_strategies(http_coros, url)
+        if race_result:
+            winner_name, result = race_result
+            html, sc, hdrs = _unpack_http_result(result)
+            raw_html, status_code, response_headers = html, sc, hdrs
+            fetched = True
+            # Map winner name to strategy for cache
+            if winner_name == "curl_cffi_multi":
+                winning_strategy = "curl_cffi:chrome124"  # Best guess; exact profile tracked inside
+            else:
+                winning_strategy = winner_name
+            winning_tier = 1
+            elapsed_ms = (time.time() - tier_start) * 1000
+            await record_strategy_result(url, winning_strategy, 1, True, elapsed_ms)
+        else:
+            elapsed_ms = (time.time() - tier_start) * 1000
+            await record_strategy_result(url, "tier1", 1, False, elapsed_ms)
+
+    # === Tier 2: Browser race — race(chromium_stealth, firefox_stealth) ===
+    if not fetched and starting_tier <= 2:
+        tier_start = time.time()
+
+        browser_coros = [
+            ("chromium_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright)),
+            ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
+        ]
+
+        def _validate_browser(result):
+            html = result[0] if isinstance(result, tuple) else result
+            return bool(html) and not _looks_blocked(html)
+
+        race_result = await _race_strategies(browser_coros, url, validate_fn=_validate_browser)
+        if race_result:
+            winner_name, result = race_result
+            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(result)
+            fetched = True
+            winning_strategy = winner_name
+            winning_tier = 2
+            elapsed_ms = (time.time() - tier_start) * 1000
+            await record_strategy_result(url, winning_strategy, 2, True, elapsed_ms)
+        else:
+            elapsed_ms = (time.time() - tier_start) * 1000
+            await record_strategy_result(url, "tier2", 2, False, elapsed_ms)
+
+    # === Tier 3: Heavy race (hard sites) — race(google_search, advanced_prewarm) ===
+    if not fetched and hard_site and starting_tier <= 3:
+        tier_start = time.time()
+
+        heavy_coros = [
+            ("google_search_chain", _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)),
+            ("advanced_prewarm", _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)),
+        ]
+
+        race_result = await _race_strategies(heavy_coros, url, validate_fn=_validate_browser)
+        if race_result:
+            winner_name, result = race_result
+            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(result)
+            fetched = True
+            winning_strategy = winner_name
+            winning_tier = 3
+            elapsed_ms = (time.time() - tier_start) * 1000
+            await record_strategy_result(url, winning_strategy, 3, True, elapsed_ms)
+        else:
+            elapsed_ms = (time.time() - tier_start) * 1000
+            await record_strategy_result(url, "tier3", 3, False, elapsed_ms)
+
+    # === Tier 4: Fallback parallel — race(google_cache, wayback) ===
     if not fetched:
-        try:
-            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
-                await _fetch_with_browser_stealth(url, request, proxy=proxy_playwright)
-            )
-            if raw_html and not _looks_blocked(raw_html):
-                fetched = True
-                logger.info(f"Chromium stealth succeeded for {url} ({len(raw_html)} chars)")
-            else:
-                logger.warning(f"Chromium stealth blocked for {url} (html={len(raw_html or '')} chars)")
-                if raw_html and len(raw_html) > len(raw_html_best):
-                    raw_html_best = raw_html
-                raw_html = ""
-        except Exception as e:
-            logger.warning(f"Chromium stealth exception for {url}: {e}")
+        tier_start = time.time()
 
-    # === Strategy 4: Firefox stealth + request interception ===
-    if not fetched:
-        try:
-            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
-                await _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)
-            )
-            if raw_html and not _looks_blocked(raw_html):
-                fetched = True
-                logger.info(f"Firefox succeeded for {url} ({len(raw_html)} chars)")
-            else:
-                if raw_html and len(raw_html) > len(raw_html_best):
-                    raw_html_best = raw_html
-                raw_html = ""
-        except Exception as e:
-            logger.warning(f"Firefox exception for {url}: {e}")
+        fallback_coros = [
+            ("google_cache", _fetch_from_google_cache(url, request.timeout, proxy_url=proxy_url)),
+            ("wayback", _fetch_from_wayback_machine(url, request.timeout, proxy_url=proxy_url)),
+        ]
 
-    # === Strategy 5: Google Search referrer chain (hard sites only) ===
-    if not fetched and hard_site:
-        try:
-            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
-                await _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)
-            )
-            if raw_html and not _looks_blocked(raw_html):
-                fetched = True
-                logger.info(f"Google Search chain succeeded for {url} ({len(raw_html)} chars)")
-            else:
-                if raw_html and len(raw_html) > len(raw_html_best):
-                    raw_html_best = raw_html
-                raw_html = ""
-        except Exception as e:
-            logger.warning(f"Google Search chain exception for {url}: {e}")
+        def _validate_fallback(result):
+            html = result[0] if isinstance(result, tuple) else result
+            return bool(html) and len(html) > 500 and not _looks_blocked(html)
 
-    # === Strategy 6: Advanced session pre-warming (hard sites only) ===
-    if not fetched and hard_site:
-        try:
-            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
-                await _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)
-            )
-            if raw_html and not _looks_blocked(raw_html):
-                fetched = True
-                logger.info(f"Advanced prewarm succeeded for {url} ({len(raw_html)} chars)")
-            else:
-                if raw_html and len(raw_html) > len(raw_html_best):
-                    raw_html_best = raw_html
-                raw_html = ""
-        except Exception as e:
-            logger.warning(f"Advanced prewarm exception for {url}: {e}")
-
-    # === Strategy 7: Google Cache fallback (all sites) ===
-    if not fetched:
-        try:
-            raw_html, status_code, response_headers = await _fetch_from_google_cache(
-                url, request.timeout, proxy_url=proxy_url
-            )
-            if raw_html and not _looks_blocked(raw_html):
-                fetched = True
-                logger.info(f"Google Cache succeeded for {url} ({len(raw_html)} chars)")
-            else:
-                if raw_html and len(raw_html) > len(raw_html_best):
-                    raw_html_best = raw_html
-                raw_html = ""
-        except Exception as e:
-            logger.warning(f"Google Cache exception for {url}: {e}")
-
-    # === Strategy 8: Wayback Machine fallback (all sites, last resort) ===
-    if not fetched:
-        try:
-            raw_html, status_code, response_headers = await _fetch_from_wayback_machine(
-                url, request.timeout, proxy_url=proxy_url
-            )
-            if raw_html and len(raw_html) > 500:
-                fetched = True
-                logger.info(f"Wayback Machine succeeded for {url} ({len(raw_html)} chars)")
-            else:
-                if raw_html and len(raw_html) > len(raw_html_best):
-                    raw_html_best = raw_html
-                raw_html = ""
-        except Exception as e:
-            logger.warning(f"Wayback Machine exception for {url}: {e}")
+        race_result = await _race_strategies(fallback_coros, url, validate_fn=_validate_fallback)
+        if race_result:
+            winner_name, result = race_result
+            html, sc, hdrs = _unpack_http_result(result)
+            raw_html, status_code, response_headers = html, sc, hdrs
+            fetched = True
+            winning_strategy = winner_name
+            winning_tier = 4
+            elapsed_ms = (time.time() - tier_start) * 1000
+            await record_strategy_result(url, winning_strategy, 4, True, elapsed_ms)
 
     # --- Final fallback: use best available content even if blocked ---
     if not fetched:
         if raw_html_best:
             raw_html = raw_html_best
-            logger.warning(f"All strategies blocked for {url}, using best available ({len(raw_html_best)} chars)")
+            logger.warning(f"All tiers failed for {url}, using best available ({len(raw_html_best)} chars)")
         elif raw_html and _looks_blocked(raw_html):
-            # Keep the blocked content — better than nothing
-            logger.warning(f"All strategies blocked for {url}, using last result ({len(raw_html)} chars)")
+            logger.warning(f"All tiers failed for {url}, using last result ({len(raw_html)} chars)")
         else:
-            logger.error(f"All strategies failed for {url} — no content retrieved at all")
+            logger.error(f"All tiers failed for {url} — no content retrieved at all")
             duration = time.time() - start_time
             scrape_duration_seconds.observe(duration)
             return ScrapeData(
@@ -739,35 +880,63 @@ async def scrape_url(
             metadata=PageMetadata(source_url=url, status_code=status_code or 0),
         )
 
-    # === Content extraction ===
+    # === Parallel content extraction ===
     result_data: dict[str, Any] = {}
 
+    # Step 1: extract_main_content first (needed by markdown)
     clean_html = extract_main_content(raw_html, url) if request.only_main_content else raw_html
     if request.include_tags or request.exclude_tags:
         clean_html = apply_tag_filters(clean_html, request.include_tags, request.exclude_tags)
 
+    # Step 2: Run CPU-bound extractions in parallel via thread pool
+    loop = asyncio.get_running_loop()
+    extraction_futures = []
+    extraction_keys = []
+
     if "markdown" in request.formats:
-        result_data["markdown"] = html_to_markdown(clean_html)
+        extraction_futures.append(loop.run_in_executor(_extraction_executor, html_to_markdown, clean_html))
+        extraction_keys.append("markdown")
+    if "links" in request.formats:
+        extraction_futures.append(loop.run_in_executor(_extraction_executor, extract_links, raw_html, url))
+        extraction_keys.append("links")
+        extraction_futures.append(loop.run_in_executor(_extraction_executor, extract_links_detailed, raw_html, url))
+        extraction_keys.append("links_detail")
+    if "structured_data" in request.formats:
+        extraction_futures.append(loop.run_in_executor(_extraction_executor, extract_structured_data, raw_html))
+        extraction_keys.append("structured_data")
+    if "headings" in request.formats:
+        extraction_futures.append(loop.run_in_executor(_extraction_executor, extract_headings, raw_html))
+        extraction_keys.append("headings")
+    if "images" in request.formats:
+        extraction_futures.append(loop.run_in_executor(_extraction_executor, extract_images, raw_html, url))
+        extraction_keys.append("images")
+
+    # metadata extraction always runs
+    extraction_futures.append(loop.run_in_executor(_extraction_executor, extract_metadata, raw_html, url, status_code, response_headers))
+    extraction_keys.append("_metadata")
+
+    # Await all extractions concurrently
+    if extraction_futures:
+        extraction_results = await asyncio.gather(*extraction_futures)
+        for key, value in zip(extraction_keys, extraction_results):
+            if key == "_metadata":
+                continue
+            result_data[key] = value
+        # metadata is always the last one
+        metadata_dict = extraction_results[-1]
+    else:
+        metadata_dict = extract_metadata(raw_html, url, status_code, response_headers)
+
     if "html" in request.formats:
         result_data["html"] = clean_html
     if "raw_html" in request.formats:
         result_data["raw_html"] = raw_html
-    if "links" in request.formats:
-        result_data["links"] = extract_links(raw_html, url)
-        result_data["links_detail"] = extract_links_detailed(raw_html, url)
     if "screenshot" in request.formats:
         if screenshot_b64:
             result_data["screenshot"] = screenshot_b64
         elif action_screenshots:
             result_data["screenshot"] = action_screenshots[-1]
-    if "structured_data" in request.formats:
-        result_data["structured_data"] = extract_structured_data(raw_html)
-    if "headings" in request.formats:
-        result_data["headings"] = extract_headings(raw_html)
-    if "images" in request.formats:
-        result_data["images"] = extract_images(raw_html, url)
 
-    metadata_dict = extract_metadata(raw_html, url, status_code, response_headers)
     metadata = PageMetadata(**metadata_dict)
 
     scrape_data = ScrapeData(
@@ -791,6 +960,7 @@ async def scrape_url(
 
     duration = time.time() - start_time
     scrape_duration_seconds.observe(duration)
+    logger.info(f"Scraped {url} in {duration:.1f}s (tier={winning_tier}, strategy={winning_strategy})")
     return scrape_data
 
 
@@ -898,49 +1068,66 @@ async def _handle_document_url(
 # Strategy 1: curl_cffi — multi-profile TLS fingerprint impersonation
 # ---------------------------------------------------------------------------
 
-async def _fetch_with_curl_cffi_multi(
-    url: str, timeout: int, proxy_url: str | None = None
+async def _fetch_with_curl_cffi_single(
+    url: str, timeout: int, profile: str = "chrome124", proxy_url: str | None = None
 ) -> tuple[str, int, dict[str, str]]:
-    """HTTP fetch trying 5 TLS fingerprints in sequence. Early exit on success."""
+    """HTTP fetch with a single TLS fingerprint profile."""
     from curl_cffi.requests import AsyncSession
 
     timeout_seconds = timeout / 1000
-    best_html = ""
-    best_status = 0
-    best_headers: dict[str, str] = {}
+    headers = _get_headers_for_profile(profile, url)
+    async with AsyncSession(impersonate=profile) as session:
+        kwargs: dict[str, Any] = dict(
+            timeout=timeout_seconds,
+            allow_redirects=True,
+            headers=headers,
+        )
+        if proxy_url:
+            kwargs["proxy"] = proxy_url
 
-    for profile in _CURL_CFFI_PROFILES:
-        try:
-            headers = _get_headers_for_profile(profile, url)
-            async with AsyncSession(impersonate=profile) as session:
-                kwargs: dict[str, Any] = dict(
-                    timeout=timeout_seconds,
-                    allow_redirects=True,
-                    headers=headers,
-                )
-                if proxy_url:
-                    kwargs["proxy"] = proxy_url
+        response = await session.get(url, **kwargs)
+        resp_headers = {k.lower(): v for k, v in response.headers.items()}
+        return response.text, response.status_code, resp_headers
 
-                response = await session.get(url, **kwargs)
-                resp_headers = {k.lower(): v for k, v in response.headers.items()}
-                html = response.text
 
-                if html and response.status_code < 400 and not _looks_blocked(html):
-                    logger.info(f"curl_cffi profile {profile} succeeded for {url} ({len(html)} chars)")
-                    return html, response.status_code, resp_headers
+async def _fetch_with_curl_cffi_multi(
+    url: str, timeout: int, proxy_url: str | None = None
+) -> tuple[str, int, dict[str, str]]:
+    """HTTP fetch racing 3 TLS fingerprints concurrently (batch 1), then 2 more if needed."""
+    from curl_cffi.requests import AsyncSession
 
-                # Track best result for fallback
-                if html and len(html) > len(best_html):
-                    best_html = html
-                    best_status = response.status_code
-                    best_headers = resp_headers
+    # Batch 1: race first 3 profiles concurrently
+    batch1 = _CURL_CFFI_PROFILES[:3]
+    batch1_coros = [
+        (f"curl_cffi:{p}", _fetch_with_curl_cffi_single(url, timeout, profile=p, proxy_url=proxy_url))
+        for p in batch1
+    ]
 
-                logger.debug(f"curl_cffi profile {profile} blocked/failed for {url} (status={response.status_code})")
-        except Exception as e:
-            logger.debug(f"curl_cffi profile {profile} exception for {url}: {e}")
-            continue
+    def _validate_http(result):
+        html, sc, _ = result
+        return bool(html) and sc < 400 and not _looks_blocked(html)
 
-    return best_html, best_status, best_headers
+    race_result = await _race_strategies(batch1_coros, url, validate_fn=_validate_http)
+    if race_result:
+        name, result = race_result
+        logger.info(f"{name} succeeded for {url} ({len(result[0])} chars)")
+        return result
+
+    # Batch 2: race remaining 2 profiles
+    batch2 = _CURL_CFFI_PROFILES[3:]
+    if batch2:
+        batch2_coros = [
+            (f"curl_cffi:{p}", _fetch_with_curl_cffi_single(url, timeout, profile=p, proxy_url=proxy_url))
+            for p in batch2
+        ]
+
+        race_result = await _race_strategies(batch2_coros, url, validate_fn=_validate_http)
+        if race_result:
+            name, result = race_result
+            logger.info(f"{name} succeeded for {url} ({len(result[0])} chars)")
+            return result
+
+    return "", 0, {}
 
 
 # ---------------------------------------------------------------------------
@@ -986,9 +1173,12 @@ async def _fetch_with_browser_stealth(
         referrer = random.choice(_GOOGLE_REFERRERS)
 
         # Warm-up navigation for hard sites: visit homepage first to build session
+        # Skip if we already have cookies for this domain (saves 1.5-3s)
         if _is_hard_site(url):
+            domain = browser_pool._get_domain(url)
+            has_cookies = domain in browser_pool._cookie_jar
             homepage = _get_homepage(url)
-            if homepage:
+            if homepage and not has_cookies:
                 try:
                     await page.goto(homepage, wait_until="domcontentloaded", timeout=10000, referer=referrer)
                     await page.wait_for_timeout(random.randint(1500, 3000))
@@ -1011,7 +1201,11 @@ async def _fetch_with_browser_stealth(
         except Exception:
             pass
 
-        await page.wait_for_timeout(random.randint(500, 1000))
+        # Shorter wait for non-hard sites
+        if _is_hard_site(url):
+            await page.wait_for_timeout(random.randint(500, 1000))
+        else:
+            await page.wait_for_timeout(random.randint(200, 500))
 
         if request.wait_for > 0:
             await page.wait_for_timeout(request.wait_for)
@@ -1090,11 +1284,11 @@ async def _fetch_with_google_search_chain(
 
         await search_input.click()
         for char in query:
-            await search_input.type(char, delay=random.randint(50, 150))
-            if random.random() < 0.1:  # Occasional pause
-                await page.wait_for_timeout(random.randint(200, 500))
+            await search_input.type(char, delay=random.randint(30, 80))
+            if random.random() < 0.05:  # Reduced pause probability
+                await page.wait_for_timeout(random.randint(150, 350))
 
-        await page.wait_for_timeout(random.randint(300, 700))
+        await page.wait_for_timeout(random.randint(200, 500))
         await page.keyboard.press("Enter")
 
         # 4. Wait for results
@@ -1246,11 +1440,11 @@ async def _fetch_with_advanced_prewarm(
             if search_input:
                 await search_input.click()
                 for char in search_term:
-                    await search_input.type(char, delay=random.randint(50, 150))
-                    if random.random() < 0.1:
-                        await page.wait_for_timeout(random.randint(200, 400))
+                    await search_input.type(char, delay=random.randint(30, 80))
+                    if random.random() < 0.05:
+                        await page.wait_for_timeout(random.randint(150, 350))
 
-                await page.wait_for_timeout(random.randint(300, 600))
+                await page.wait_for_timeout(random.randint(200, 400))
                 await page.keyboard.press("Enter")
 
                 try:
@@ -1288,24 +1482,24 @@ async def _fetch_with_advanced_prewarm(
         await page.wait_for_timeout(random.randint(1500, 3000))
         await _try_accept_cookies(page)
 
-        # --- Phase 3: Browse naturally (2-3 internal pages) ---
+        # --- Phase 3: Browse naturally (1-2 internal pages, reduced delays) ---
         current = page.url
         if domain in current:
             try:
                 vp = page.viewport_size or {"width": 1920, "height": 1080}
-                for _ in range(random.randint(2, 3)):
+                for _ in range(random.randint(1, 2)):
                     # Mouse movements
-                    for _ in range(random.randint(2, 3)):
+                    for _ in range(random.randint(1, 2)):
                         await page.mouse.move(
                             random.randint(100, vp["width"] - 100),
                             random.randint(100, vp["height"] - 100),
                             steps=random.randint(8, 15),
                         )
-                        await page.wait_for_timeout(random.randint(200, 400))
+                        await page.wait_for_timeout(random.randint(150, 300))
 
                     # Scroll
                     await page.mouse.wheel(0, random.randint(200, 500))
-                    await page.wait_for_timeout(random.randint(500, 1000))
+                    await page.wait_for_timeout(random.randint(300, 600))
 
                     # Click a random internal link
                     internal_links = await page.query_selector_all(f"a[href*='{domain}']")
@@ -1313,13 +1507,13 @@ async def _fetch_with_advanced_prewarm(
                         link = random.choice(internal_links[:10])
                         try:
                             await link.scroll_into_view_if_needed()
-                            await page.wait_for_timeout(random.randint(200, 400))
+                            await page.wait_for_timeout(random.randint(150, 300))
                             await link.click()
                             await page.wait_for_load_state("domcontentloaded", timeout=8000)
                         except Exception:
                             pass
 
-                    await page.wait_for_timeout(random.randint(1000, 2000))
+                    await page.wait_for_timeout(random.randint(500, 1000))
                     await _try_accept_cookies(page)
             except Exception:
                 pass
