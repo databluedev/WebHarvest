@@ -277,9 +277,9 @@ async def scrape_url(
                 if raw_html and len(raw_html) > len(raw_html_best):
                     raw_html_best = raw_html
                 raw_html = ""
-                logger.info(f"curl_cffi blocked for {url}, escalating")
+                logger.info(f"curl_cffi blocked/failed for {url} (status={status_code}, best={len(raw_html_best)}), escalating")
         except Exception as e:
-            logger.debug(f"curl_cffi failed for {url}: {e}")
+            logger.warning(f"curl_cffi exception for {url}: {e}")
 
     # === Strategy 1b: httpx HTTP/2 (non-hard sites only) ===
     if not fetched and not needs_browser and not hard_site:
@@ -294,66 +294,75 @@ async def scrape_url(
                     raw_html_best = raw_html
                 raw_html = ""
         except Exception as e:
-            logger.debug(f"httpx failed for {url}: {e}")
+            logger.warning(f"httpx exception for {url}: {e}")
 
     # === Strategy 2: Chromium browser with stealth ===
-    if not fetched and not (raw_html_best and len(raw_html_best) > 5000):
+    if not fetched:
         try:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
                 await _fetch_with_browser_stealth(url, request, proxy=proxy_playwright)
             )
             if raw_html and not _looks_blocked(raw_html):
                 fetched = True
-                logger.info(f"Chromium stealth succeeded for {url}")
+                logger.info(f"Chromium stealth succeeded for {url} ({len(raw_html)} chars)")
             else:
-                logger.info(f"Chromium stealth blocked for {url}")
+                logger.warning(f"Chromium stealth blocked for {url} (html={len(raw_html or '')} chars)")
                 if raw_html and len(raw_html) > len(raw_html_best):
                     raw_html_best = raw_html
                 raw_html = ""
         except Exception as e:
-            logger.warning(f"Chromium stealth failed for {url}: {e}")
+            logger.warning(f"Chromium stealth exception for {url}: {e}")
 
     # === Strategy 3: Firefox browser (only if no usable content yet) ===
-    if not fetched and not (raw_html_best and len(raw_html_best) > 5000):
+    if not fetched:
         try:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
                 await _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)
             )
             if raw_html and not _looks_blocked(raw_html):
                 fetched = True
-                logger.info(f"Firefox succeeded for {url}")
+                logger.info(f"Firefox succeeded for {url} ({len(raw_html)} chars)")
             else:
                 if raw_html and len(raw_html) > len(raw_html_best):
                     raw_html_best = raw_html
                 raw_html = ""
         except Exception as e:
-            logger.warning(f"Firefox failed for {url}: {e}")
+            logger.warning(f"Firefox exception for {url}: {e}")
 
-    # If we have decent content from any strategy, use it instead of aggressive
-    if not fetched and raw_html_best and len(raw_html_best) > 2000:
-        raw_html = raw_html_best
-        logger.info(f"Using best available content ({len(raw_html_best)} chars) for {url}")
-    # === Strategy 4: Aggressive browser — only if we truly have nothing ===
-    elif not fetched:
+    # === Strategy 4: Aggressive browser — only if we truly have nothing good ===
+    if not fetched:
         try:
             raw_html, status_code, screenshot_b64, action_screenshots, response_headers = (
                 await _fetch_with_browser_aggressive(url, request, proxy=proxy_playwright)
             )
             if raw_html and not _looks_blocked(raw_html):
                 fetched = True
-                logger.info(f"Aggressive browser succeeded for {url}")
+                logger.info(f"Aggressive browser succeeded for {url} ({len(raw_html)} chars)")
             else:
                 if raw_html and len(raw_html) > len(raw_html_best):
                     raw_html_best = raw_html
-                if not raw_html:
-                    raw_html = raw_html_best
-                logger.warning(f"All strategies exhausted for {url}")
+                logger.warning(f"Aggressive browser blocked for {url} (html={len(raw_html or '')})")
         except Exception as e:
-            logger.warning(f"Aggressive browser failed for {url}: {e}")
-            if not raw_html:
-                raw_html = raw_html_best
+            logger.warning(f"Aggressive browser exception for {url}: {e}")
+
+    # --- Final fallback: use best available content even if blocked ---
+    if not fetched:
+        if raw_html_best:
+            raw_html = raw_html_best
+            logger.warning(f"All strategies blocked for {url}, using best available ({len(raw_html_best)} chars)")
+        elif raw_html and _looks_blocked(raw_html):
+            # Keep the blocked content — better than nothing
+            logger.warning(f"All strategies blocked for {url}, using last result ({len(raw_html)} chars)")
+        else:
+            logger.error(f"All strategies failed for {url} — no content retrieved at all")
+            duration = time.time() - start_time
+            scrape_duration_seconds.observe(duration)
+            return ScrapeData(
+                metadata=PageMetadata(source_url=url, status_code=status_code or 0),
+            )
 
     if not raw_html:
+        logger.error(f"No raw_html for {url} despite fallback (best={len(raw_html_best)})")
         duration = time.time() - start_time
         scrape_duration_seconds.observe(duration)
         return ScrapeData(
