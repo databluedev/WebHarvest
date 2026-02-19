@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { Textarea } from "@/components/ui/textarea";
-import { Globe, Loader2, Play, Eye, ChevronDown, ChevronUp, Settings2, Info, Sparkles } from "lucide-react";
+import { Globe, Loader2, Play, Eye, ChevronDown, ChevronUp, Settings2, Info, Sparkles, FileText, Code, Link2, Camera, Braces, List, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 
 export default function CrawlPage() {
@@ -29,6 +29,36 @@ export default function CrawlPage() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [extractEnabled, setExtractEnabled] = useState(false);
   const [extractPrompt, setExtractPrompt] = useState("");
+  const [useProxy, setUseProxy] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [mobileDevice, setMobileDevice] = useState("");
+  const [devicePresets, setDevicePresets] = useState<any[]>([]);
+  const [webhookSecret, setWebhookSecret] = useState("");
+  const [formats, setFormats] = useState<string[]>(["markdown"]);
+  const [onlyMainContent, setOnlyMainContent] = useState(true);
+  const [waitFor, setWaitFor] = useState(0);
+
+  const allFormats = [
+    { id: "markdown", label: "Markdown", icon: FileText },
+    { id: "html", label: "HTML", icon: Code },
+    { id: "links", label: "Links", icon: Link2 },
+    { id: "screenshot", label: "Screenshot", icon: Camera },
+    { id: "structured_data", label: "Structured", icon: Braces },
+    { id: "headings", label: "Headings", icon: List },
+    { id: "images", label: "Images", icon: ImageIcon },
+  ];
+
+  const toggleFormat = (format: string) => {
+    setFormats((prev) =>
+      prev.includes(format) ? prev.filter((f) => f !== format) : [...prev, format]
+    );
+  };
+
+  useEffect(() => {
+    if (mobile && devicePresets.length === 0) {
+      api.getDevicePresets().then(res => setDevicePresets(res.devices || [])).catch(() => {});
+    }
+  }, [mobile]);
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -66,6 +96,17 @@ export default function CrawlPage() {
         if (includePaths.trim()) params.include_paths = includePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
         if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
         if (webhookUrl.trim()) params.webhook_url = webhookUrl.trim();
+        if (webhookSecret.trim()) params.webhook_secret = webhookSecret.trim();
+        if (useProxy) params.use_proxy = true;
+        params.scrape_options = {
+          formats,
+          only_main_content: onlyMainContent,
+          wait_for: waitFor || undefined,
+        };
+        if (mobile) {
+          params.scrape_options.mobile = true;
+          if (mobileDevice) params.scrape_options.mobile_device = mobileDevice;
+        }
       }
       if (extractEnabled && extractPrompt.trim()) {
         params.scrape_options = { ...params.scrape_options, extract: { prompt: extractPrompt.trim() } };
@@ -242,6 +283,113 @@ export default function CrawlPage() {
                       onChange={(e) => setWebhookUrl(e.target.value)}
                     />
                   </div>
+
+                  {/* Webhook Secret */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium flex items-center gap-1.5">
+                      Webhook Secret
+                      <span className="text-xs text-muted-foreground font-normal">
+                        (optional, signs webhook payloads)
+                      </span>
+                    </label>
+                    <Input
+                      placeholder="your-secret-key"
+                      value={webhookSecret}
+                      onChange={(e) => setWebhookSecret(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Output Formats */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Output Formats</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {allFormats.map((fmt) => (
+                        <button
+                          key={fmt.id}
+                          onClick={() => toggleFormat(fmt.id)}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                            formats.includes(fmt.id)
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <fmt.icon className="h-3 w-3" />
+                          {fmt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Main Content Only */}
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Main content only</label>
+                    <button
+                      onClick={() => setOnlyMainContent(!onlyMainContent)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                        onlyMainContent
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {onlyMainContent ? "On" : "Off"}
+                    </button>
+                  </div>
+
+                  {/* Wait for */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Wait after load (ms)</label>
+                    <Input
+                      type="number"
+                      value={waitFor}
+                      onChange={(e) => setWaitFor(parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+
+                  {/* Proxy */}
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Use Proxy</label>
+                    <button
+                      onClick={() => setUseProxy(!useProxy)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                        useProxy
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {useProxy ? "On" : "Off"}
+                    </button>
+                  </div>
+
+                  {/* Mobile Emulation */}
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Mobile Emulation</label>
+                    <button
+                      onClick={() => setMobile(!mobile)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                        mobile
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {mobile ? "On" : "Off"}
+                    </button>
+                  </div>
+                  {mobile && devicePresets.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Device</label>
+                      <select
+                        value={mobileDevice}
+                        onChange={(e) => setMobileDevice(e.target.value)}
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">Default mobile</option>
+                        {devicePresets.map((d: any) => (
+                          <option key={d.id} value={d.id}>{d.name} ({d.width}x{d.height})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* AI Extraction */}
                   <div className="space-y-2">

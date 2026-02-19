@@ -16,6 +16,12 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 
 interface Job {
@@ -130,6 +136,9 @@ export default function JobsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
+  const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
 
   const PER_PAGE = 20;
 
@@ -150,6 +159,8 @@ export default function JobsPage() {
         type: typeFilter,
         status: statusFilter,
         search: searchQuery || undefined,
+        sort_by: sortBy,
+        sort_dir: sortDir,
       });
       setJobs(res.jobs);
       setTotalPages(res.total_pages);
@@ -159,7 +170,7 @@ export default function JobsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, typeFilter, statusFilter, searchQuery]);
+  }, [page, typeFilter, statusFilter, searchQuery, sortBy, sortDir]);
 
   useEffect(() => {
     if (api.getToken()) {
@@ -207,6 +218,60 @@ export default function JobsPage() {
 
   const handleRowClick = (job: Job) => {
     router.push(getJobDetailPath(job));
+  };
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortDir("desc");
+    }
+    setPage(1);
+  };
+
+  const toggleSelectJob = (jobId: string) => {
+    setSelectedJobs((prev) => {
+      const next = new Set(prev);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedJobs.size === jobs.length) {
+      setSelectedJobs(new Set());
+    } else {
+      setSelectedJobs(new Set(jobs.map((j) => j.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedJobs.size} selected job(s)?`)) return;
+    for (const jobId of Array.from(selectedJobs)) {
+      try {
+        await api.deleteJob(jobId);
+      } catch {}
+    }
+    setSelectedJobs(new Set());
+    loadJobs();
+  };
+
+  const getRerunPath = (job: Job): string => {
+    switch (job.type) {
+      case "scrape": return "/scrape";
+      case "crawl": return "/crawl";
+      case "batch": return "/batch";
+      case "search": return "/search";
+      case "map": return "/map";
+      default: return "/";
+    }
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortBy !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />;
+    return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
   return (
@@ -261,6 +326,12 @@ export default function JobsPage() {
                   <Search className="h-4 w-4" />
                   Search
                 </Button>
+                {selectedJobs.size > 0 && (
+                  <Button onClick={handleBulkDelete} variant="destructive" size="sm" className="gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Delete {selectedJobs.size}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -307,12 +378,29 @@ export default function JobsPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border">
+                          <th className="py-3 px-3 w-8">
+                            <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
+                              {selectedJobs.size === jobs.length && jobs.length > 0 ? (
+                                <CheckSquare className="h-4 w-4" />
+                              ) : (
+                                <Square className="h-4 w-4" />
+                              )}
+                            </button>
+                          </th>
                           <th className="text-left py-3 px-3 font-medium text-muted-foreground">Type</th>
                           <th className="text-left py-3 px-3 font-medium text-muted-foreground">URL / Query</th>
-                          <th className="text-left py-3 px-3 font-medium text-muted-foreground">Status</th>
-                          <th className="text-left py-3 px-3 font-medium text-muted-foreground">Pages</th>
-                          <th className="text-left py-3 px-3 font-medium text-muted-foreground">Duration</th>
-                          <th className="text-left py-3 px-3 font-medium text-muted-foreground">Created</th>
+                          <th className="text-left py-3 px-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none" onClick={() => handleSort("status")}>
+                            <span className="flex items-center">Status<SortIcon column="status" /></span>
+                          </th>
+                          <th className="text-left py-3 px-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none" onClick={() => handleSort("total_pages")}>
+                            <span className="flex items-center">Pages<SortIcon column="total_pages" /></span>
+                          </th>
+                          <th className="text-left py-3 px-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none" onClick={() => handleSort("duration_seconds")}>
+                            <span className="flex items-center">Duration<SortIcon column="duration_seconds" /></span>
+                          </th>
+                          <th className="text-left py-3 px-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none" onClick={() => handleSort("created_at")}>
+                            <span className="flex items-center">Created<SortIcon column="created_at" /></span>
+                          </th>
                           <th className="text-right py-3 px-3 font-medium text-muted-foreground"></th>
                         </tr>
                       </thead>
@@ -323,6 +411,15 @@ export default function JobsPage() {
                             onClick={() => handleRowClick(job)}
                             className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors"
                           >
+                            <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                              <button onClick={() => toggleSelectJob(job.id)} className="text-muted-foreground hover:text-foreground">
+                                {selectedJobs.has(job.id) ? (
+                                  <CheckSquare className="h-4 w-4" />
+                                ) : (
+                                  <Square className="h-4 w-4" />
+                                )}
+                              </button>
+                            </td>
                             <td className="py-3 px-3">
                               <Badge variant="outline" className="capitalize">
                                 {job.type}
@@ -352,6 +449,18 @@ export default function JobsPage() {
                               {formatDate(job.created_at ?? "")}
                             </td>
                             <td className="py-3 px-3 text-right">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(getRerunPath(job));
+                                }}
+                                title="Rerun"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="icon"

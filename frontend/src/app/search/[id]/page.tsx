@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ExportDropdown } from "@/components/ui/export-dropdown";
 import { api } from "@/lib/api";
 import {
@@ -334,6 +335,8 @@ export default function SearchStatusPage() {
   const [status, setStatus] = useState<any>(null);
   const [error, setError] = useState("");
   const [polling, setPolling] = useState(true);
+  const [searchFilter, setSearchFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "success" | "error">("all");
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -407,6 +410,26 @@ export default function SearchStatusPage() {
     status?.total_results > 0
       ? Math.min(100, Math.round((status.completed_results / status.total_results) * 100))
       : 0;
+
+  const successCount = useMemo(() => status?.data?.filter((d: any) => d.success)?.length || 0, [status?.data]);
+  const failCount = useMemo(() => status?.data?.filter((d: any) => !d.success)?.length || 0, [status?.data]);
+  const totalWords = useMemo(() => status?.data?.reduce((sum: number, d: any) => sum + (d.metadata?.word_count || 0), 0) || 0, [status?.data]);
+  const screenshotCount = useMemo(() => status?.data?.filter((d: any) => d.screenshot)?.length || 0, [status?.data]);
+
+  const filteredData = useMemo(() => {
+    if (!status?.data) return [];
+    let data = status.data.map((d: any, i: number) => ({ ...d, _index: i }));
+    if (searchFilter) {
+      const q = searchFilter.toLowerCase();
+      data = data.filter((d: any) => d.url?.toLowerCase().includes(q) || d.title?.toLowerCase().includes(q));
+    }
+    if (statusFilter === "success") {
+      data = data.filter((d: any) => d.success);
+    } else if (statusFilter === "error") {
+      data = data.filter((d: any) => !d.success);
+    }
+    return data;
+  }, [status?.data, searchFilter, statusFilter]);
 
   return (
     <div className="flex h-screen">
@@ -489,6 +512,40 @@ export default function SearchStatusPage() {
                     </div>
                   </div>
 
+                  {/* Stats row */}
+                  {status.data && status.data.length > 0 && (
+                    <div className="flex gap-6 mt-4 pt-4 border-t border-border text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <Globe className="h-3.5 w-3.5" />
+                        <span>{status.data.length} results</span>
+                      </div>
+                      {successCount > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+                          <span>{successCount} succeeded</span>
+                        </div>
+                      )}
+                      {failCount > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <XCircle className="h-3.5 w-3.5 text-red-400" />
+                          <span>{failCount} failed</span>
+                        </div>
+                      )}
+                      {totalWords > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <FileText className="h-3.5 w-3.5" />
+                          <span>{totalWords.toLocaleString()} total words</span>
+                        </div>
+                      )}
+                      {screenshotCount > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <Camera className="h-3.5 w-3.5" />
+                          <span>{screenshotCount} screenshots</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {status.error && (
                     <div className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-red-400">
                       {status.error}
@@ -497,14 +554,47 @@ export default function SearchStatusPage() {
                 </CardContent>
               </Card>
 
+              {/* Filter Bar */}
+              {status.data && status.data.length > 0 && (
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Filter by URL..."
+                      value={searchFilter}
+                      onChange={(e) => setSearchFilter(e.target.value)}
+                      className="pl-9 h-9"
+                    />
+                  </div>
+                  <div className="flex gap-1">
+                    {(["all", "success", "error"] as const).map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setStatusFilter(f)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          statusFilter === f
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {f === "all" ? "All" : f === "success" ? "Success" : "Errors"}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {filteredData.length} of {status.data.length} results
+                  </span>
+                </div>
+              )}
+
               {status.data && status.data.length > 0 ? (
                 <div className="space-y-3">
                   <h2 className="text-lg font-semibold flex items-center gap-2 mb-3">
                     <Globe className="h-5 w-5" />
                     Search Results
                   </h2>
-                  {status.data.map((item: any, i: number) => (
-                    <SearchResultCard key={i} item={item} index={i} />
+                  {filteredData.map((item: any) => (
+                    <SearchResultCard key={item._index} item={item} index={item._index} />
                   ))}
                 </div>
               ) : isRunning ? (

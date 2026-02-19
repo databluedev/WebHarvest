@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ExportDropdown } from "@/components/ui/export-dropdown";
 import { api } from "@/lib/api";
 import {
@@ -28,6 +29,7 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Sparkles,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -409,6 +411,9 @@ export default function CrawlStatusPage() {
   const [status, setStatus] = useState<any>(null);
   const [error, setError] = useState("");
   const [polling, setPolling] = useState(true);
+  const [searchFilter, setSearchFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "success" | "error">("all");
+  const [sortBy, setSortBy] = useState<"index" | "url" | "words">("index");
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -501,6 +506,26 @@ export default function CrawlStatusPage() {
     (sum: number, p: any) => sum + (p.metadata?.word_count || 0),
     0
   ) || 0, [status?.data]);
+
+  const filteredData = useMemo(() => {
+    if (!status?.data) return [];
+    let data = status.data.map((p: any, i: number) => ({ ...p, _index: i }));
+    if (searchFilter) {
+      const q = searchFilter.toLowerCase();
+      data = data.filter((p: any) => p.url?.toLowerCase().includes(q) || p.metadata?.title?.toLowerCase().includes(q));
+    }
+    if (statusFilter === "success") {
+      data = data.filter((p: any) => p.metadata?.status_code >= 200 && p.metadata?.status_code < 400);
+    } else if (statusFilter === "error") {
+      data = data.filter((p: any) => !p.metadata?.status_code || p.metadata?.status_code >= 400);
+    }
+    if (sortBy === "url") {
+      data.sort((a: any, b: any) => (a.url || "").localeCompare(b.url || ""));
+    } else if (sortBy === "words") {
+      data.sort((a: any, b: any) => (b.metadata?.word_count || 0) - (a.metadata?.word_count || 0));
+    }
+    return data;
+  }, [status?.data, searchFilter, statusFilter, sortBy]);
 
   return (
     <div className="flex h-screen">
@@ -637,6 +662,48 @@ export default function CrawlStatusPage() {
                 </CardContent>
               </Card>
 
+              {/* Filter Bar */}
+              {status.data && status.data.length > 0 && (
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Filter by URL..."
+                      value={searchFilter}
+                      onChange={(e) => setSearchFilter(e.target.value)}
+                      className="pl-9 h-9"
+                    />
+                  </div>
+                  <div className="flex gap-1">
+                    {(["all", "success", "error"] as const).map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setStatusFilter(f)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          statusFilter === f
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {f === "all" ? "All" : f === "success" ? "Success" : "Errors"}
+                      </button>
+                    ))}
+                  </div>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+                  >
+                    <option value="index">Sort: Original</option>
+                    <option value="url">Sort: URL</option>
+                    <option value="words">Sort: Words</option>
+                  </select>
+                  <span className="text-xs text-muted-foreground">
+                    {filteredData.length} of {status.data.length} pages
+                  </span>
+                </div>
+              )}
+
               {/* Results List */}
               {status.data && status.data.length > 0 ? (
                 <div className="space-y-3">
@@ -644,8 +711,8 @@ export default function CrawlStatusPage() {
                     <Globe className="h-5 w-5" />
                     Crawled Pages
                   </h2>
-                  {status.data.map((page: any, i: number) => (
-                    <PageResultCard key={i} page={page} index={i} />
+                  {filteredData.map((page: any) => (
+                    <PageResultCard key={page._index} page={page} index={page._index} />
                   ))}
                 </div>
               ) : isRunning ? (

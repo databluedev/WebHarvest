@@ -19,6 +19,10 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  Pencil,
+  Save,
+  CheckCircle2,
+  Globe,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -30,6 +34,12 @@ const CRON_PRESETS = [
   { label: "Daily (9am)", value: "0 9 * * *" },
   { label: "Weekly (Monday)", value: "0 0 * * 1" },
   { label: "Custom", value: "custom" },
+];
+
+const TIMEZONES = [
+  "UTC", "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Tokyo",
+  "Asia/Shanghai", "Asia/Kolkata", "Australia/Sydney", "America/Sao_Paulo",
 ];
 
 export default function SchedulesPage() {
@@ -48,6 +58,13 @@ export default function SchedulesPage() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [timezone, setTimezone] = useState("UTC");
+  const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editCron, setEditCron] = useState("");
+  const [editTimezone, setEditTimezone] = useState("");
+  const [editWebhookUrl, setEditWebhookUrl] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -90,6 +107,7 @@ export default function SchedulesPage() {
         schedule_type: scheduleType,
         config,
         cron_expression: cron,
+        timezone,
         webhook_url: webhookUrl || undefined,
       });
       setName("");
@@ -129,6 +147,32 @@ export default function SchedulesPage() {
       loadSchedules();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const startEditing = (s: any) => {
+    setEditingSchedule(s.id);
+    setEditName(s.name);
+    setEditCron(s.cron_expression);
+    setEditTimezone(s.timezone || "UTC");
+    setEditWebhookUrl(s.webhook_url || "");
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    setEditSaving(true);
+    try {
+      await api.updateSchedule(id, {
+        name: editName,
+        cron_expression: editCron,
+        timezone: editTimezone,
+        webhook_url: editWebhookUrl || undefined,
+      });
+      setEditingSchedule(null);
+      loadSchedules();
+    } catch (err: any) {
+      console.error("Edit failed:", err);
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -242,6 +286,19 @@ export default function SchedulesPage() {
                 </div>
 
                 <div className="space-y-2">
+                  <label className="text-sm font-medium">Timezone</label>
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {TIMEZONES.map((tz) => (
+                      <option key={tz} value={tz}>{tz}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
                   <label className="text-sm font-medium">Webhook URL (optional)</label>
                   <Input
                     placeholder="https://your-server.com/webhook"
@@ -290,64 +347,128 @@ export default function SchedulesPage() {
               ) : (
                 <div className="space-y-3">
                   {schedules.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between rounded-md border p-4"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{s.name}</span>
-                          <Badge variant={s.is_active ? "success" : "outline"} className="text-xs">
-                            {s.is_active ? "Active" : "Paused"}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {s.schedule_type}
-                          </Badge>
+                    <div key={s.id} className="rounded-md border p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{s.name}</span>
+                            <Badge variant={s.is_active ? "success" : "outline"} className="text-xs">
+                              {s.is_active ? "Active" : "Paused"}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {s.schedule_type}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                            <code>{s.cron_expression}</code>
+                            <span>{s.run_count} runs</span>
+                            {s.next_run_human && s.is_active && (
+                              <span>Next: {s.next_run_human}</span>
+                            )}
+                            {s.last_run_at && (
+                              <span>Last: {new Date(s.last_run_at).toLocaleString()}</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                          <code>{s.cron_expression}</code>
-                          <span>{s.run_count} runs</span>
-                          {s.next_run_human && s.is_active && (
-                            <span>Next: {s.next_run_human}</span>
-                          )}
-                          {s.last_run_at && (
-                            <span>Last: {new Date(s.last_run_at).toLocaleString()}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 ml-4">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleTrigger(s.id)}
-                          title="Run now"
-                        >
-                          <Zap className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleToggle(s.id, s.is_active)}
-                          title={s.is_active ? "Pause" : "Resume"}
-                        >
-                          {s.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                        </Button>
-                        <Link href={`/schedules/${s.id}`}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Eye className="h-4 w-4" />
+                        <div className="flex items-center gap-1 ml-4">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => startEditing(s)}
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
                           </Button>
-                        </Link>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(s.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleTrigger(s.id)}
+                            title="Run now"
+                          >
+                            <Zap className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleToggle(s.id, s.is_active)}
+                            title={s.is_active ? "Pause" : "Resume"}
+                          >
+                            {s.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                          </Button>
+                          <Link href={`/schedules/${s.id}`}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleDelete(s.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
+                      {editingSchedule === s.id && (
+                        <div className="mt-4 pt-4 border-t border-border space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-xs font-medium">Name</label>
+                              <Input
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs font-medium">Cron Expression</label>
+                              <Input
+                                value={editCron}
+                                onChange={(e) => setEditCron(e.target.value)}
+                                className="font-mono"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-xs font-medium">Timezone</label>
+                              <select
+                                value={editTimezone}
+                                onChange={(e) => setEditTimezone(e.target.value)}
+                                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                              >
+                                {TIMEZONES.map((tz) => (
+                                  <option key={tz} value={tz}>{tz}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs font-medium">Webhook URL</label>
+                              <Input
+                                value={editWebhookUrl}
+                                onChange={(e) => setEditWebhookUrl(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveEdit(s.id)}
+                              disabled={editSaving}
+                              className="gap-1"
+                            >
+                              {editSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                              Save
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditingSchedule(null)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

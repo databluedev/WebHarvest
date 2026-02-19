@@ -53,6 +53,8 @@ export default function ExtractPage() {
   const [schemaText, setSchemaText] = useState("");
   const [provider, setProvider] = useState("");
   const [showSchema, setShowSchema] = useState(false);
+  const [onlyMainContent, setOnlyMainContent] = useState(true);
+  const [useProxy, setUseProxy] = useState(false);
 
   // -- Result state --
   const [loading, setLoading] = useState(false);
@@ -184,6 +186,8 @@ export default function ExtractPage() {
       if (prompt.trim()) params.prompt = prompt.trim();
       if (parsedSchema) params.schema_ = parsedSchema;
       if (provider) params.provider = provider;
+      if (onlyMainContent) params.only_main_content = true;
+      if (useProxy) params.use_proxy = true;
 
       const res = await api.extract(params);
 
@@ -446,6 +450,34 @@ export default function ExtractPage() {
                   <p className="text-[11px] text-muted-foreground mt-2">
                     Requires a configured LLM key in Settings (BYOK).
                   </p>
+                </CardContent>
+              </Card>
+
+              {/* Options */}
+              <Card>
+                <CardContent className="pt-4 pb-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm text-muted-foreground">Main content only</label>
+                    <button
+                      onClick={() => setOnlyMainContent(!onlyMainContent)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                        onlyMainContent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {onlyMainContent ? "On" : "Off"}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm text-muted-foreground">Use Proxy</label>
+                    <button
+                      onClick={() => setUseProxy(!useProxy)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                        useProxy ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {useProxy ? "On" : "Off"}
+                    </button>
+                  </div>
                 </CardContent>
               </Card>
 

@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ExportDropdown } from "@/components/ui/export-dropdown";
 import { api } from "@/lib/api";
@@ -29,6 +30,7 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Sparkles,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -360,6 +362,8 @@ export default function BatchStatusPage() {
   const [status, setStatus] = useState<any>(null);
   const [error, setError] = useState("");
   const [polling, setPolling] = useState(true);
+  const [searchFilter, setSearchFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed">("all");
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -437,6 +441,21 @@ export default function BatchStatusPage() {
   const failCount = useMemo(() => status?.data?.filter((d: any) => !d.success)?.length || 0, [status?.data]);
   const totalWords = useMemo(() => status?.data?.reduce((sum: number, d: any) => sum + (d.metadata?.word_count || 0), 0) || 0, [status?.data]);
   const screenshotCount = useMemo(() => status?.data?.filter((d: any) => d.screenshot)?.length || 0, [status?.data]);
+
+  const filteredData = useMemo(() => {
+    if (!status?.data) return [];
+    let data = status.data.map((d: any, i: number) => ({ ...d, _index: i }));
+    if (searchFilter) {
+      const q = searchFilter.toLowerCase();
+      data = data.filter((d: any) => d.url?.toLowerCase().includes(q) || d.metadata?.title?.toLowerCase().includes(q));
+    }
+    if (statusFilter === "success") {
+      data = data.filter((d: any) => d.success);
+    } else if (statusFilter === "failed") {
+      data = data.filter((d: any) => !d.success);
+    }
+    return data;
+  }, [status?.data, searchFilter, statusFilter]);
 
   return (
     <div className="flex h-screen">
@@ -555,14 +574,47 @@ export default function BatchStatusPage() {
                 </CardContent>
               </Card>
 
+              {/* Filter Bar */}
+              {status.data && status.data.length > 0 && (
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Filter by URL..."
+                      value={searchFilter}
+                      onChange={(e) => setSearchFilter(e.target.value)}
+                      className="pl-9 h-9"
+                    />
+                  </div>
+                  <div className="flex gap-1">
+                    {(["all", "success", "failed"] as const).map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setStatusFilter(f)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          statusFilter === f
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {f === "all" ? `All (${status.data.length})` : f === "success" ? `Success (${successCount})` : `Failed (${failCount})`}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    Showing {filteredData.length} of {status.data.length}
+                  </span>
+                </div>
+              )}
+
               {status.data && status.data.length > 0 ? (
                 <div className="space-y-3">
                   <h2 className="text-lg font-semibold flex items-center gap-2 mb-3">
                     <Layers className="h-5 w-5" />
                     Results
                   </h2>
-                  {status.data.map((item: any, i: number) => (
-                    <BatchResultCard key={i} item={item} index={i} />
+                  {filteredData.map((item: any) => (
+                    <BatchResultCard key={item._index} item={item} index={item._index} />
                   ))}
                 </div>
               ) : isRunning ? (

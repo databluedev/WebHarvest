@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ExportDropdown } from "@/components/ui/export-dropdown";
 import { api } from "@/lib/api";
 import {
@@ -15,6 +16,7 @@ import {
   ExternalLink,
   Copy,
   Check,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -25,6 +27,8 @@ export default function MapDetailPage() {
   const [status, setStatus] = useState<any>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [urlFilter, setUrlFilter] = useState("");
+  const [visibleCount, setVisibleCount] = useState(100);
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -67,6 +71,13 @@ export default function MapDetailPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const filteredLinks = useMemo(() => {
+    if (!status?.links) return [];
+    if (!urlFilter) return status.links;
+    const q = urlFilter.toLowerCase();
+    return status.links.filter((l: any) => l.url?.toLowerCase().includes(q) || l.title?.toLowerCase().includes(q));
+  }, [status?.links, urlFilter]);
 
   return (
     <div className="flex h-screen">
@@ -169,8 +180,22 @@ export default function MapDetailPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
+                    <div className="mb-3 flex items-center gap-3">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Filter URLs..."
+                          value={urlFilter}
+                          onChange={(e) => { setUrlFilter(e.target.value); setVisibleCount(100); }}
+                          className="pl-9 h-9"
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {filteredLinks.length} of {status.links.length} URLs
+                      </span>
+                    </div>
                     <div className="max-h-[600px] overflow-auto space-y-1">
-                      {status.links.map((link: any, i: number) => (
+                      {filteredLinks.slice(0, visibleCount).map((link: any, i: number) => (
                         <div key={i} className="flex items-center justify-between rounded px-2 py-1.5 hover:bg-muted group">
                           <div className="min-w-0 flex-1">
                             <a
@@ -204,6 +229,17 @@ export default function MapDetailPage() {
                         </div>
                       ))}
                     </div>
+                    {visibleCount < filteredLinks.length && (
+                      <div className="mt-3 text-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setVisibleCount((c) => c + 100)}
+                        >
+                          Load more ({filteredLinks.length - visibleCount} remaining)
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ) : status.status === "failed" ? (

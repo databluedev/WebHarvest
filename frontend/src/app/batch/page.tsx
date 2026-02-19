@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Layers, Loader2, Play, Info, Eye, Sparkles } from "lucide-react";
+import { Layers, Loader2, Play, Info, Eye, Sparkles, ChevronDown, ChevronUp, Settings2 } from "lucide-react";
 import Link from "next/link";
 
 export default function BatchPage() {
@@ -21,11 +21,28 @@ export default function BatchPage() {
   const [recentJobs, setRecentJobs] = useState<any[]>([]);
   const [extractEnabled, setExtractEnabled] = useState(false);
   const [extractPrompt, setExtractPrompt] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [onlyMainContent, setOnlyMainContent] = useState(true);
+  const [waitFor, setWaitFor] = useState(0);
+  const [useProxy, setUseProxy] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [mobileDevice, setMobileDevice] = useState("");
+  const [devicePresets, setDevicePresets] = useState<any[]>([]);
+  const [headersText, setHeadersText] = useState("");
+  const [cookiesText, setCookiesText] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
 
   // Format toggles
   const [formats, setFormats] = useState<string[]>(["markdown"]);
 
   const allFormats = ["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"];
+
+  useEffect(() => {
+    if (mobile && devicePresets.length === 0) {
+      api.getDevicePresets().then(res => setDevicePresets(res.devices || [])).catch(() => {});
+    }
+  }, [mobile]);
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -62,9 +79,22 @@ export default function BatchPage() {
         urls,
         formats,
         concurrency,
+        only_main_content: onlyMainContent,
+        wait_for: waitFor || undefined,
+        use_proxy: useProxy || undefined,
+        mobile: mobile || undefined,
+        mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined,
+        webhook_url: webhookUrl.trim() || undefined,
+        webhook_secret: webhookSecret.trim() || undefined,
       };
       if (extractEnabled && extractPrompt.trim()) {
         params.extract = { prompt: extractPrompt.trim() };
+      }
+      if (headersText.trim()) {
+        try { params.headers = JSON.parse(headersText); } catch {}
+      }
+      if (cookiesText.trim()) {
+        try { params.cookies = JSON.parse(cookiesText); } catch {}
       }
       const res = await api.startBatch(params);
       if (res.success) {
@@ -171,6 +201,121 @@ export default function BatchPage() {
                     rows={3}
                     className="text-sm"
                   />
+                )}
+              </div>
+
+              {/* Advanced Options */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Settings2 className="h-4 w-4" />
+                  Advanced Options
+                  {showAdvanced ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+
+                {showAdvanced && (
+                  <div className="space-y-4 pt-3 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">Main content only</label>
+                      <button
+                        onClick={() => setOnlyMainContent(!onlyMainContent)}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                          onlyMainContent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {onlyMainContent ? "On" : "Off"}
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Wait after load (ms)</label>
+                      <Input
+                        type="number"
+                        value={waitFor}
+                        onChange={(e) => setWaitFor(parseInt(e.target.value) || 0)}
+                        placeholder="0"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">Use Proxy</label>
+                      <button
+                        onClick={() => setUseProxy(!useProxy)}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                          useProxy ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {useProxy ? "On" : "Off"}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">Mobile Emulation</label>
+                      <button
+                        onClick={() => setMobile(!mobile)}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                          mobile ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {mobile ? "On" : "Off"}
+                      </button>
+                    </div>
+                    {mobile && devicePresets.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Device</label>
+                        <select
+                          value={mobileDevice}
+                          onChange={(e) => setMobileDevice(e.target.value)}
+                          className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value="">Default mobile</option>
+                          {devicePresets.map((d: any) => (
+                            <option key={d.id} value={d.id}>{d.name} ({d.width}x{d.height})</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Custom Headers (JSON)</label>
+                      <textarea
+                        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"
+                        placeholder='{"Authorization": "Bearer ..."}'
+                        value={headersText}
+                        onChange={(e) => setHeadersText(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Cookies (JSON)</label>
+                      <textarea
+                        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"
+                        placeholder='{"session_id": "abc123"}'
+                        value={cookiesText}
+                        onChange={(e) => setCookiesText(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Webhook URL</label>
+                      <Input
+                        placeholder="https://your-server.com/webhook"
+                        value={webhookUrl}
+                        onChange={(e) => setWebhookUrl(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Webhook Secret</label>
+                      <Input
+                        placeholder="your-secret-key"
+                        value={webhookSecret}
+                        onChange={(e) => setWebhookSecret(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
 

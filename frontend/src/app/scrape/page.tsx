@@ -49,10 +49,22 @@ export default function ScrapePage() {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("markdown");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [useProxy, setUseProxy] = useState(false);
+  const [mobile, setMobile] = useState(false);
+  const [mobileDevice, setMobileDevice] = useState("");
+  const [devicePresets, setDevicePresets] = useState<any[]>([]);
+  const [headersText, setHeadersText] = useState("");
+  const [cookiesText, setCookiesText] = useState("");
 
   useEffect(() => {
     if (!api.getToken()) router.push("/auth/login");
   }, [router]);
+
+  useEffect(() => {
+    if (mobile && devicePresets.length === 0) {
+      api.getDevicePresets().then(res => setDevicePresets(res.devices || [])).catch(() => {});
+    }
+  }, [mobile]);
 
   const toggleFormat = (format: string) => {
     setFormats((prev) =>
@@ -72,9 +84,18 @@ export default function ScrapePage() {
         formats,
         only_main_content: onlyMainContent,
         wait_for: waitFor,
+        use_proxy: useProxy || undefined,
+        mobile: mobile || undefined,
+        mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined,
       };
       if (extractEnabled && extractPrompt) {
         params.extract = { prompt: extractPrompt };
+      }
+      if (headersText.trim()) {
+        try { params.headers = JSON.parse(headersText); } catch {}
+      }
+      if (cookiesText.trim()) {
+        try { params.cookies = JSON.parse(cookiesText); } catch {}
       }
       const res = await api.scrape(params);
       if (!res.success) {
@@ -279,6 +300,65 @@ export default function ScrapePage() {
                           value={waitFor}
                           onChange={(e) => setWaitFor(parseInt(e.target.value) || 0)}
                           placeholder="0"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm">Use Proxy</label>
+                        <button
+                          onClick={() => setUseProxy(!useProxy)}
+                          className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                            useProxy
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {useProxy ? "On" : "Off"}
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm">Mobile Emulation</label>
+                        <button
+                          onClick={() => setMobile(!mobile)}
+                          className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                            mobile
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {mobile ? "On" : "Off"}
+                        </button>
+                      </div>
+                      {mobile && devicePresets.length > 0 && (
+                        <div className="space-y-1.5">
+                          <label className="text-sm">Device</label>
+                          <select
+                            value={mobileDevice}
+                            onChange={(e) => setMobileDevice(e.target.value)}
+                            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                          >
+                            <option value="">Default mobile</option>
+                            {devicePresets.map((d: any) => (
+                              <option key={d.id} value={d.id}>{d.name} ({d.width}x{d.height})</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <div className="space-y-1.5">
+                        <label className="text-sm">Custom Headers (JSON)</label>
+                        <textarea
+                          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"
+                          placeholder='{"Authorization": "Bearer ..."}'
+                          value={headersText}
+                          onChange={(e) => setHeadersText(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm">Cookies (JSON)</label>
+                        <textarea
+                          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"
+                          placeholder='{"session_id": "abc123"}'
+                          value={cookiesText}
+                          onChange={(e) => setCookiesText(e.target.value)}
                         />
                       </div>
                     </div>

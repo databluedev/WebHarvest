@@ -24,6 +24,7 @@ import {
   Loader2,
   History,
   Activity,
+  Pencil,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────
@@ -156,6 +157,21 @@ export default function MonitorsPage() {
   // Action loading states
   const [actionLoading, setActionLoading] = useState<Record<string, string>>({});
 
+  const [editingMonitor, setEditingMonitor] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    check_interval_minutes: number;
+    css_selector: string;
+    notify_on: string;
+    keywords: string;
+    webhook_url: string;
+    threshold: number;
+  }>({ name: "", check_interval_minutes: 60, css_selector: "", notify_on: "any_change", keywords: "", webhook_url: "", threshold: 5 });
+
+  // History pagination
+  const [historyTotal, setHistoryTotal] = useState<Record<string, number>>({});
+  const [historyOffset, setHistoryOffset] = useState<Record<string, number>>({});
+
   // ── Auth check & initial load ────────────────────────────
 
   const loadMonitors = useCallback(async () => {
@@ -268,6 +284,51 @@ export default function MonitorsPage() {
     }
   };
 
+  const startEditing = (monitor: Monitor) => {
+    setEditingMonitor(monitor.id);
+    setEditForm({
+      name: monitor.name,
+      check_interval_minutes: monitor.check_interval_minutes,
+      css_selector: monitor.css_selector || "",
+      notify_on: monitor.notify_on,
+      keywords: monitor.keywords?.join(", ") || "",
+      webhook_url: monitor.webhook_url || "",
+      threshold: monitor.threshold || 5,
+    });
+  };
+
+  const handleSaveEdit = async (monitorId: string) => {
+    setActionLoading((prev) => ({ ...prev, [monitorId]: "edit" }));
+    try {
+      const keywords = editForm.keywords.trim()
+        ? editForm.keywords.split(",").map((k) => k.trim()).filter(Boolean)
+        : undefined;
+      await api.updateMonitor(monitorId, {
+        name: editForm.name,
+        check_interval_minutes: editForm.check_interval_minutes,
+        css_selector: editForm.css_selector || undefined,
+        notify_on: editForm.notify_on,
+        keywords,
+        webhook_url: editForm.webhook_url || undefined,
+        threshold: editForm.threshold,
+      });
+      setEditingMonitor(null);
+      loadMonitors();
+    } catch (err: any) {
+      console.error("Edit failed:", err);
+    } finally {
+      setActionLoading((prev) => {
+        const next = { ...prev };
+        delete next[monitorId];
+        return next;
+      });
+    }
+  };
+
+  const cancelEditing = () => {
+    setEditingMonitor(null);
+  };
+
   // ── History toggle ───────────────────────────────────────
 
   const toggleHistory = async (monitorId: string) => {
@@ -277,14 +338,33 @@ export default function MonitorsPage() {
     if (!isExpanded && !historyData[monitorId]) {
       setHistoryLoading((prev) => ({ ...prev, [monitorId]: true }));
       try {
-        const res = await api.getMonitorHistory(monitorId, 20);
+        const res = await api.getMonitorHistory(monitorId, 20, 0);
         setHistoryData((prev) => ({ ...prev, [monitorId]: res.checks || [] }));
+        setHistoryTotal((prev) => ({ ...prev, [monitorId]: res.total || 0 }));
+        setHistoryOffset((prev) => ({ ...prev, [monitorId]: 0 }));
       } catch (err: any) {
         console.error("Failed to load history:", err);
         setHistoryData((prev) => ({ ...prev, [monitorId]: [] }));
       } finally {
         setHistoryLoading((prev) => ({ ...prev, [monitorId]: false }));
       }
+    }
+  };
+
+  const loadMoreHistory = async (monitorId: string) => {
+    const currentOffset = (historyOffset[monitorId] || 0) + 20;
+    setHistoryLoading((prev) => ({ ...prev, [monitorId]: true }));
+    try {
+      const res = await api.getMonitorHistory(monitorId, 20, currentOffset);
+      setHistoryData((prev) => ({
+        ...prev,
+        [monitorId]: [...(prev[monitorId] || []), ...(res.checks || [])],
+      }));
+      setHistoryOffset((prev) => ({ ...prev, [monitorId]: currentOffset }));
+    } catch (err: any) {
+      console.error("Failed to load more history:", err);
+    } finally {
+      setHistoryLoading((prev) => ({ ...prev, [monitorId]: false }));
     }
   };
 
@@ -332,6 +412,30 @@ export default function MonitorsPage() {
               </Button>
             </div>
           </div>
+
+          {/* Summary Stats */}
+          {monitors.length > 0 && (
+            <div className="mb-6 grid grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold">{monitors.filter((m) => m.is_active).length}</p>
+                  <p className="text-xs text-muted-foreground">Active Monitors</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold">{monitors.reduce((sum, m) => sum + (m.total_checks ?? 0), 0)}</p>
+                  <p className="text-xs text-muted-foreground">Total Checks</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <p className="text-2xl font-bold">{monitors.reduce((sum, m) => sum + (m.total_changes ?? 0), 0)}</p>
+                  <p className="text-xs text-muted-foreground">Total Changes</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Error banner */}
           {error && (
@@ -651,6 +755,16 @@ export default function MonitorsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
+                            onClick={() => startEditing(monitor)}
+                            disabled={!!currentAction}
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
                             onClick={() => toggleHistory(monitor.id)}
                             title="View history"
                           >
@@ -672,6 +786,94 @@ export default function MonitorsPage() {
                           </Button>
                         </div>
                       </div>
+
+                      {/* Inline Edit Form */}
+                      {editingMonitor === monitor.id && (
+                        <div className="mt-4 pt-4 border-t border-border/50 space-y-3 animate-fade-in">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-xs font-medium">Name</label>
+                              <Input
+                                value={editForm.name}
+                                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs font-medium">Interval</label>
+                              <select
+                                value={editForm.check_interval_minutes}
+                                onChange={(e) => setEditForm({ ...editForm, check_interval_minutes: parseInt(e.target.value) })}
+                                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                              >
+                                {INTERVAL_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-xs font-medium">CSS Selector</label>
+                              <Input
+                                value={editForm.css_selector}
+                                onChange={(e) => setEditForm({ ...editForm, css_selector: e.target.value })}
+                                className="font-mono text-xs"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs font-medium">Notify On</label>
+                              <select
+                                value={editForm.notify_on}
+                                onChange={(e) => setEditForm({ ...editForm, notify_on: e.target.value })}
+                                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                              >
+                                {NOTIFY_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium">Keywords (comma-separated)</label>
+                            <Input
+                              value={editForm.keywords}
+                              onChange={(e) => setEditForm({ ...editForm, keywords: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium">Webhook URL</label>
+                            <Input
+                              value={editForm.webhook_url}
+                              onChange={(e) => setEditForm({ ...editForm, webhook_url: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium">Threshold: {editForm.threshold}%</label>
+                            <input
+                              type="range"
+                              min={1}
+                              max={100}
+                              value={editForm.threshold}
+                              onChange={(e) => setEditForm({ ...editForm, threshold: parseInt(e.target.value) })}
+                              className="w-full accent-primary"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveEdit(monitor.id)}
+                              disabled={currentAction === "edit"}
+                              className="gap-1"
+                            >
+                              {currentAction === "edit" ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                              Save
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={cancelEditing}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* ── Expandable History Section ──────── */}
                       {isExpanded && (
@@ -695,6 +897,7 @@ export default function MonitorsPage() {
                               </p>
                             </div>
                           ) : (
+                            <>
                             <div className="space-y-1.5 max-h-64 overflow-y-auto">
                               {checks.map((check) => (
                                 <div
@@ -776,6 +979,20 @@ export default function MonitorsPage() {
                                 </div>
                               ))}
                             </div>
+                            {(historyTotal[monitor.id] || 0) > (historyData[monitor.id]?.length || 0) && (
+                              <div className="mt-3 text-center">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => loadMoreHistory(monitor.id)}
+                                  disabled={isHistoryLoading}
+                                >
+                                  {isHistoryLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                                  Load more ({(historyTotal[monitor.id] || 0) - (historyData[monitor.id]?.length || 0)} remaining)
+                                </Button>
+                              </div>
+                            )}
+                            </>
                           )}
                         </div>
                       )}

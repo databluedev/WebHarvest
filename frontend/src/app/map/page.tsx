@@ -20,6 +20,8 @@ export default function MapPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [includeSubdomains, setIncludeSubdomains] = useState(false);
+  const [useSitemap, setUseSitemap] = useState(true);
 
   useEffect(() => {
     if (!api.getToken()) router.push("/auth/login");
@@ -36,6 +38,8 @@ export default function MapPage() {
         url,
         search: search || undefined,
         limit,
+        include_subdomains: includeSubdomains || undefined,
+        use_sitemap: useSitemap,
       });
       if (res.success && res.job_id) {
         router.push(`/map/${res.job_id}`);
@@ -141,6 +145,28 @@ export default function MapPage() {
                       value={limit}
                       onChange={(e) => setLimit(parseInt(e.target.value) || 100)}
                     />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Include subdomains</label>
+                    <button
+                      onClick={() => setIncludeSubdomains(!includeSubdomains)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                        includeSubdomains ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {includeSubdomains ? "On" : "Off"}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Use sitemap</label>
+                    <button
+                      onClick={() => setUseSitemap(!useSitemap)}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                        useSitemap ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {useSitemap ? "On" : "Off"}
+                    </button>
                   </div>
 
                   {error && (

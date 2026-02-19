@@ -261,6 +261,11 @@ export default function ScrapeDetailPage() {
                       {result.metadata.title && (
                         <span className="text-xs text-muted-foreground truncate">{result.metadata.title}</span>
                       )}
+                      {result.metadata.canonical_url && result.metadata.canonical_url !== result.url && (
+                        <span className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                          Canonical: <a href={result.metadata.canonical_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{result.metadata.canonical_url}</a>
+                        </span>
+                      )}
                     </div>
                   )}
 

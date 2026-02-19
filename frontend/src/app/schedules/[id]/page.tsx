@@ -17,8 +17,19 @@ import {
   Trash2,
   Loader2,
   Eye,
+  Pencil,
+  CheckCircle2,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
+
+const TIMEZONES = [
+  "UTC", "US/Eastern", "US/Central", "US/Mountain", "US/Pacific",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Tokyo",
+  "Asia/Shanghai", "Asia/Kolkata", "Australia/Sydney", "America/Sao_Paulo",
+];
 
 export default function ScheduleDetailPage() {
   const router = useRouter();
@@ -28,6 +39,14 @@ export default function ScheduleDetailPage() {
   const [schedule, setSchedule] = useState<any>(null);
   const [runs, setRuns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editCron, setEditCron] = useState("");
+  const [editTimezone, setEditTimezone] = useState("");
+  const [editWebhookUrl, setEditWebhookUrl] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [runPage, setRunPage] = useState(0);
+  const RUNS_PER_PAGE = 10;
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -78,6 +97,33 @@ export default function ScheduleDetailPage() {
       router.push("/schedules");
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const startEditing = () => {
+    if (!schedule) return;
+    setEditName(schedule.name);
+    setEditCron(schedule.cron_expression);
+    setEditTimezone(schedule.timezone || "UTC");
+    setEditWebhookUrl(schedule.webhook_url || "");
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setEditSaving(true);
+    try {
+      await api.updateSchedule(scheduleId, {
+        name: editName,
+        cron_expression: editCron,
+        timezone: editTimezone,
+        webhook_url: editWebhookUrl || undefined,
+      });
+      setEditing(false);
+      loadData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -135,6 +181,10 @@ export default function ScheduleDetailPage() {
               </p>
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={startEditing} className="gap-1">
+                <Pencil className="h-4 w-4" />
+                Edit
+              </Button>
               <Button variant="outline" size="sm" onClick={handleTrigger} className="gap-1">
                 <Zap className="h-4 w-4" />
                 Run Now
@@ -154,6 +204,52 @@ export default function ScheduleDetailPage() {
               </Button>
             </div>
           </div>
+
+          {/* Edit Form */}
+          {editing && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Edit Schedule</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Name</label>
+                    <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Cron Expression</label>
+                    <Input value={editCron} onChange={(e) => setEditCron(e.target.value)} className="font-mono" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Timezone</label>
+                    <select
+                      value={editTimezone}
+                      onChange={(e) => setEditTimezone(e.target.value)}
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {TIMEZONES.map((tz) => (
+                        <option key={tz} value={tz}>{tz}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Webhook URL</label>
+                    <Input value={editWebhookUrl} onChange={(e) => setEditWebhookUrl(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveEdit} disabled={editSaving} className="gap-1">
+                    {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    Save
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Schedule Info */}
           <div className="grid grid-cols-2 gap-6 mb-6">
@@ -183,6 +279,32 @@ export default function ScheduleDetailPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-lg font-bold">{schedule.run_count} runs</p>
+                {runs.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Success rate:</span>
+                      <span className="text-sm font-medium">
+                        {Math.round((runs.filter((r: any) => r.status === "completed").length / runs.length) * 100)}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Last 10:</span>
+                      {runs.slice(0, 10).map((r: any, i: number) => (
+                        <div
+                          key={i}
+                          className={`h-3 w-3 rounded-full ${
+                            r.status === "completed"
+                              ? "bg-green-500"
+                              : r.status === "failed"
+                              ? "bg-red-500"
+                              : "bg-yellow-500"
+                          }`}
+                          title={`${r.status}${r.created_at ? ` - ${new Date(r.created_at).toLocaleString()}` : ""}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {schedule.last_run_at && (
                   <p className="text-sm text-muted-foreground mt-2">
                     Last run: {new Date(schedule.last_run_at).toLocaleString()}
@@ -222,8 +344,9 @@ export default function ScheduleDetailPage() {
                   </p>
                 </div>
               ) : (
+                <>
                 <div className="space-y-2">
-                  {runs.map((run) => (
+                  {runs.slice(runPage * RUNS_PER_PAGE, (runPage + 1) * RUNS_PER_PAGE).map((run: any) => (
                     <div
                       key={run.id}
                       className="flex items-center justify-between rounded-md border p-3"
@@ -270,6 +393,36 @@ export default function ScheduleDetailPage() {
                     </div>
                   ))}
                 </div>
+                {runs.length > RUNS_PER_PAGE && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                    <p className="text-sm text-muted-foreground">
+                      Page {runPage + 1} of {Math.ceil(runs.length / RUNS_PER_PAGE)}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRunPage((p) => Math.max(0, p - 1))}
+                        disabled={runPage === 0}
+                        className="gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRunPage((p) => Math.min(Math.ceil(runs.length / RUNS_PER_PAGE) - 1, p + 1))}
+                        disabled={runPage >= Math.ceil(runs.length / RUNS_PER_PAGE) - 1}
+                        className="gap-1"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
               )}
             </CardContent>
           </Card>
