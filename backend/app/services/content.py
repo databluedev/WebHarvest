@@ -222,10 +222,19 @@ def extract_main_content(html: str, url: str = "") -> str:
 
 
 def _remove_hidden_elements(soup: BeautifulSoup) -> None:
-    """Remove elements that are hidden/invisible via inline styles or attributes."""
-    # Elements with display:none or visibility:hidden in inline style
-    for el in soup.find_all(style=True):
-        style = el.get("style", "")
+    """Remove elements that are hidden/invisible via inline styles or attributes.
+
+    Collects elements before iterating to avoid tree mutation issues where
+    decomposing one element can set sibling attrs to None in BeautifulSoup.
+    """
+    # Collect elements first to avoid iterator invalidation during decompose
+    styled = list(soup.find_all(style=True))
+    for el in styled:
+        if not hasattr(el, "attrs") or not isinstance(el.attrs, dict):
+            continue
+        style = el.attrs.get("style", "")
+        if not style:
+            continue
         if "display:none" in style.replace(" ", "") or "display: none" in style:
             el.decompose()
             continue
@@ -233,14 +242,21 @@ def _remove_hidden_elements(soup: BeautifulSoup) -> None:
             el.decompose()
 
     # Elements with hidden attribute
-    for el in soup.find_all(attrs={"hidden": True}):
-        el.decompose()
+    hidden = list(soup.find_all(attrs={"hidden": True}))
+    for el in hidden:
+        try:
+            el.decompose()
+        except Exception:
+            pass
 
     # aria-hidden elements (usually decorative)
-    for el in soup.find_all(attrs={"aria-hidden": "true"}):
-        # Only remove if it doesn't contain substantial text
-        if len(el.get_text(strip=True)) < 100:
-            el.decompose()
+    aria_hidden = list(soup.find_all(attrs={"aria-hidden": "true"}))
+    for el in aria_hidden:
+        try:
+            if len(el.get_text(strip=True)) < 100:
+                el.decompose()
+        except Exception:
+            pass
 
 
 def _find_main_container(soup: BeautifulSoup) -> Tag | None:
