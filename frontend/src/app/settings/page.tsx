@@ -13,10 +13,14 @@ import { Settings as SettingsIcon, Plus, Trash2, Star, Check, Shield, Globe } fr
 const PROVIDERS = [
   { id: "openai", name: "OpenAI", placeholder: "sk-...", defaultModel: "gpt-4o-mini" },
   { id: "anthropic", name: "Anthropic", placeholder: "sk-ant-...", defaultModel: "claude-sonnet-4-20250514" },
+  { id: "openrouter", name: "OpenRouter", placeholder: "sk-or-v1-...", defaultModel: "google/gemma-2-9b-it:free" },
   { id: "groq", name: "Groq", placeholder: "gsk_...", defaultModel: "llama-3.1-70b-versatile" },
   { id: "together", name: "Together AI", placeholder: "...", defaultModel: "meta-llama/Llama-3.1-70B-Instruct-Turbo" },
   { id: "mistral", name: "Mistral", placeholder: "...", defaultModel: "mistral-large-latest" },
   { id: "deepseek", name: "DeepSeek", placeholder: "sk-...", defaultModel: "deepseek-chat" },
+  { id: "fireworks", name: "Fireworks", placeholder: "...", defaultModel: "accounts/fireworks/models/llama-v3p1-70b-instruct" },
+  { id: "cohere", name: "Cohere", placeholder: "...", defaultModel: "command-r-plus" },
+  { id: "ollama", name: "Ollama (Local)", placeholder: "not needed", defaultModel: "llama3.1" },
 ];
 
 export default function SettingsPage() {
