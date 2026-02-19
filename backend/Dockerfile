@@ -15,8 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install Playwright Chromium (required)
 RUN playwright install chromium --with-deps
 
-# Install Firefox (optional — anti-detection fallback, build continues if download fails)
-RUN playwright install firefox --with-deps || echo "Firefox install failed, continuing with Chromium only"
+# Install Firefox dependencies explicitly, then the browser binary
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgtk-3-0 libdbus-glib-1-2 libxt6 libx11-xcb1 libasound2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && playwright install firefox
 
 # Copy application
 COPY . .
