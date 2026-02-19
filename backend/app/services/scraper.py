@@ -901,26 +901,30 @@ async def scrape_url(
 
         if crawl_session:
             # Use persistent CrawlSession — no context creation overhead
+            # Do NOT combine with Tier 3 in crawl mode — Tier 3 creates separate
+            # browser contexts that conflict with the persistent session on cancellation.
             browser_coros = [
                 ("chromium_stealth", _fetch_with_browser_session(url, request, crawl_session)),
             ]
+            t2_timeout = 30 if hard_site else 20
         else:
             browser_coros = [
                 ("chromium_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright)),
                 ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
             ]
 
-        # For hard sites, race Tier 2 AND Tier 3 concurrently for massive speed win
-        if hard_site and starting_tier <= 3:
-            heavy_coros = [
-                ("google_search_chain", _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)),
-                ("advanced_prewarm", _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)),
-            ]
-            browser_coros.extend(heavy_coros)
-            _skip_tier3 = True
-            t2_timeout = 35  # Combined race timeout
-        else:
-            t2_timeout = 30 if hard_site else 20
+            # For hard sites, race Tier 2 AND Tier 3 concurrently for massive speed win
+            # Only safe in single-scrape mode (no crawl_session)
+            if hard_site and starting_tier <= 3:
+                heavy_coros = [
+                    ("google_search_chain", _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)),
+                    ("advanced_prewarm", _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)),
+                ]
+                browser_coros.extend(heavy_coros)
+                _skip_tier3 = True
+                t2_timeout = 35  # Combined race timeout
+            else:
+                t2_timeout = 30 if hard_site else 20
 
         race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=t2_timeout)
         _update_best(race)
@@ -2110,24 +2114,26 @@ async def scrape_url_fetch_only(
             return bool(html) and not _looks_blocked(html)
 
         if crawl_session:
+            # Don't combine Tier 2+3 in crawl mode — avoids TargetClosedError
             browser_coros = [("chromium_stealth", _fetch_with_browser_session(url, request, crawl_session))]
+            t2_timeout = 30 if _is_hard_site(url) else 20
         else:
             browser_coros = [
                 ("chromium_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright)),
                 ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
             ]
 
-        # For hard sites, race Tier 2 AND Tier 3 concurrently for massive speed win
-        if hard_site and starting_tier <= 3:
-            heavy_coros = [
-                ("google_search_chain", _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)),
-                ("advanced_prewarm", _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)),
-            ]
-            browser_coros.extend(heavy_coros)
-            _skip_tier3_fetch = True
-            t2_timeout = 35  # Combined race timeout
-        else:
-            t2_timeout = 30 if hard_site else 20
+            # For hard sites, race Tier 2 AND Tier 3 concurrently for massive speed win
+            if hard_site and starting_tier <= 3:
+                heavy_coros = [
+                    ("google_search_chain", _fetch_with_google_search_chain(url, request, proxy=proxy_playwright)),
+                    ("advanced_prewarm", _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)),
+                ]
+                browser_coros.extend(heavy_coros)
+                _skip_tier3_fetch = True
+                t2_timeout = 35  # Combined race timeout
+            else:
+                t2_timeout = 30 if hard_site else 20
 
         race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=t2_timeout)
         if race.best_html and len(race.best_html) > len(raw_html_best):

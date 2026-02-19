@@ -1171,10 +1171,71 @@ class CrawlSession:
         logger.info("CrawlSession started (persistent browser context)")
 
     async def new_page(self) -> Page:
-        """Create a new page within the persistent context."""
+        """Create a new page within the persistent context.
+
+        Auto-recovers if the context was closed by a race cancellation or crash.
+        """
         if not self._context:
             raise RuntimeError("CrawlSession not started")
-        return await self._context.new_page()
+        try:
+            return await self._context.new_page()
+        except Exception as e:
+            # Context died (e.g. race cancellation TargetClosedError) — recreate it
+            logger.warning(f"CrawlSession context dead, recreating: {e}")
+            await self._recreate_context()
+            return await self._context.new_page()
+
+    async def _recreate_context(self):
+        """Recreate the browser context after a crash, preserving cookies."""
+        is_firefox = self._use_firefox and self._pool._firefox is not None
+        browser = self._pool._firefox if is_firefox else self._pool._chromium
+
+        if browser is None or not browser.is_connected():
+            await self._pool._relaunch_browser(use_firefox=is_firefox)
+            browser = self._pool._firefox if is_firefox else self._pool._chromium
+
+        vp = random.choice(VIEWPORTS)
+        tz = random.choice(TIMEZONES)
+        hw_concurrency = random.choice([4, 8, 12, 16])
+        device_mem = random.choice([4, 8, 16])
+        webgl_vendor, webgl_renderer = random.choice(WEBGL_RENDERERS)
+        color_depth = random.choice(COLOR_DEPTHS)
+
+        if is_firefox:
+            ua = random.choice(FIREFOX_USER_AGENTS)
+            context_kwargs = dict(
+                user_agent=ua, viewport=vp, locale="en-US", timezone_id=tz,
+                ignore_https_errors=True, java_script_enabled=True,
+                has_touch=False, is_mobile=False, color_scheme="light",
+            )
+        else:
+            ua = random.choice(CHROME_USER_AGENTS)
+            context_kwargs = dict(
+                user_agent=ua, viewport=vp, locale="en-US", timezone_id=tz,
+                ignore_https_errors=True, java_script_enabled=True,
+                has_touch=False, is_mobile=False, color_scheme="light",
+            )
+
+        self._context = await browser.new_context(**context_kwargs)
+
+        # Re-inject stealth
+        if is_firefox:
+            script = _build_firefox_stealth(hw_concurrency)
+        else:
+            script = _build_chromium_stealth(
+                webgl_vendor, webgl_renderer, color_depth,
+                hw_concurrency, device_mem,
+            )
+        await self._context.add_init_script(script)
+
+        # Restore accumulated cookies
+        if self._cookies:
+            try:
+                await self._context.add_cookies(self._cookies)
+            except Exception:
+                pass
+
+        logger.info("CrawlSession context recreated after crash")
 
     async def close_page(self, page: Page):
         """Close a page but keep the context alive. Saves cookies."""
