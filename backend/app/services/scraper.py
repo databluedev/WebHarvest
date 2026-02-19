@@ -737,6 +737,20 @@ async def scrape_url(
     Tier 3: Heavy race (hard sites) → race(google_search, advanced_prewarm)
     Tier 4: Fallback parallel → race(google_cache, wayback)
     """
+    try:
+        return await _scrape_url_inner(request, proxy_manager, crawl_session)
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"scrape_url crashed for {request.url}: {e}\n{tb}")
+        raise type(e)(f"{e} | traceback: {tb[-800:]}") from e
+
+
+async def _scrape_url_inner(
+    request: ScrapeRequest,
+    proxy_manager=None,
+    crawl_session=None,
+) -> ScrapeData:
     from app.core.cache import get_cached_scrape, set_cached_scrape
     from app.core.metrics import scrape_duration_seconds
     from app.services.document import detect_document_type, extract_pdf, extract_docx
@@ -2031,6 +2045,20 @@ async def scrape_url_fetch_only(
     Returns dict with keys: raw_html, status_code, response_headers, screenshot_b64,
     action_screenshots, winning_strategy, winning_tier. Returns None on total failure.
     """
+    try:
+        return await _scrape_url_fetch_only_inner(request, proxy_manager, crawl_session)
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"scrape_url_fetch_only crashed for {request.url}: {e}\n{tb}")
+        raise type(e)(f"{e} | traceback: {tb[-800:]}") from e
+
+
+async def _scrape_url_fetch_only_inner(
+    request: ScrapeRequest,
+    proxy_manager=None,
+    crawl_session=None,
+) -> dict | None:
     from app.services.document import detect_document_type
 
     url = request.url
