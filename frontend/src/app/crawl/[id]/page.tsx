@@ -27,10 +27,11 @@ import {
   FileCode,
   ArrowUpRight,
   ArrowDownLeft,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 
-type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "json";
+type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "json";
 
 const PageResultCard = memo(function PageResultCard({ page, index }: { page: any; index: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -43,6 +44,7 @@ const PageResultCard = memo(function PageResultCard({ page, index }: { page: any
   const hasStructured = page.structured_data && Object.keys(page.structured_data).length > 0;
   const hasHeadings = page.headings?.length > 0;
   const hasImages = page.images?.length > 0;
+  const hasExtract = !!page.extract;
 
   const tabs: { id: TabType; label: string; icon: any; available: boolean }[] = [
     { id: "markdown", label: "Markdown", icon: FileText, available: hasMarkdown },
@@ -52,6 +54,7 @@ const PageResultCard = memo(function PageResultCard({ page, index }: { page: any
     { id: "structured", label: "Structured Data", icon: Braces, available: hasStructured },
     { id: "headings", label: "Headings", icon: List, available: hasHeadings },
     { id: "images", label: "Images", icon: ImageIcon, available: hasImages },
+    { id: "extract", label: "AI Extract", icon: Sparkles, available: hasExtract },
     { id: "json", label: "Full JSON", icon: FileCode, available: true },
   ];
 
@@ -379,6 +382,12 @@ const PageResultCard = memo(function PageResultCard({ page, index }: { page: any
                   </div>
                 ))}
               </div>
+            )}
+
+            {activeTab === "extract" && hasExtract && (
+              <pre className="max-h-96 overflow-auto text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-md p-4">
+                {JSON.stringify(page.extract, null, 2)}
+              </pre>
             )}
 
             {activeTab === "json" && (

@@ -156,6 +156,7 @@ class ApiClient {
     include_paths?: string[];
     exclude_paths?: string[];
     scrape_options?: object;
+    extract?: { prompt?: string; schema_?: object };
     use_proxy?: boolean;
     webhook_url?: string;
     webhook_secret?: string;
@@ -173,7 +174,7 @@ class ApiClient {
       data?: Array<{
         url: string; markdown?: string; html?: string; links?: string[];
         links_detail?: any; screenshot?: string; structured_data?: any;
-        headings?: any[]; images?: any[]; metadata?: any;
+        headings?: any[]; images?: any[]; extract?: any; metadata?: any;
       }>;
     }>(`/v1/crawl/${jobId}`);
   }
@@ -224,6 +225,7 @@ class ApiClient {
     formats?: string[];
     only_main_content?: boolean;
     concurrency?: number;
+    extract?: { prompt?: string; schema_?: object };
     use_proxy?: boolean;
     headers?: Record<string, string>;
     cookies?: Record<string, string>;
@@ -242,7 +244,7 @@ class ApiClient {
     return this.request<{
       success: boolean; job_id: string; status: string;
       total_urls: number; completed_urls: number;
-      data?: Array<{ url: string; success: boolean; markdown?: string; html?: string; links?: string[]; screenshot?: string; metadata?: any; error?: string }>;
+      data?: Array<{ url: string; success: boolean; markdown?: string; html?: string; links?: string[]; screenshot?: string; extract?: any; metadata?: any; error?: string }>;
       error?: string;
     }>(`/v1/batch/${jobId}`);
   }
@@ -262,6 +264,7 @@ class ApiClient {
     brave_api_key?: string;
     formats?: string[];
     only_main_content?: boolean;
+    extract?: { prompt?: string; schema_?: object };
     use_proxy?: boolean;
     mobile?: boolean;
     mobile_device?: string;
@@ -282,7 +285,7 @@ class ApiClient {
         url: string; title?: string; snippet?: string; success: boolean;
         markdown?: string; html?: string; links?: string[];
         links_detail?: any; screenshot?: string; structured_data?: any;
-        headings?: any[]; images?: any[];
+        headings?: any[]; images?: any[]; extract?: any;
         metadata?: any; error?: string;
       }>;
       error?: string;

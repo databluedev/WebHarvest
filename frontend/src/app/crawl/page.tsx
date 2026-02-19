@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
-import { Globe, Loader2, Play, Eye, ChevronDown, ChevronUp, Settings2, Info } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Globe, Loader2, Play, Eye, ChevronDown, ChevronUp, Settings2, Info, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 export default function CrawlPage() {
@@ -26,6 +27,7 @@ export default function CrawlPage() {
   const [excludePaths, setExcludePaths] = useState("");
   const [concurrency, setConcurrency] = useState(3);
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [extractPrompt, setExtractPrompt] = useState("");
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -63,6 +65,9 @@ export default function CrawlPage() {
         if (includePaths.trim()) params.include_paths = includePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
         if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
         if (webhookUrl.trim()) params.webhook_url = webhookUrl.trim();
+      }
+      if (extractPrompt.trim()) {
+        params.scrape_options = { ...params.scrape_options, extract: { prompt: extractPrompt.trim() } };
       }
 
       const res = await api.startCrawl(params);
@@ -234,6 +239,24 @@ export default function CrawlPage() {
                       placeholder="https://your-server.com/webhook"
                       value={webhookUrl}
                       onChange={(e) => setWebhookUrl(e.target.value)}
+                    />
+                  </div>
+
+                  {/* AI Extraction */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4" />
+                      AI Extraction (BYOK)
+                      <span className="text-xs text-muted-foreground font-normal">
+                        (requires LLM key in Settings)
+                      </span>
+                    </label>
+                    <Textarea
+                      placeholder="e.g., Extract the product name, price, and description from each page"
+                      value={extractPrompt}
+                      onChange={(e) => setExtractPrompt(e.target.value)}
+                      rows={3}
+                      className="text-sm"
                     />
                   </div>
 

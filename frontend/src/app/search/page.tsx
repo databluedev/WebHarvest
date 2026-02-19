@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
-import { Search, Loader2, Play, Info } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Search, Loader2, Play, Info, Sparkles } from "lucide-react";
 
 export default function SearchPage() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function SearchPage() {
   const [engine, setEngine] = useState("duckduckgo");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [extractPrompt, setExtractPrompt] = useState("");
 
   // Format toggles — now all 7 formats
   const [formats, setFormats] = useState<string[]>(["markdown"]);
@@ -37,12 +39,16 @@ export default function SearchPage() {
     setError("");
 
     try {
-      const res = await api.startSearch({
+      const params: any = {
         query: query.trim(),
         num_results: numResults,
         engine,
         formats,
-      });
+      };
+      if (extractPrompt.trim()) {
+        params.extract = { prompt: extractPrompt.trim() };
+      }
+      const res = await api.startSearch(params);
       if (res.success) {
         router.push(`/search/${res.job_id}`);
       }
@@ -160,6 +166,24 @@ export default function SearchPage() {
                     </Button>
                   ))}
                 </div>
+              </div>
+
+              {/* AI Extraction */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4" />
+                  AI Extraction (BYOK)
+                  <span className="text-xs text-muted-foreground font-normal">
+                    (requires LLM key in Settings)
+                  </span>
+                </label>
+                <Textarea
+                  placeholder="e.g., Extract the main topic, key facts, and sentiment from each result"
+                  value={extractPrompt}
+                  onChange={(e) => setExtractPrompt(e.target.value)}
+                  rows={3}
+                  className="text-sm"
+                />
               </div>
 
               <div className="flex items-start gap-2 rounded-md bg-muted/50 p-3">

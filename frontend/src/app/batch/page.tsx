@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { Layers, Loader2, Play, Info, Eye } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Layers, Loader2, Play, Info, Eye, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 export default function BatchPage() {
@@ -18,6 +19,7 @@ export default function BatchPage() {
   const [error, setError] = useState("");
   const [concurrency, setConcurrency] = useState(5);
   const [recentJobs, setRecentJobs] = useState<any[]>([]);
+  const [extractPrompt, setExtractPrompt] = useState("");
 
   // Format toggles
   const [formats, setFormats] = useState<string[]>(["markdown"]);
@@ -55,11 +57,15 @@ export default function BatchPage() {
     setError("");
 
     try {
-      const res = await api.startBatch({
+      const params: any = {
         urls,
         formats,
         concurrency,
-      });
+      };
+      if (extractPrompt.trim()) {
+        params.extract = { prompt: extractPrompt.trim() };
+      }
+      const res = await api.startBatch(params);
       if (res.success) {
         router.push(`/batch/${res.job_id}`);
       }
@@ -133,6 +139,24 @@ export default function BatchPage() {
                   <span>1 (slow, gentle)</span>
                   <span>20 (fast, aggressive)</span>
                 </div>
+              </div>
+
+              {/* AI Extraction */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4" />
+                  AI Extraction (BYOK)
+                  <span className="text-xs text-muted-foreground font-normal">
+                    (requires LLM key in Settings)
+                  </span>
+                </label>
+                <Textarea
+                  placeholder="e.g., Extract the product name, price, and description from each page"
+                  value={extractPrompt}
+                  onChange={(e) => setExtractPrompt(e.target.value)}
+                  rows={3}
+                  className="text-sm"
+                />
               </div>
 
               <div className="flex items-start gap-2 rounded-md bg-muted/50 p-3">

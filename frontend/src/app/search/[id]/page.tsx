@@ -29,10 +29,11 @@ import {
   FileCode,
   ArrowUpRight,
   ArrowDownLeft,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 
-type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "json";
+type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "json";
 
 function SearchResultCard({ item, index }: { item: any; index: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -45,6 +46,7 @@ function SearchResultCard({ item, index }: { item: any; index: number }) {
   const hasStructured = item.structured_data && Object.keys(item.structured_data).length > 0;
   const hasHeadings = item.headings?.length > 0;
   const hasImages = item.images?.length > 0;
+  const hasExtract = !!item.extract;
 
   const tabs: { id: TabType; label: string; icon: any; available: boolean }[] = [
     { id: "markdown", label: "Markdown", icon: FileText, available: hasMarkdown },
@@ -54,6 +56,7 @@ function SearchResultCard({ item, index }: { item: any; index: number }) {
     { id: "structured", label: "Structured Data", icon: Braces, available: hasStructured },
     { id: "headings", label: "Headings", icon: List, available: hasHeadings },
     { id: "images", label: "Images", icon: ImageIcon, available: hasImages },
+    { id: "extract", label: "AI Extract", icon: Sparkles, available: hasExtract },
     { id: "json", label: "Full JSON", icon: FileCode, available: true },
   ];
 
@@ -304,6 +307,12 @@ function SearchResultCard({ item, index }: { item: any; index: number }) {
                   </div>
                 ))}
               </div>
+            )}
+
+            {activeTab === "extract" && hasExtract && (
+              <pre className="max-h-96 overflow-auto text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-md p-4">
+                {JSON.stringify(item.extract, null, 2)}
+              </pre>
             )}
 
             {activeTab === "json" && (
