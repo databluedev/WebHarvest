@@ -24,7 +24,10 @@ Every action creates a **Job** record in the database. Results are persisted and
 
 ## Features
 
-- **Full Browser Rendering** - Playwright (Chromium) handles JavaScript-heavy sites
+- **Full Browser Rendering** - Playwright (Chromium + Firefox) handles JavaScript-heavy sites
+- **Anti-Bot Bypass** - 20-level stealth injection, TLS fingerprint impersonation (curl_cffi), request interception, Google referrer chains, and cookie-enhanced HTTP
+- **5-Tier Scraping Pipeline** - Strategy cache → Cookie HTTP → HTTP race → Browser race → Heavy strategies → Fallback archives, with per-domain strategy learning
+- **Fast Crawling** - Persistent browser sessions, cookie reuse across pages, and producer-consumer pipeline overlap fetch and extraction for ~5x crawl speed
 - **Smart Content Extraction** - Trafilatura strips boilerplate before processing
 - **AI Extraction (BYOK)** - Bring your own OpenAI/Anthropic/Groq key for LLM-powered structured extraction
 - **Scheduled Jobs** - Cron-based recurring scrapes with Celery Beat
@@ -370,12 +373,14 @@ WebHarvest/
 │   │   │   ├── job.py         # Job tracking (all types)
 │   │   │   └── job_result.py  # Per-page results
 │   │   ├── services/          # Business logic
-│   │   │   ├── scraper.py     # Playwright + Trafilatura scraping
+│   │   │   ├── scraper.py     # 5-tier scraping pipeline with strategy cache
+│   │   │   ├── browser.py     # Browser pool + CrawlSession (persistent contexts)
+│   │   │   ├── crawler.py     # BFS crawler with session management
 │   │   │   ├── mapper.py      # Sitemap + link discovery
 │   │   │   ├── search.py      # Search engine integration
 │   │   │   └── llm_extract.py # LLM extraction via LiteLLM
 │   │   ├── workers/           # Celery background tasks
-│   │   │   ├── crawl_worker.py
+│   │   │   ├── crawl_worker.py # Producer-consumer pipeline
 │   │   │   ├── batch_worker.py
 │   │   │   └── search_worker.py
 │   │   └── config.py          # Settings from environment
@@ -501,7 +506,8 @@ alembic revision --autogenerate -m "description"  # Create new migration
 | **Database** | PostgreSQL 16 |
 | **Cache / Queue** | Redis 7 |
 | **Task Queue** | Celery 5 |
-| **Browser** | Playwright (Chromium) |
+| **Browser** | Playwright (Chromium + Firefox), persistent sessions for crawl mode |
+| **HTTP Engine** | curl_cffi (TLS fingerprint impersonation), httpx (HTTP/2) |
 | **Content Extraction** | Trafilatura, BeautifulSoup, Markdownify |
 | **LLM** | LiteLLM (supports OpenAI, Anthropic, Groq, etc.) |
 | **Search** | DuckDuckGo (default), Google Custom Search, Brave Search |

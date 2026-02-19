@@ -746,13 +746,21 @@ async def scrape_url(
         return result[0], result[1], result[2], result[3], result[4]
 
     # === Tier 0: Strategy cache hit — try last known working strategy ===
-    if starting_tier == 0 and strategy_data and not needs_browser:
+    _is_browser_strategy = False
+    if starting_tier == 0 and strategy_data:
+        last_strategy = strategy_data.get("last_success_strategy", "")
+        _is_browser_strategy = last_strategy in (
+            "chromium_stealth", "firefox_stealth",
+            "google_search_chain", "advanced_prewarm",
+        )
+
+    if starting_tier == 0 and strategy_data and (not needs_browser or _is_browser_strategy):
         last_strategy = strategy_data.get("last_success_strategy", "")
         last_tier = strategy_data.get("last_success_tier", 1)
         tier_start = time.time()
 
         try:
-            if last_strategy.startswith("curl_cffi:"):
+            if last_strategy.startswith("curl_cffi:") and not needs_browser:
                 profile = last_strategy.split(":", 1)[1]
                 result = await _fetch_with_curl_cffi_single(
                     url, request.timeout, profile=profile, proxy_url=proxy_url
@@ -764,7 +772,7 @@ async def scrape_url(
                     winning_strategy = last_strategy
                     winning_tier = 0
                     logger.info(f"Strategy cache hit for {url}: {last_strategy}")
-            elif last_strategy == "httpx":
+            elif last_strategy == "httpx" and not needs_browser:
                 result = await _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)
                 html, sc, hdrs = result
                 if html and sc < 400 and not _looks_blocked(html):
@@ -829,11 +837,20 @@ async def scrape_url(
         except Exception as e:
             logger.debug(f"Cookie HTTP failed for {url}: {e}")
 
-    # Helper to accumulate best HTML from race losers
+    # Helper to accumulate best HTML + screenshot from race losers
+    screenshot_b64_best = None
+    action_screenshots_best = []
+
     def _update_best(race: RaceResult):
-        nonlocal raw_html_best
+        nonlocal raw_html_best, screenshot_b64_best, action_screenshots_best
         if race.best_html and len(race.best_html) > len(raw_html_best):
             raw_html_best = race.best_html
+        # Preserve screenshot from browser race results (5-tuple)
+        if race.best_result and isinstance(race.best_result, tuple) and len(race.best_result) == 5:
+            _, _, best_ss, best_action_ss, _ = race.best_result
+            if best_ss and not screenshot_b64_best:
+                screenshot_b64_best = best_ss
+                action_screenshots_best = best_action_ss or []
 
     def _validate_browser(result):
         html = result[0] if isinstance(result, tuple) else result
@@ -943,8 +960,15 @@ async def scrape_url(
     if not fetched:
         if raw_html_best:
             raw_html = raw_html_best
+            # Recover screenshot from browser race that had content but failed validation
+            if not screenshot_b64 and screenshot_b64_best:
+                screenshot_b64 = screenshot_b64_best
+                action_screenshots = action_screenshots_best
             logger.warning(f"All tiers failed for {url}, using best available ({len(raw_html_best)} chars)")
         elif raw_html and _looks_blocked(raw_html):
+            if not screenshot_b64 and screenshot_b64_best:
+                screenshot_b64 = screenshot_b64_best
+                action_screenshots = action_screenshots_best
             logger.warning(f"All tiers failed for {url}, using last result ({len(raw_html)} chars)")
         else:
             logger.error(f"All tiers failed for {url} — no content retrieved at all")
