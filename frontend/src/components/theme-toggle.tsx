@@ -37,9 +37,9 @@ export function ThemeToggle() {
   };
 
   const icon =
-    theme === "dark" ? <Moon className="h-4 w-4" /> :
-    theme === "light" ? <Sun className="h-4 w-4" /> :
-    <Monitor className="h-4 w-4" />;
+    theme === "dark" ? <Moon className="h-3.5 w-3.5" /> :
+    theme === "light" ? <Sun className="h-3.5 w-3.5" /> :
+    <Monitor className="h-3.5 w-3.5" />;
 
   const label =
     theme === "dark" ? "Dark" :
@@ -49,7 +49,7 @@ export function ThemeToggle() {
   return (
     <button
       onClick={cycleTheme}
-      className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium font-mono text-muted-foreground transition-all duration-200 hover:bg-accent hover:text-foreground border border-transparent"
       title={`Theme: ${label}`}
     >
       {icon}

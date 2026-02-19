@@ -11,11 +11,11 @@ import {
   Key,
   Settings,
   Home,
-  Bug,
   LogOut,
   Layers,
   Clock,
   BarChart3,
+  Terminal,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -43,15 +43,22 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r bg-card">
+    <aside className="flex h-screen w-64 flex-col border-r border-border/50 bg-card/50 backdrop-blur-sm">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2 border-b px-6">
-        <Bug className="h-6 w-6 text-primary" />
-        <span className="text-xl font-bold">WebHarvest</span>
+      <div className="flex h-16 items-center gap-2.5 border-b border-border/50 px-5">
+        <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10 border border-primary/20">
+          <Terminal className="h-4 w-4 text-primary" />
+        </div>
+        <div className="flex flex-col">
+          <span className="text-sm font-bold font-mono tracking-tight">
+            WebHarvest
+          </span>
+          <span className="text-[10px] text-muted-foreground font-mono">v0.1.0</span>
+        </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-4">
+      <nav className="flex-1 p-3 space-y-0.5 stagger-children overflow-y-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
           return (
@@ -59,32 +66,32 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200 group relative",
                 isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  ? "bg-primary/10 text-primary border border-primary/20"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground border border-transparent"
               )}
             >
-              <item.icon className="h-4 w-4" />
-              {item.label}
+              {isActive && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-primary rounded-r" />
+              )}
+              <item.icon className={cn("h-4 w-4 transition-colors", isActive && "text-primary")} />
+              <span className="font-mono">{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
       {/* Footer */}
-      <div className="border-t p-4 space-y-1">
+      <div className="border-t border-border/50 p-3 space-y-0.5">
         <ThemeToggle />
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium font-mono text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-red-400 border border-transparent"
         >
           <LogOut className="h-4 w-4" />
           Logout
         </button>
-        <p className="mt-3 px-3 text-xs text-muted-foreground">
-          WebHarvest v0.1.0
-        </p>
       </div>
     </aside>
   );

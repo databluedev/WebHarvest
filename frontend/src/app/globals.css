@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -10,8 +12,8 @@
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 142 76% 36%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 142 100% 50%;
+    --primary-foreground: 0 0% 2%;
     --secondary: 0 0% 96.1%;
     --secondary-foreground: 0 0% 9%;
     --muted: 0 0% 96.1%;
@@ -22,30 +24,30 @@
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
-    --ring: 142 76% 36%;
-    --radius: 0.5rem;
+    --ring: 142 100% 50%;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 6%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 6%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 142 76% 36%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 0 0% 2%;
+    --foreground: 0 0% 93%;
+    --card: 0 0% 4.5%;
+    --card-foreground: 0 0% 93%;
+    --popover: 0 0% 4.5%;
+    --popover-foreground: 0 0% 93%;
+    --primary: 142 100% 50%;
+    --primary-foreground: 0 0% 2%;
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 0 0% 93%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 93%;
+    --destructive: 0 62.8% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 142 76% 36%;
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+    --ring: 142 100% 50%;
   }
 }
 
@@ -55,41 +57,254 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 }
 
-/* Custom scrollbar */
+/* ========================================
+   ASCII / Terminal Typography
+   ======================================== */
+
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace !important;
+}
+
+.ascii-art {
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: pre;
+  font-size: 0.6rem;
+}
+
+@media (min-width: 640px) {
+  .ascii-art {
+    font-size: 0.75rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ascii-art {
+    font-size: 0.85rem;
+  }
+}
+
+/* ========================================
+   Grid Background
+   ======================================== */
+
+.grid-bg {
+  background-image:
+    radial-gradient(circle at 1px 1px, hsl(0 0% 15%) 1px, transparent 0);
+  background-size: 32px 32px;
+}
+
+.dark .grid-bg {
+  background-image:
+    radial-gradient(circle at 1px 1px, hsl(0 0% 12%) 1px, transparent 0);
+}
+
+/* Gradient mesh overlay */
+.mesh-gradient {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, hsla(142, 100%, 50%, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 50%, hsla(187, 100%, 42%, 0.04), transparent);
+}
+
+/* ========================================
+   Glow Effects
+   ======================================== */
+
+.glow-green {
+  text-shadow: 0 0 10px hsla(142, 100%, 50%, 0.5),
+               0 0 20px hsla(142, 100%, 50%, 0.3),
+               0 0 40px hsla(142, 100%, 50%, 0.1);
+}
+
+.glow-green-sm {
+  text-shadow: 0 0 8px hsla(142, 100%, 50%, 0.4),
+               0 0 16px hsla(142, 100%, 50%, 0.2);
+}
+
+.glow-border {
+  box-shadow:
+    0 0 0 1px hsla(142, 100%, 50%, 0.1),
+    0 0 15px -3px hsla(142, 100%, 50%, 0.1),
+    0 0 30px -6px hsla(142, 100%, 50%, 0.05);
+}
+
+.glow-border-hover:hover {
+  box-shadow:
+    0 0 0 1px hsla(142, 100%, 50%, 0.2),
+    0 0 20px -3px hsla(142, 100%, 50%, 0.15),
+    0 0 40px -6px hsla(142, 100%, 50%, 0.08);
+}
+
+/* ========================================
+   Glassmorphism Cards
+   ======================================== */
+
+.glass {
+  background: hsla(0, 0%, 6%, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid hsla(0, 0%, 100%, 0.06);
+}
+
+.glass-hover:hover {
+  background: hsla(0, 0%, 8%, 0.7);
+  border-color: hsla(142, 100%, 50%, 0.15);
+}
+
+/* ========================================
+   Animations
+   ======================================== */
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in-slow {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+.animate-fade-in-slow {
+  animation: fade-in-slow 0.7s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.6s ease-out forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* Staggered children */
+.stagger-children > * {
+  opacity: 0;
+  animation: fade-in 0.4s ease-out forwards;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.3s; }
+.stagger-children > *:nth-child(7) { animation-delay: 0.35s; }
+.stagger-children > *:nth-child(8) { animation-delay: 0.4s; }
+.stagger-children > *:nth-child(9) { animation-delay: 0.45s; }
+.stagger-children > *:nth-child(10) { animation-delay: 0.5s; }
+.stagger-children > *:nth-child(11) { animation-delay: 0.55s; }
+
+/* ========================================
+   Cursor Blink
+   ======================================== */
+
+.cursor::after {
+  content: '_';
+  animation: blink 1s step-end infinite;
+  color: hsl(142 100% 50%);
+}
+
+/* ========================================
+   Terminal Styling
+   ======================================== */
+
+.terminal-prompt::before {
+  content: '$ ';
+  color: hsl(142 100% 50%);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ========================================
+   Custom Scrollbar
+   ======================================== */
+
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(0 0% 95%);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(0 0% 80%);
-  border-radius: 4px;
+  background: hsl(0 0% 20%);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(0 0% 70%);
-}
-
-.dark ::-webkit-scrollbar-track {
-  background: hsl(0 0% 6%);
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: hsl(0 0% 20%);
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
   background: hsl(0 0% 30%);
 }
 
-/* Code blocks */
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 15%);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(0 0% 25%);
+}
+
+/* ========================================
+   Code Blocks / Markdown
+   ======================================== */
+
 pre, code {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
@@ -105,8 +320,52 @@ pre, code {
 .markdown-output ul { @apply list-disc pl-6 mb-3; }
 .markdown-output ol { @apply list-decimal pl-6 mb-3; }
 .markdown-output a { @apply text-primary underline; }
-.markdown-output code { @apply bg-muted px-1.5 py-0.5 rounded text-xs; }
-.markdown-output pre { @apply bg-muted p-4 rounded-lg overflow-x-auto mb-4; }
+.markdown-output code { @apply bg-muted px-1.5 py-0.5 rounded text-xs font-mono; }
+.markdown-output pre { @apply bg-muted p-4 rounded-lg overflow-x-auto mb-4 border border-border; }
 .markdown-output table { @apply w-full border-collapse mb-4; }
 .markdown-output th { @apply border border-border px-3 py-2 bg-muted text-left font-semibold; }
 .markdown-output td { @apply border border-border px-3 py-2; }
+
+/* ========================================
+   Selection Color
+   ======================================== */
+
+::selection {
+  background: hsla(142, 100%, 50%, 0.2);
+  color: hsl(142, 100%, 70%);
+}
+
+/* ========================================
+   Noise Texture Overlay
+   ======================================== */
+
+.noise::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.015;
+  pointer-events: none;
+  z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* ========================================
+   Gradient Text
+   ======================================== */
+
+.gradient-text {
+  background: linear-gradient(135deg, hsl(142, 100%, 50%) 0%, hsl(187, 100%, 50%) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-warm {
+  background: linear-gradient(135deg, hsl(142, 100%, 50%) 0%, hsl(80, 100%, 55%) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
