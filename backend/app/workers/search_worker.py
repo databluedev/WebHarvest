@@ -16,7 +16,8 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.workers.search_worker.process_search", bind=True, max_retries=1)
+@celery_app.task(name="app.workers.search_worker.process_search", bind=True, max_retries=1,
+                 soft_time_limit=600, time_limit=660)
 def process_search(self, job_id: str, config: dict):
     """Process a search job — search web, then scrape top results."""
 
@@ -113,7 +114,10 @@ def process_search(self, job_id: str, config: dict):
                         mobile=request.mobile,
                         mobile_device=request.mobile_device,
                     )
-                    result = await scrape_url(scrape_request, proxy_manager=proxy_manager)
+                    result = await asyncio.wait_for(
+                        scrape_url(scrape_request, proxy_manager=proxy_manager),
+                        timeout=120,
+                    )
 
                     metadata = {}
                     if result.metadata:

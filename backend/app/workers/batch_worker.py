@@ -16,7 +16,8 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.workers.batch_worker.process_batch", bind=True, max_retries=1)
+@celery_app.task(name="app.workers.batch_worker.process_batch", bind=True, max_retries=1,
+                 soft_time_limit=1800, time_limit=1860)
 def process_batch(self, job_id: str, config: dict):
     """Process a batch scrape job — scrape multiple URLs concurrently."""
 
@@ -104,15 +105,22 @@ def process_batch(self, job_id: str, config: dict):
             job.started_at = datetime.now(timezone.utc)
             await db.commit()
 
+        PER_URL_TIMEOUT = 120  # seconds per URL
+
         semaphore = asyncio.Semaphore(request.concurrency)
         completed_count = 0
 
-        async def scrape_one(url_config: dict) -> dict:
+        async def scrape_one(url_config: dict):
             nonlocal completed_count
             async with semaphore:
+                url = url_config["url"]
+                r = None
                 try:
                     scrape_request = ScrapeRequest(**url_config)
-                    result = await scrape_url(scrape_request, proxy_manager=proxy_manager)
+                    result = await asyncio.wait_for(
+                        scrape_url(scrape_request, proxy_manager=proxy_manager),
+                        timeout=PER_URL_TIMEOUT,
+                    )
 
                     metadata = {}
                     if result.metadata:
@@ -139,10 +147,10 @@ def process_batch(self, job_id: str, config: dict):
                                     schema=request.extract.schema_,
                                 )
                         except Exception as e:
-                            logger.warning(f"LLM extraction failed for {url_config['url']}: {e}")
+                            logger.warning(f"LLM extraction failed for {url}: {e}")
 
-                    return {
-                        "url": url_config["url"],
+                    r = {
+                        "url": url,
                         "markdown": result.markdown,
                         "html": result.html,
                         "links": result.links if result.links else None,
@@ -151,26 +159,27 @@ def process_batch(self, job_id: str, config: dict):
                         "metadata": metadata,
                         "error": None,
                     }
+                except asyncio.TimeoutError:
+                    logger.warning(f"Batch scrape timed out for {url} after {PER_URL_TIMEOUT}s")
+                    r = {
+                        "url": url,
+                        "markdown": None, "html": None, "links": None,
+                        "screenshot": None, "extract": None,
+                        "metadata": {"error": f"Timed out after {PER_URL_TIMEOUT}s"},
+                        "error": f"Timed out after {PER_URL_TIMEOUT}s",
+                    }
                 except Exception as e:
-                    logger.warning(f"Batch scrape failed for {url_config['url']}: {e}")
-                    return {
-                        "url": url_config["url"],
-                        "markdown": None,
-                        "html": None,
-                        "links": None,
-                        "screenshot": None,
-                        "extract": None,
+                    logger.warning(f"Batch scrape failed for {url}: {e}")
+                    r = {
+                        "url": url,
+                        "markdown": None, "html": None, "links": None,
+                        "screenshot": None, "extract": None,
                         "metadata": {"error": str(e)},
                         "error": str(e),
                     }
 
-        try:
-            tasks = [scrape_one(uc) for uc in url_configs]
-            results = await asyncio.gather(*tasks)
-
-            # Store all results
-            async with session_factory() as db:
-                for r in results:
+                # Save result immediately (progressive)
+                async with session_factory() as db:
                     job_result = JobResult(
                         job_id=UUID(job_id),
                         url=r["url"],
@@ -182,11 +191,22 @@ def process_batch(self, job_id: str, config: dict):
                         screenshot_url=r["screenshot"],
                     )
                     db.add(job_result)
+                    completed_count += 1
+                    job = await db.get(Job, UUID(job_id))
+                    if job:
+                        job.completed_pages = completed_count
+                    await db.commit()
 
+        try:
+            tasks = [scrape_one(uc) for uc in url_configs]
+            await asyncio.gather(*tasks)
+
+            # Mark job completed
+            async with session_factory() as db:
                 job = await db.get(Job, UUID(job_id))
                 if job:
                     job.status = "completed"
-                    job.completed_pages = len(results)
+                    job.completed_pages = completed_count
                     job.completed_at = datetime.now(timezone.utc)
                 await db.commit()
 

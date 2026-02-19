@@ -16,7 +16,8 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.workers.scrape_worker.process_scrape", bind=True, max_retries=2)
+@celery_app.task(name="app.workers.scrape_worker.process_scrape", bind=True, max_retries=2,
+                 soft_time_limit=300, time_limit=360)
 def process_scrape(self, job_id: str, url: str, config: dict):
     """Process a single scrape job."""
 
@@ -52,8 +53,11 @@ def process_scrape(self, job_id: str, url: str, config: dict):
                 job.started_at = datetime.now(timezone.utc)
                 await db.commit()
 
-                # Scrape the URL
-                result = await scrape_url(request, proxy_manager=proxy_manager)
+                # Scrape the URL (with timeout to prevent hanging)
+                result = await asyncio.wait_for(
+                    scrape_url(request, proxy_manager=proxy_manager),
+                    timeout=120,
+                )
 
                 # Build rich metadata
                 metadata = {}

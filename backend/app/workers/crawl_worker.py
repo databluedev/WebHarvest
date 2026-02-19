@@ -20,7 +20,8 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.workers.crawl_worker.process_crawl", bind=True, max_retries=1)
+@celery_app.task(name="app.workers.crawl_worker.process_crawl", bind=True, max_retries=1,
+                 soft_time_limit=3600, time_limit=3660)
 def process_crawl(self, job_id: str, config: dict):
     """Process a crawl job using BFS crawler with producer-consumer pipeline."""
 
@@ -122,7 +123,9 @@ def process_crawl(self, job_id: str, config: dict):
                     async def fetch_one(url: str, depth: int) -> dict | None:
                         async with semaphore:
                             try:
-                                fetch_result = await crawler.fetch_page_only(url)
+                                fetch_result = await asyncio.wait_for(
+                                    crawler.fetch_page_only(url), timeout=120,
+                                )
                                 if fetch_result:
                                     return {
                                         "url": url,
@@ -130,13 +133,18 @@ def process_crawl(self, job_id: str, config: dict):
                                         "fetch_result": fetch_result,
                                     }
                                 # Fallback to full scrape for documents, etc.
-                                result = await crawler.scrape_page(url)
+                                result = await asyncio.wait_for(
+                                    crawler.scrape_page(url), timeout=120,
+                                )
                                 return {
                                     "url": url,
                                     "depth": depth,
                                     "scrape_data": result["scrape_data"],
                                     "discovered_links": result["discovered_links"],
                                 }
+                            except asyncio.TimeoutError:
+                                logger.warning(f"Fetch timed out for {url} after 120s")
+                                return None
                             except Exception as e:
                                 logger.warning(f"Failed to fetch {url}: {e}")
                                 return None
