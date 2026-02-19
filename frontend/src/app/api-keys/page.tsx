@@ -175,21 +175,136 @@ export default function ApiKeysPage() {
             </CardContent>
           </Card>
 
-          {/* Usage Example */}
+          {/* Usage Examples */}
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle className="text-lg">Usage Example</CardTitle>
+              <CardTitle className="text-lg">Usage Examples</CardTitle>
+              <CardDescription>Use your API key in the <code className="text-xs bg-muted px-1 py-0.5 rounded">Authorization</code> header with all requests</CardDescription>
             </CardHeader>
-            <CardContent>
-              <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto">
-{`curl -X POST http://localhost:8000/v1/scrape \\
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm font-medium mb-2">Scrape a URL</p>
+                <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto font-mono">
+{`curl -X POST https://api-datablue.welocalhost.com/v1/scrape \\
   -H "Authorization: Bearer wh_your_api_key" \\
   -H "Content-Type: application/json" \\
   -d '{
     "url": "https://example.com",
-    "formats": ["markdown"]
+    "formats": ["markdown", "links", "screenshot"]
   }'`}
-              </pre>
+                </pre>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-2">Crawl an entire website</p>
+                <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto font-mono">
+{`curl -X POST https://api-datablue.welocalhost.com/v1/crawl \\
+  -H "Authorization: Bearer wh_your_api_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "url": "https://docs.example.com",
+    "max_pages": 50,
+    "max_depth": 3
+  }'`}
+                </pre>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-2">Batch scrape multiple URLs</p>
+                <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto font-mono">
+{`curl -X POST https://api-datablue.welocalhost.com/v1/batch/scrape \\
+  -H "Authorization: Bearer wh_your_api_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "urls": [
+      "https://example.com/page-1",
+      "https://example.com/page-2",
+      "https://example.com/page-3"
+    ],
+    "formats": ["markdown", "structured_data"],
+    "concurrency": 5
+  }'`}
+                </pre>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-2">Search & scrape results</p>
+                <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto font-mono">
+{`curl -X POST https://api-datablue.welocalhost.com/v1/search \\
+  -H "Authorization: Bearer wh_your_api_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "best web scraping tools 2025",
+    "num_results": 5,
+    "engine": "duckduckgo",
+    "formats": ["markdown", "links"]
+  }'`}
+                </pre>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-2">Map a website (discover all URLs)</p>
+                <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto font-mono">
+{`curl -X POST https://api-datablue.welocalhost.com/v1/map \\
+  -H "Authorization: Bearer wh_your_api_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "url": "https://example.com",
+    "use_sitemap": true,
+    "limit": 500
+  }'`}
+                </pre>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-2">Extract structured data with AI</p>
+                <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto font-mono">
+{`curl -X POST https://api-datablue.welocalhost.com/v1/extract \\
+  -H "Authorization: Bearer wh_your_api_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "urls": ["https://example.com/pricing"],
+    "prompt": "Extract all pricing plans with name, price, and features",
+    "provider": "openai"
+  }'`}
+                </pre>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-2">Check job status (works for all job types)</p>
+                <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto font-mono">
+{`curl https://api-datablue.welocalhost.com/v1/scrape/JOB_ID \\
+  -H "Authorization: Bearer wh_your_api_key"`}
+                </pre>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-2">Python example</p>
+                <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto font-mono">
+{`import requests
+
+API_KEY = "wh_your_api_key"
+BASE = "https://api-datablue.welocalhost.com/v1"
+headers = {"Authorization": f"Bearer {API_KEY}"}
+
+# Start a scrape
+resp = requests.post(f"{BASE}/scrape", headers=headers, json={
+    "url": "https://example.com",
+    "formats": ["markdown", "screenshot", "structured_data"]
+})
+job_id = resp.json()["job_id"]
+
+# Poll for results
+import time
+while True:
+    status = requests.get(f"{BASE}/scrape/{job_id}", headers=headers).json()
+    if status["status"] in ["completed", "failed"]:
+        break
+    time.sleep(2)
+
+print(status["data"][0]["markdown"][:500])`}
+                </pre>
+              </div>
             </CardContent>
           </Card>
         </div>
