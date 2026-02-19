@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import csv
 import io
@@ -29,6 +30,17 @@ from app.services.llm_extract import extract_with_llm
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Global concurrency limiter — prevents OOM when many requests arrive simultaneously.
+# Requests beyond this limit wait in queue instead of all running at once.
+_scrape_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_scrape_semaphore() -> asyncio.Semaphore:
+    global _scrape_semaphore
+    if _scrape_semaphore is None:
+        _scrape_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_SCRAPES)
+    return _scrape_semaphore
 
 
 def _sanitize_filename(url: str) -> str:
@@ -108,8 +120,31 @@ async def scrape(
             from app.services.proxy import ProxyManager
             proxy_manager = await ProxyManager.from_user(db, user.id)
 
-        # Scrape the URL
-        result = await scrape_url(request, proxy_manager=proxy_manager)
+        # Acquire concurrency slot — prevents OOM from too many parallel scrapes
+        sem = _get_scrape_semaphore()
+        try:
+            await asyncio.wait_for(sem.acquire(), timeout=30)
+        except asyncio.TimeoutError:
+            job.status = "failed"
+            job.error = "Server is at capacity. Please retry in a few seconds."
+            job.completed_at = datetime.now(timezone.utc)
+            scrape_requests_total.labels(status="error").inc()
+            return ScrapeResponse(success=False, error=job.error, job_id=str(job.id))
+
+        try:
+            # Scrape with overall timeout to prevent hanging
+            result = await asyncio.wait_for(
+                scrape_url(request, proxy_manager=proxy_manager),
+                timeout=settings.SCRAPE_API_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            job.status = "failed"
+            job.error = f"Scrape timed out after {settings.SCRAPE_API_TIMEOUT}s. The site may be too slow or heavily protected."
+            job.completed_at = datetime.now(timezone.utc)
+            scrape_requests_total.labels(status="error").inc()
+            return ScrapeResponse(success=False, error=job.error, job_id=str(job.id))
+        finally:
+            sem.release()
 
         # LLM extraction if requested
         if request.extract and result.markdown:
