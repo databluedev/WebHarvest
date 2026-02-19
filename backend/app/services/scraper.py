@@ -61,6 +61,9 @@ _BLOCK_PATTERNS = [
     "we need to verify that you're not a robot",
     "sorry, we just need to make sure",
     "one more step",
+    "please click here if you are not redirected",
+    "if you are not redirected within",
+    "having trouble accessing google",
 ]
 
 _HARD_SITES = {
@@ -434,20 +437,35 @@ def _looks_blocked(html: str) -> bool:
     body_html = body_match.group(1) if body_match else html
     body_text = re.sub(r"<[^>]+>", " ", body_html).strip().lower()
 
+    # Pages with substantial text content are never block pages
+    if len(body_text) > 5000:
+        return False
+
     if len(body_text) < 1500:
         for pattern in _BLOCK_PATTERNS:
             if pattern in body_text:
                 return True
 
+    # Only check head for patterns that STRONGLY indicate a block page
+    # Avoid generic words like "captcha" / "robot" which appear in normal content
     head = html[:5000].lower()
-    for pattern in ["javascript is disabled", "enable javascript", "access denied",
+    for pattern in ["javascript is disabled", "enable javascript",
                     "attention required", "just a moment", "checking your browser",
-                    "captcha", "robot", "verify you are human", "not a robot"]:
+                    "please wait while we verify", "verify you are human",
+                    "are you a robot", "not a robot",
+                    "please click here if you are not redirected",
+                    "having trouble accessing google"]:
         if pattern in head:
             return True
 
-    if len(body_text) < 300 and ("<noscript" in html.lower() or "captcha" in html.lower()):
+    if len(body_text) < 300 and ("<noscript" in html.lower()):
         return True
+
+    # Google redirect/interstitial page (from Google Cache attempts)
+    if len(body_text) < 500:
+        title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+        if title_match and "google" in title_match.group(1).lower():
+            return True
 
     # Amazon-style "no session" interstitial: very short body with specific combo
     if len(body_text) < 500:
