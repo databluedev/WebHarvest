@@ -634,6 +634,30 @@ class BrowserPool:
     Each page gets a unique fingerprint (WebGL, canvas seed, hardware, etc.).
     """
 
+    _CHROMIUM_ARGS = [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled",
+        "--disable-infobars",
+        "--window-size=1920,1080",
+        "--start-maximized",
+        "--disable-extensions",
+        "--disable-component-extensions-with-background-pages",
+        "--disable-default-apps",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-hang-monitor",
+        "--disable-prompt-on-repost",
+        "--disable-background-networking",
+        "--disable-sync",
+        "--metrics-recording-only",
+        "--disable-features=IsolateOrigins,site-per-process,TranslateUI",
+        "--enable-features=NetworkService,NetworkServiceInProcess",
+        "--disable-web-security",
+        "--allow-running-insecure-content",
+    ]
+
     def __init__(self):
         self._playwright = None
         self._chromium: Browser | None = None
@@ -641,65 +665,95 @@ class BrowserPool:
         self._semaphore: asyncio.Semaphore | None = None
         self._initialized = False
         self._loop = None
+        self._init_lock: asyncio.Lock | None = None
         # Cookie jar: domain -> list of cookies (persisted across page contexts)
         self._cookie_jar: dict[str, list[dict]] = {}
+
+    def _get_init_lock(self) -> asyncio.Lock:
+        """Get or create an asyncio.Lock bound to the current event loop."""
+        current_loop = asyncio.get_running_loop()
+        if self._init_lock is None or self._loop is not current_loop:
+            self._init_lock = asyncio.Lock()
+        return self._init_lock
 
     async def initialize(self):
         current_loop = asyncio.get_running_loop()
 
         if self._initialized and self._loop is current_loop:
-            return
+            # Quick check: are the browsers still alive?
+            if self._chromium and self._chromium.is_connected():
+                return
 
-        if self._initialized and self._loop is not current_loop:
-            logger.debug("Event loop changed, reinitializing browser pool")
-            self._force_kill_old_browsers()
-            self._playwright = None
-            self._chromium = None
-            self._firefox = None
-            self._initialized = False
+        async with self._get_init_lock():
+            # Double-check after acquiring lock
+            if self._initialized and self._loop is current_loop:
+                if self._chromium and self._chromium.is_connected():
+                    return
 
-        self._loop = current_loop
-        self._semaphore = asyncio.Semaphore(settings.BROWSER_POOL_SIZE)
-        self._playwright = await async_playwright().start()
+            if self._initialized and self._loop is not current_loop:
+                logger.debug("Event loop changed, reinitializing browser pool")
+                self._force_kill_old_browsers()
+                self._playwright = None
+                self._chromium = None
+                self._firefox = None
+                self._initialized = False
 
-        # Chromium with anti-detection flags
-        self._chromium = await self._playwright.chromium.launch(
-            headless=settings.BROWSER_HEADLESS,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled",
-                "--disable-infobars",
-                "--window-size=1920,1080",
-                "--start-maximized",
-                "--disable-extensions",
-                "--disable-component-extensions-with-background-pages",
-                "--disable-default-apps",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--disable-hang-monitor",
-                "--disable-prompt-on-repost",
-                "--disable-background-networking",
-                "--disable-sync",
-                "--metrics-recording-only",
-                "--disable-features=IsolateOrigins,site-per-process,TranslateUI",
-                "--enable-features=NetworkService,NetworkServiceInProcess",
-                "--disable-web-security",
-                "--allow-running-insecure-content",
-            ],
-        )
+            # Also reinitialize if browsers have crashed/disconnected
+            if self._initialized and (not self._chromium or not self._chromium.is_connected()):
+                logger.warning("Chromium browser disconnected, reinitializing browser pool")
+                self._force_kill_old_browsers()
+                self._playwright = None
+                self._chromium = None
+                self._firefox = None
+                self._initialized = False
 
-        # Firefox — different engine, different TLS fingerprint
-        try:
-            self._firefox = await self._playwright.firefox.launch(headless=True)
-            logger.info("Firefox browser initialized")
-        except Exception as e:
-            logger.warning(f"Firefox launch failed (Chromium only): {e}")
-            self._firefox = None
+            self._loop = current_loop
+            self._semaphore = asyncio.Semaphore(settings.BROWSER_POOL_SIZE)
+            self._playwright = await async_playwright().start()
 
-        self._initialized = True
-        logger.info(f"Browser pool initialized (pool_size={settings.BROWSER_POOL_SIZE})")
+            # Chromium with anti-detection flags
+            self._chromium = await self._playwright.chromium.launch(
+                headless=settings.BROWSER_HEADLESS,
+                args=self._CHROMIUM_ARGS,
+            )
+
+            # Firefox — different engine, different TLS fingerprint
+            try:
+                self._firefox = await self._playwright.firefox.launch(headless=True)
+                logger.info("Firefox browser initialized")
+            except Exception as e:
+                logger.warning(f"Firefox launch failed (Chromium only): {e}")
+                self._firefox = None
+
+            self._initialized = True
+            logger.info(f"Browser pool initialized (pool_size={settings.BROWSER_POOL_SIZE})")
+
+    async def _relaunch_browser(self, use_firefox: bool = False):
+        """Relaunch a crashed browser. Must be called under _init_lock."""
+        async with self._get_init_lock():
+            if use_firefox:
+                if self._firefox and self._firefox.is_connected():
+                    return  # Already relaunched by another coroutine
+                try:
+                    self._firefox = await self._playwright.firefox.launch(headless=True)
+                    logger.info("Firefox browser relaunched after crash")
+                except Exception as e:
+                    logger.warning(f"Firefox relaunch failed: {e}")
+                    self._firefox = None
+            else:
+                if self._chromium and self._chromium.is_connected():
+                    return  # Already relaunched by another coroutine
+                try:
+                    self._chromium = await self._playwright.chromium.launch(
+                        headless=settings.BROWSER_HEADLESS,
+                        args=self._CHROMIUM_ARGS,
+                    )
+                    logger.info("Chromium browser relaunched after crash")
+                except Exception as e:
+                    logger.error(f"Chromium relaunch failed, full reinit: {e}")
+                    # Full reinit as last resort
+                    self._initialized = False
+                    await self.initialize()
 
     def _force_kill_old_browsers(self):
         """Synchronously kill old browser processes tied to a dead event loop."""
@@ -763,6 +817,17 @@ class BrowserPool:
         except Exception:
             pass
 
+    def _is_browser_closed_error(self, exc: Exception) -> bool:
+        """Check if an exception indicates the browser process has died."""
+        msg = str(exc).lower()
+        return any(phrase in msg for phrase in [
+            "browser has been closed",
+            "target page, context or browser has been closed",
+            "browser.new_context",
+            "connection closed",
+            "browser closed",
+        ])
+
     @asynccontextmanager
     async def get_page(
         self,
@@ -784,11 +849,17 @@ class BrowserPool:
         from app.core.metrics import active_browser_contexts
 
         is_firefox = use_firefox and self._firefox is not None
-        browser = self._firefox if is_firefox else self._chromium
 
         async with self._semaphore:
             active_browser_contexts.inc()
             try:
+                # Resolve the browser reference, relaunching if it crashed
+                browser = self._firefox if is_firefox else self._chromium
+                if browser is None or not browser.is_connected():
+                    logger.warning(f"{'Firefox' if is_firefox else 'Chromium'} browser not connected, relaunching")
+                    await self._relaunch_browser(use_firefox=is_firefox)
+                    browser = self._firefox if is_firefox else self._chromium
+
                 vp = random.choice(VIEWPORTS)
                 tz = random.choice(TIMEZONES)
 
@@ -852,7 +923,19 @@ class BrowserPool:
                 if proxy:
                     context_kwargs["proxy"] = proxy
 
-                context: BrowserContext = await browser.new_context(**context_kwargs)
+                # Try to create context, relaunch browser on failure
+                try:
+                    context: BrowserContext = await browser.new_context(**context_kwargs)
+                except Exception as e:
+                    if self._is_browser_closed_error(e):
+                        logger.warning(f"Browser closed during new_context, relaunching {'Firefox' if is_firefox else 'Chromium'}")
+                        await self._relaunch_browser(use_firefox=is_firefox)
+                        browser = self._firefox if is_firefox else self._chromium
+                        if browser is None:
+                            raise RuntimeError(f"{'Firefox' if is_firefox else 'Chromium'} browser failed to relaunch") from e
+                        context = await browser.new_context(**context_kwargs)
+                    else:
+                        raise
 
                 # Restore cookies from previous sessions for this domain
                 if target_url:
@@ -875,8 +958,14 @@ class BrowserPool:
                     # Save cookies before closing
                     if target_url:
                         await self._save_cookies(context, target_url)
-                    await page.close()
-                    await context.close()
+                    try:
+                        await page.close()
+                    except Exception:
+                        pass
+                    try:
+                        await context.close()
+                    except Exception:
+                        pass
             finally:
                 active_browser_contexts.dec()
 
