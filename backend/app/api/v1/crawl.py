@@ -28,6 +28,7 @@ from app.schemas.crawl import (
 )
 from app.schemas.scrape import PageMetadata
 from app.workers.crawl_worker import process_crawl
+from app.services.quota import check_quota, increment_usage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -93,6 +94,9 @@ async def start_crawl(
     response.headers["X-RateLimit-Reset"] = str(rl.reset)
     if not rl.allowed:
         raise RateLimitError("Crawl rate limit exceeded. Try again in a minute.")
+
+    # Quota check
+    await check_quota(db, user.id, "crawl")
 
     # Cap max pages
     if request.max_pages > settings.MAX_CRAWL_PAGES:

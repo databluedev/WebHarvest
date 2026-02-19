@@ -28,7 +28,23 @@ export default function CrawlPage() {
   const [webhookUrl, setWebhookUrl] = useState("");
 
   useEffect(() => {
-    if (!api.getToken()) router.push("/auth/login");
+    if (!api.getToken()) {
+      router.push("/auth/login");
+      return;
+    }
+    // Load recent crawl jobs from API
+    api.getUsageHistory({ type: "crawl", per_page: 10, sort_by: "created_at", sort_dir: "desc" })
+      .then((res) => {
+        setJobs(res.jobs.map((j: any) => ({
+          id: j.id,
+          url: j.config?.url || "Unknown",
+          status: j.status,
+          total_pages: j.total_pages,
+          completed_pages: j.completed_pages,
+          created_at: j.created_at,
+        })));
+      })
+      .catch(() => {});
   }, [router]);
 
   const handleStartCrawl = async () => {
@@ -250,13 +266,24 @@ export default function CrawlPage() {
               ) : (
                 <div className="space-y-3">
                   {jobs.map((job) => (
-                    <div
+                    <Link
                       key={job.id}
-                      className="flex items-center justify-between rounded-md border p-3"
+                      href={`/crawl/${job.id}`}
+                      className="flex items-center justify-between rounded-lg border border-border/50 p-3 hover:border-border transition-colors"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium truncate">{job.url}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{job.id}</p>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-xs text-muted-foreground">{job.id.slice(0, 8)}</span>
+                          {job.completed_pages > 0 && (
+                            <span className="text-xs text-muted-foreground">{job.completed_pages}/{job.total_pages} pages</span>
+                          )}
+                          {job.created_at && (
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(job.created_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 ml-4">
                         <Badge
@@ -265,18 +292,16 @@ export default function CrawlPage() {
                               ? "success"
                               : job.status === "failed"
                               ? "destructive"
-                              : "warning"
+                              : job.status === "running"
+                              ? "warning"
+                              : "default"
                           }
                         >
                           {job.status}
                         </Badge>
-                        <Link href={`/crawl/${job.id}`}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </Link>
+                        <Eye className="h-4 w-4 text-muted-foreground" />
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )}

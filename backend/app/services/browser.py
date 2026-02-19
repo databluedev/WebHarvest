@@ -1009,36 +1009,137 @@ class BrowserPool:
             pass
 
     async def execute_actions(self, page: Page, actions: list[dict]) -> list[str]:
-        """Execute a list of browser actions on the page."""
+        """Execute a list of browser actions on the page.
+
+        Supported actions:
+        - click: Click element (supports button, click_count, modifiers)
+        - type: Type text into element (character by character with delay)
+        - fill: Fill input instantly (no typing delay)
+        - wait: Wait for milliseconds
+        - scroll: Scroll up/down by amount
+        - screenshot: Take screenshot
+        - hover: Hover over element
+        - press: Press keyboard key (Enter, Tab, Escape, etc.)
+        - select: Select dropdown option by value
+        - fill_form: Fill multiple form fields at once
+        - evaluate: Execute JavaScript code
+        - go_back: Navigate back
+        - go_forward: Navigate forward
+        - wait_for_selector: Wait for element to appear
+        - wait_for_navigation: Wait for page navigation
+        - focus: Focus on element
+        - clear: Clear input field
+        """
         screenshots = []
         for action in actions:
             action_type = action.get("type", "")
 
-            if action_type == "click":
-                selector = action.get("selector", "")
-                if selector:
-                    await page.click(selector, timeout=5000)
+            try:
+                if action_type == "click":
+                    selector = action.get("selector", "")
+                    if selector:
+                        kwargs = {"timeout": 5000}
+                        if action.get("button"):
+                            kwargs["button"] = action["button"]
+                        if action.get("click_count"):
+                            kwargs["click_count"] = action["click_count"]
+                        if action.get("modifiers"):
+                            kwargs["modifiers"] = action["modifiers"]
+                        await page.click(selector, **kwargs)
 
-            elif action_type == "type":
-                selector = action.get("selector", "")
-                text = action.get("text", "")
-                if selector and text:
-                    await page.fill(selector, text)
+                elif action_type == "type":
+                    selector = action.get("selector", "")
+                    text = action.get("text", "")
+                    if selector and text:
+                        await page.type(selector, text, delay=50)
 
-            elif action_type == "wait":
-                ms = action.get("milliseconds", 1000)
-                await page.wait_for_timeout(ms)
+                elif action_type == "fill":
+                    selector = action.get("selector", "")
+                    text = action.get("text", "")
+                    if selector and text:
+                        await page.fill(selector, text)
 
-            elif action_type == "scroll":
-                direction = action.get("direction", "down")
-                amount = action.get("amount", 500)
-                delta = amount if direction == "down" else -amount
-                await page.mouse.wheel(0, delta)
-                await page.wait_for_timeout(500)
+                elif action_type == "wait":
+                    ms = action.get("milliseconds", 1000)
+                    await page.wait_for_timeout(min(ms, 30000))
 
-            elif action_type == "screenshot":
-                screenshot = await page.screenshot(type="png")
-                screenshots.append(base64.b64encode(screenshot).decode())
+                elif action_type == "scroll":
+                    direction = action.get("direction", "down")
+                    amount = action.get("amount", 500)
+                    delta = amount if direction == "down" else -amount
+                    await page.mouse.wheel(0, delta)
+                    await page.wait_for_timeout(500)
+
+                elif action_type == "screenshot":
+                    screenshot = await page.screenshot(type="png")
+                    screenshots.append(base64.b64encode(screenshot).decode())
+
+                elif action_type == "hover":
+                    selector = action.get("selector", "")
+                    if selector:
+                        await page.hover(selector, timeout=5000)
+
+                elif action_type == "press":
+                    key = action.get("key", "")
+                    selector = action.get("selector")
+                    if key:
+                        if selector:
+                            await page.press(selector, key, timeout=5000)
+                        else:
+                            await page.keyboard.press(key)
+
+                elif action_type == "select":
+                    selector = action.get("selector", "")
+                    value = action.get("value", "")
+                    if selector and value:
+                        await page.select_option(selector, value=value, timeout=5000)
+
+                elif action_type == "fill_form":
+                    fields = action.get("fields", {})
+                    for field_selector, field_value in fields.items():
+                        try:
+                            await page.fill(field_selector, field_value, timeout=3000)
+                        except Exception:
+                            try:
+                                await page.type(field_selector, field_value, delay=30, timeout=3000)
+                            except Exception:
+                                pass
+                    # Small delay after filling form
+                    await page.wait_for_timeout(200)
+
+                elif action_type == "evaluate":
+                    script = action.get("script", "")
+                    if script:
+                        await page.evaluate(script)
+
+                elif action_type == "go_back":
+                    await page.go_back(timeout=10000)
+
+                elif action_type == "go_forward":
+                    await page.go_forward(timeout=10000)
+
+                elif action_type == "wait_for_selector":
+                    selector = action.get("selector", "")
+                    ms = action.get("milliseconds", 10000)
+                    if selector:
+                        await page.wait_for_selector(selector, timeout=ms)
+
+                elif action_type == "wait_for_navigation":
+                    ms = action.get("milliseconds", 10000)
+                    await page.wait_for_load_state("domcontentloaded", timeout=ms)
+
+                elif action_type == "focus":
+                    selector = action.get("selector", "")
+                    if selector:
+                        await page.focus(selector, timeout=5000)
+
+                elif action_type == "clear":
+                    selector = action.get("selector", "")
+                    if selector:
+                        await page.fill(selector, "", timeout=5000)
+
+            except Exception as e:
+                logger.warning(f"Action '{action_type}' failed: {e}")
 
         return screenshots
 

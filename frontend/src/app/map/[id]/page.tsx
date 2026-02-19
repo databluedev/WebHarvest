@@ -34,6 +34,15 @@ export default function MapDetailPage() {
     fetchStatus();
   }, [jobId]);
 
+  // Auto-poll when job is still running
+  useEffect(() => {
+    if (!status || status.status === "completed" || status.status === "failed") return;
+    const interval = setInterval(() => {
+      fetchStatus();
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [status]);
+
   const fetchStatus = useCallback(async () => {
     try {
       const res = await api.getMapStatus(jobId);

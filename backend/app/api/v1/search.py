@@ -29,6 +29,7 @@ from app.schemas.search import (
 )
 from app.schemas.scrape import PageMetadata
 from app.workers.search_worker import process_search
+from app.services.quota import check_quota, increment_usage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -91,6 +92,9 @@ async def start_search(
     response.headers["X-RateLimit-Reset"] = str(rl.reset)
     if not rl.allowed:
         raise RateLimitError("Search rate limit exceeded. Try again in a minute.")
+
+    # Quota check
+    await check_quota(db, user.id, "search")
 
     if request.num_results > settings.MAX_SEARCH_RESULTS:
         request.num_results = settings.MAX_SEARCH_RESULTS

@@ -15,6 +15,10 @@ import {
   Layers,
   Clock,
   BarChart3,
+  FileText,
+  Eye,
+  Webhook,
+  Sparkles,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -27,9 +31,13 @@ const navItems = [
   { href: "/batch", label: "Batch", icon: Layers },
   { href: "/search", label: "Search", icon: Search },
   { href: "/map", label: "Map", icon: Map },
+  { href: "/extract", label: "Extract", icon: Sparkles },
+  { href: "/monitors", label: "Monitors", icon: Eye },
   { href: "/jobs", label: "Jobs", icon: History },
   { href: "/schedules", label: "Schedules", icon: Clock },
+  { href: "/webhooks", label: "Webhooks", icon: Webhook },
   { href: "/api-keys", label: "API Keys", icon: Key },
+  { href: "/docs", label: "API Docs", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

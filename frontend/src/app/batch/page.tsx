@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { api } from "@/lib/api";
-import { Layers, Loader2, Play, Info } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Layers, Loader2, Play, Info, Eye } from "lucide-react";
+import Link from "next/link";
 
 export default function BatchPage() {
   const router = useRouter();
@@ -15,6 +17,7 @@ export default function BatchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [concurrency, setConcurrency] = useState(5);
+  const [recentJobs, setRecentJobs] = useState<any[]>([]);
 
   // Format toggles
   const [formats, setFormats] = useState<string[]>(["markdown"]);
@@ -22,7 +25,21 @@ export default function BatchPage() {
   const allFormats = ["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"];
 
   useEffect(() => {
-    if (!api.getToken()) router.push("/auth/login");
+    if (!api.getToken()) {
+      router.push("/auth/login");
+      return;
+    }
+    api.getUsageHistory({ type: "batch", per_page: 10, sort_by: "created_at", sort_dir: "desc" })
+      .then((res) => {
+        setRecentJobs(res.jobs.map((j: any) => ({
+          id: j.id,
+          total: j.total_pages,
+          completed: j.completed_pages,
+          status: j.status,
+          created_at: j.created_at,
+        })));
+      })
+      .catch(() => {});
   }, [router]);
 
   const toggleFormat = (f: string) => {
@@ -147,7 +164,43 @@ export default function BatchPage() {
             </CardContent>
           </Card>
 
-          {/* Empty state */}
+          {/* Recent Batch Jobs */}
+          {recentJobs.length > 0 && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Recent Batches</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {recentJobs.map((job) => (
+                    <Link
+                      key={job.id}
+                      href={`/batch/${job.id}`}
+                      className="flex items-center justify-between rounded-lg border border-border/50 p-3 hover:border-border transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground">{job.id.slice(0, 8)}</span>
+                        <span className="text-sm">{job.completed}/{job.total} URLs</span>
+                        {job.created_at && (
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(job.created_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={job.status === "completed" ? "success" : job.status === "failed" ? "destructive" : "warning"}>
+                          {job.status}
+                        </Badge>
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* How It Works */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">How It Works</CardTitle>

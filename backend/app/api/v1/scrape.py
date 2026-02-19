@@ -27,6 +27,7 @@ from app.models.user import User
 from app.schemas.scrape import ScrapeRequest, ScrapeResponse, PageMetadata
 from app.services.scraper import scrape_url, classify_error
 from app.services.llm_extract import extract_with_llm
+from app.services.quota import check_quota, increment_usage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -104,6 +105,9 @@ async def scrape(
     if not rl.allowed:
         from app.core.exceptions import RateLimitError
         raise RateLimitError("Scrape rate limit exceeded. Try again in a minute.")
+
+    # Quota check
+    await check_quota(db, user.id, "scrape")
 
     # Create job record
     job = Job(
@@ -195,6 +199,7 @@ async def scrape(
             job.completed_pages = 1
             job.completed_at = datetime.now(timezone.utc)
             scrape_requests_total.labels(status="success").inc()
+            await increment_usage(db, user.id, "scrape", pages=1)
             resp = ScrapeResponse(success=True, data=result, job_id=str(job.id))
         else:
             job.status = "failed"

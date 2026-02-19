@@ -226,6 +226,24 @@ async def get_top_domains(
     }
 
 
+@router.get("/quota")
+async def get_quota(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the current user's monthly quota and usage."""
+    from app.services.quota import get_quota_summary
+    summary = await get_quota_summary(db, user.id)
+    return {"success": True, **summary}
+
+
+@router.get("/devices")
+async def list_devices():
+    """List all available mobile device presets for viewport emulation."""
+    from app.services.mobile_presets import list_device_presets
+    return {"success": True, "devices": list_device_presets()}
+
+
 @router.delete("/jobs/{job_id}")
 async def delete_job(
     job_id: str,

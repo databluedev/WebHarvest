@@ -103,6 +103,12 @@ def process_search(self, job_id: str, config: dict):
                     scrape_request = ScrapeRequest(
                         url=sr.url,
                         formats=request.formats,
+                        only_main_content=request.only_main_content,
+                        use_proxy=request.use_proxy,
+                        headers=request.headers,
+                        cookies=request.cookies,
+                        mobile=request.mobile,
+                        mobile_device=request.mobile_device,
                     )
                     result = await scrape_url(scrape_request, proxy_manager=proxy_manager)
 

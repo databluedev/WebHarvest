@@ -1486,12 +1486,14 @@ async def _fetch_with_browser_stealth(
     response_headers: dict[str, str] = {}
 
     async with browser_pool.get_page(proxy=proxy, use_firefox=use_firefox, target_url=url) as page:
-        # Mobile viewport emulation
-        if getattr(request, "mobile", False):
-            await page.set_viewport_size({"width": 390, "height": 844})
-            await page.set_extra_http_headers({
-                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-            })
+        # Mobile viewport emulation (device preset or default iPhone 14)
+        if getattr(request, "mobile", False) or getattr(request, "mobile_device", None):
+            from app.services.mobile_presets import get_device_preset
+            preset = get_device_preset(getattr(request, "mobile_device", None))
+            if not preset:
+                preset = {"width": 390, "height": 844, "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
+            await page.set_viewport_size({"width": preset["width"], "height": preset["height"]})
+            await page.set_extra_http_headers({"User-Agent": preset["user_agent"]})
 
         # Inject custom cookies before navigation
         if getattr(request, "cookies", None):
@@ -1609,12 +1611,14 @@ async def _fetch_with_browser_session(
 
     page = await crawl_session.new_page()
     try:
-        # Mobile viewport emulation
-        if getattr(request, "mobile", False):
-            await page.set_viewport_size({"width": 390, "height": 844})
-            await page.set_extra_http_headers({
-                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-            })
+        # Mobile viewport emulation (device preset or default iPhone 14)
+        if getattr(request, "mobile", False) or getattr(request, "mobile_device", None):
+            from app.services.mobile_presets import get_device_preset
+            preset = get_device_preset(getattr(request, "mobile_device", None))
+            if not preset:
+                preset = {"width": 390, "height": 844, "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"}
+            await page.set_viewport_size({"width": preset["width"], "height": preset["height"]})
+            await page.set_extra_http_headers({"User-Agent": preset["user_agent"]})
 
         # Inject custom cookies
         if getattr(request, "cookies", None):

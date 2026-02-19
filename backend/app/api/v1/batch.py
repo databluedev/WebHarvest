@@ -29,6 +29,7 @@ from app.schemas.batch import (
 )
 from app.schemas.scrape import PageMetadata
 from app.workers.batch_worker import process_batch
+from app.services.quota import check_quota, increment_usage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -92,6 +93,9 @@ async def start_batch_scrape(
     response.headers["X-RateLimit-Reset"] = str(rl.reset)
     if not rl.allowed:
         raise RateLimitError("Batch rate limit exceeded. Try again in a minute.")
+
+    # Quota check
+    await check_quota(db, user.id, "batch")
 
     # Build URL list
     urls = []

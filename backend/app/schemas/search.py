@@ -12,8 +12,13 @@ class SearchRequest(BaseModel):
     google_api_key: str | None = None  # For Google Custom Search
     google_cx: str | None = None  # Google Custom Search Engine ID
     brave_api_key: str | None = None  # For Brave Search API
-    formats: list[str] = ["markdown"]
+    formats: list[str] = ["markdown"]  # All 7 formats: markdown, html, links, screenshot, structured_data, headings, images
+    only_main_content: bool = True
     use_proxy: bool = False
+    headers: dict[str, str] | None = None
+    cookies: dict[str, str] | None = None
+    mobile: bool = False
+    mobile_device: str | None = None
     webhook_url: str | None = None
     webhook_secret: str | None = None
 

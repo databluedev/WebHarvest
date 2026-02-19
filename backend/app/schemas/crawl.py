@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.schemas.scrape import PageMetadata
+from app.schemas.scrape import PageMetadata, ExtractConfig
 
 
 class ScrapeOptions(BaseModel):
@@ -16,6 +16,8 @@ class ScrapeOptions(BaseModel):
     headers: dict[str, str] | None = None
     cookies: dict[str, str] | None = None
     mobile: bool = False
+    mobile_device: str | None = None
+    extract: ExtractConfig | None = None  # LLM extraction config for each page
 
 
 class CrawlRequest(BaseModel):

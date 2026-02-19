@@ -17,9 +17,9 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Format toggles
+  // Format toggles — now all 7 formats
   const [formats, setFormats] = useState<string[]>(["markdown"]);
-  const allFormats = ["markdown", "html", "links"];
+  const allFormats = ["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"];
 
   useEffect(() => {
     if (!api.getToken()) router.push("/auth/login");

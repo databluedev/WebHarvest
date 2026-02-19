@@ -4,12 +4,19 @@ from pydantic import BaseModel, HttpUrl
 
 
 class ActionStep(BaseModel):
-    type: str  # click, wait, scroll, type, screenshot
+    type: str  # click, wait, scroll, type, screenshot, hover, press, select, fill_form, evaluate, go_back, go_forward
     selector: str | None = None
     milliseconds: int | None = None
     direction: str | None = None  # up, down
     amount: int | None = None
     text: str | None = None
+    key: str | None = None  # For press action (Enter, Tab, Escape, etc.)
+    value: str | None = None  # For select action (option value)
+    script: str | None = None  # For evaluate action (JavaScript code)
+    fields: dict[str, str] | None = None  # For fill_form action ({selector: value})
+    button: str | None = None  # For click action: left, right, middle
+    click_count: int | None = None  # For click action: double-click = 2
+    modifiers: list[str] | None = None  # Alt, Control, Meta, Shift
 
 
 class ExtractConfig(BaseModel):
@@ -32,7 +39,8 @@ class ScrapeRequest(BaseModel):
     use_proxy: bool = False
     headers: dict[str, str] | None = None  # Custom HTTP headers to send
     cookies: dict[str, str] | None = None  # Custom cookies to send (name: value)
-    mobile: bool = False  # Emulate mobile viewport (iPhone 14)
+    mobile: bool = False  # Emulate mobile viewport
+    mobile_device: str | None = None  # Device preset name (e.g., "iphone_14", "pixel_7", "ipad_pro")
     webhook_url: str | None = None  # Webhook URL for job completion notification
     webhook_secret: str | None = None  # HMAC secret for webhook signature
 
