@@ -74,6 +74,9 @@ def process_crawl(self, job_id: str, config: dict):
                 """BFS loop: fetch pages, put raw results on extract_queue."""
                 nonlocal pages_crawled, cancelled
 
+                empty_retries = 0
+                max_empty_retries = 3  # Wait up to 3 times for consumer to add links
+
                 while pages_crawled < request.max_pages and not cancelled:
                     batch_items = []
                     remaining = request.max_pages - pages_crawled
@@ -93,7 +96,21 @@ def process_crawl(self, job_id: str, config: dict):
                         batch_items.append((url, depth))
 
                     if not batch_items:
-                        break
+                        # Frontier is empty — but consumer may still be extracting
+                        # links from the previous batch. Wait for queue to drain
+                        # before giving up.
+                        if not extract_queue.empty():
+                            await extract_queue.join()
+                            empty_retries = 0
+                            continue  # Retry — consumer may have added new links
+                        elif empty_retries < max_empty_retries:
+                            empty_retries += 1
+                            await asyncio.sleep(2)
+                            continue  # Brief wait for consumer to finish
+                        else:
+                            break  # Truly no more URLs
+
+                    empty_retries = 0
 
                     async def fetch_one(url: str, depth: int) -> dict | None:
                         async with semaphore:
