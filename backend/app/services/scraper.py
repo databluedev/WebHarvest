@@ -739,7 +739,7 @@ async def scrape_url(
     """
     from app.core.cache import get_cached_scrape, set_cached_scrape
     from app.core.metrics import scrape_duration_seconds
-    from app.services.document import detect_document_type, extract_pdf, extract_docx
+    from app.services.document import detect_document_type
 
     url = request.url
     start_time = time.time()
@@ -753,9 +753,9 @@ async def scrape_url(
             except Exception:
                 pass
 
-    # Check if URL points to a document (PDF, DOCX) by extension
+    # Check if URL points to a document by extension
     doc_type = detect_document_type(url, content_type=None, raw_bytes=b"")
-    if doc_type in ("pdf", "docx"):
+    if doc_type in ("pdf", "docx", "xlsx", "pptx", "csv", "rtf", "epub"):
         return await _handle_document_url(url, doc_type, request, proxy_manager, start_time)
 
     raw_html = ""
@@ -1221,7 +1221,7 @@ def classify_error(error: str | None, html: str | None = None, status_code: int 
 
 
 # ---------------------------------------------------------------------------
-# Document handling (PDF, DOCX)
+# Document handling (PDF, DOCX, XLSX, PPTX, CSV, RTF, EPUB)
 # ---------------------------------------------------------------------------
 
 async def _handle_document_url(
@@ -1231,9 +1231,9 @@ async def _handle_document_url(
     proxy_manager,
     start_time: float,
 ) -> ScrapeData:
-    """Fetch and extract content from document URLs (PDF, DOCX)."""
+    """Fetch and extract content from document URLs."""
     from app.core.metrics import scrape_duration_seconds
-    from app.services.document import extract_pdf, extract_docx, detect_document_type
+    from app.services.document import extract_document, detect_document_type
 
     proxy_url = None
     if proxy_manager:
@@ -1284,10 +1284,8 @@ async def _handle_document_url(
     # Re-detect type from content-type header and bytes
     actual_type = detect_document_type(url, content_type, raw_bytes)
 
-    if actual_type == "pdf":
-        doc_result = await extract_pdf(raw_bytes)
-    elif actual_type == "docx":
-        doc_result = await extract_docx(raw_bytes)
+    if actual_type in ("pdf", "docx", "xlsx", "pptx", "csv", "rtf", "epub"):
+        doc_result = await extract_document(raw_bytes, actual_type)
     else:
         # Not actually a document, return the text as HTML
         duration = time.time() - start_time
@@ -2166,7 +2164,7 @@ async def scrape_url_fetch_only(
 
     # Check if URL points to a document — delegate to full scrape_url for these
     doc_type = detect_document_type(url, content_type=None, raw_bytes=b"")
-    if doc_type in ("pdf", "docx"):
+    if doc_type in ("pdf", "docx", "xlsx", "pptx", "csv", "rtf", "epub"):
         return None  # Caller should fall back to scrape_url()
 
     raw_html = ""
