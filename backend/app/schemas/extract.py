@@ -49,7 +49,7 @@ class ExtractResult(BaseModel):
     """Single extraction result."""
 
     url: str | None = None
-    extract: dict[str, Any] | None = None
+    extract: dict[str, Any] | list[Any] | None = None
     content_length: int = 0
     error: str | None = None
 
