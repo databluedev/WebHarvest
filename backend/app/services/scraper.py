@@ -263,10 +263,9 @@ _LOCALE_MAP = {
 # ---------------------------------------------------------------------------
 
 _BOT_DETECTION_PATTERNS = [
-    r"fls-na\.amazon\.",
-    r"unagi\.amazon\.",
-    r".*\.akstat\.io",
-    r".*\.akamaized\.net",
+    # Third-party bot detection services only.
+    # DO NOT block first-party scripts (e.g. Amazon's fls/unagi) — blocking them
+    # signals bot activity because the server expects them to execute and report back.
     r"px-captcha",
     r".*\.perimeterx\.",
     r"js\.datadome\.co",
@@ -275,11 +274,10 @@ _BOT_DETECTION_PATTERNS = [
     r"cdn-cgi/challenge-platform",
     r".*\.kasada\.io",
     r".*\.shape\.ag",
-    r"fingerprintjs",
     r"recaptcha",
 ]
 
-_BOT_DETECTION_REGEX: re.Pattern | None = None
+_BOT_DETECTION_REGEX: re.Pattern | None = None  # Reset on pattern change
 
 _GOOGLE_REFERRERS = [
     "https://www.google.com/",
@@ -1329,21 +1327,31 @@ async def _fetch_with_browser_stealth(
     response_headers: dict[str, str] = {}
 
     async with browser_pool.get_page(proxy=proxy, use_firefox=use_firefox, target_url=url) as page:
-        # Set up request interception (blocks bot detection scripts on hard sites)
+        # Set up request interception (blocks third-party bot detection on hard sites)
         await _setup_request_interception(page, url)
 
         referrer = random.choice(_GOOGLE_REFERRERS)
+        hard_site = _is_hard_site(url)
 
         # Warm-up navigation for hard sites: visit homepage first to build session
         # Skip if we already have cookies for this domain (saves 1.5-3s)
-        if _is_hard_site(url):
+        if hard_site:
             domain = browser_pool._get_domain(url)
             has_cookies = domain in browser_pool._cookie_jar
             homepage = _get_homepage(url)
             if homepage and not has_cookies:
                 try:
-                    await page.goto(homepage, wait_until="domcontentloaded", timeout=10000, referer=referrer)
-                    await page.wait_for_timeout(random.randint(1500, 3000))
+                    await page.goto(homepage, wait_until="domcontentloaded", timeout=12000, referer=referrer)
+                    await page.wait_for_timeout(random.randint(2000, 4000))
+                    # Human-like interaction during warm-up
+                    vp = page.viewport_size or {"width": 1920, "height": 1080}
+                    await page.mouse.move(
+                        random.randint(200, vp["width"] - 200),
+                        random.randint(150, vp["height"] - 200),
+                        steps=random.randint(8, 15),
+                    )
+                    await page.mouse.wheel(0, random.randint(200, 500))
+                    await page.wait_for_timeout(random.randint(500, 1000))
                     await _try_accept_cookies(page)
                     await page.wait_for_timeout(random.randint(500, 1000))
                 except Exception:
@@ -1357,15 +1365,24 @@ async def _fetch_with_browser_stealth(
         if response:
             response_headers = {k.lower(): v for k, v in response.headers.items()}
 
-        # Short networkidle — give JS 5s to render, don't block forever
+        # Networkidle — give JS time to render; hard sites need more
         try:
-            await page.wait_for_load_state("networkidle", timeout=5000)
+            await page.wait_for_load_state("networkidle", timeout=10000 if hard_site else 5000)
         except Exception:
             pass
 
-        # Shorter wait for non-hard sites
-        if _is_hard_site(url):
+        if hard_site:
+            # Human-like interaction after page load
+            await page.wait_for_timeout(random.randint(1000, 2000))
+            vp = page.viewport_size or {"width": 1920, "height": 1080}
+            await page.mouse.move(
+                random.randint(200, vp["width"] - 200),
+                random.randint(150, vp["height"] - 200),
+                steps=random.randint(8, 15),
+            )
+            await page.mouse.wheel(0, random.randint(300, 600))
             await page.wait_for_timeout(random.randint(500, 1000))
+            await _try_accept_cookies(page)
         else:
             await page.wait_for_timeout(random.randint(200, 500))
 
@@ -1401,6 +1418,7 @@ async def _fetch_with_browser_session(
         await _setup_request_interception(page, url)
 
         referrer = random.choice(_GOOGLE_REFERRERS)
+        hard_site = _is_hard_site(url)
 
         response = await page.goto(
             url, wait_until="domcontentloaded", timeout=15000, referer=referrer,
@@ -1410,11 +1428,19 @@ async def _fetch_with_browser_session(
             response_headers = {k.lower(): v for k, v in response.headers.items()}
 
         try:
-            await page.wait_for_load_state("networkidle", timeout=5000)
+            await page.wait_for_load_state("networkidle", timeout=10000 if hard_site else 5000)
         except Exception:
             pass
 
-        if _is_hard_site(url):
+        if hard_site:
+            await page.wait_for_timeout(random.randint(1000, 2000))
+            vp = page.viewport_size or {"width": 1920, "height": 1080}
+            await page.mouse.move(
+                random.randint(200, vp["width"] - 200),
+                random.randint(150, vp["height"] - 200),
+                steps=random.randint(8, 15),
+            )
+            await page.mouse.wheel(0, random.randint(300, 600))
             await page.wait_for_timeout(random.randint(500, 1000))
         else:
             await page.wait_for_timeout(random.randint(200, 500))
