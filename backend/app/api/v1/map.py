@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.exceptions import NotFoundError, RateLimitError
-from app.core.rate_limiter import check_rate_limit
+from app.core.rate_limiter import check_rate_limit_full
 from app.config import settings
 from app.models.job import Job
 from app.models.job_result import JobResult
@@ -28,15 +28,19 @@ logger = logging.getLogger(__name__)
 @router.post("", response_model=MapResponse)
 async def map_site(
     request: MapRequest,
+    response: Response,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Map all URLs on a website. Returns discovered URLs with titles and descriptions."""
     # Rate limiting
-    allowed, _ = await check_rate_limit(
+    rl = await check_rate_limit_full(
         f"rate:map:{user.id}", settings.RATE_LIMIT_MAP
     )
-    if not allowed:
+    response.headers["X-RateLimit-Limit"] = str(rl.limit)
+    response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
+    response.headers["X-RateLimit-Reset"] = str(rl.reset)
+    if not rl.allowed:
         raise RateLimitError("Map rate limit exceeded. Try again in a minute.")
 
     # Create job record

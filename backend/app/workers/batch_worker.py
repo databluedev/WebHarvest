@@ -34,6 +34,13 @@ def process_batch(self, job_id: str, config: dict):
 
         # Build URL list with per-URL overrides
         url_configs = []
+        # Shared fields to propagate to each ScrapeRequest
+        _shared = {
+            "headers": getattr(request, "headers", None),
+            "cookies": getattr(request, "cookies", None),
+            "mobile": getattr(request, "mobile", False),
+        }
+
         if request.items:
             # Deduplicate items by URL
             seen_urls = set()
@@ -49,6 +56,7 @@ def process_batch(self, job_id: str, config: dict):
                     "only_main_content": item.only_main_content if item.only_main_content is not None else request.only_main_content,
                     "wait_for": item.wait_for if item.wait_for is not None else request.wait_for,
                     "timeout": item.timeout if item.timeout is not None else request.timeout,
+                    **_shared,
                 })
         elif request.urls:
             # Deduplicate URL list
@@ -60,6 +68,7 @@ def process_batch(self, job_id: str, config: dict):
                     "only_main_content": request.only_main_content,
                     "wait_for": request.wait_for,
                     "timeout": request.timeout,
+                    **_shared,
                 })
 
         if not url_configs:

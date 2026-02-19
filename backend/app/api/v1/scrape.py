@@ -10,22 +10,22 @@ import zipfile
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Query, Response
+from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.exceptions import BadRequestError, NotFoundError
-from app.core.rate_limiter import check_rate_limit
+from app.core.rate_limiter import check_rate_limit_full
 from app.core.metrics import scrape_requests_total
 from app.config import settings
 from app.models.job import Job
 from app.models.job_result import JobResult
 from app.models.user import User
 from app.schemas.scrape import ScrapeRequest, ScrapeResponse, PageMetadata
-from app.services.scraper import scrape_url
+from app.services.scraper import scrape_url, classify_error
 from app.services.llm_extract import extract_with_llm
 
 router = APIRouter()
@@ -89,15 +89,19 @@ def _build_result_dicts(results) -> list[dict]:
 @router.post("", response_model=ScrapeResponse)
 async def scrape(
     request: ScrapeRequest,
+    response: Response,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Scrape a single URL and return content in requested formats."""
     # Rate limiting
-    allowed, remaining = await check_rate_limit(
+    rl = await check_rate_limit_full(
         f"rate:scrape:{user.id}", settings.RATE_LIMIT_SCRAPE
     )
-    if not allowed:
+    response.headers["X-RateLimit-Limit"] = str(rl.limit)
+    response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
+    response.headers["X-RateLimit-Reset"] = str(rl.reset)
+    if not rl.allowed:
         from app.core.exceptions import RateLimitError
         raise RateLimitError("Scrape rate limit exceeded. Try again in a minute.")
 
@@ -129,7 +133,7 @@ async def scrape(
             job.error = "Server is at capacity. Please retry in a few seconds."
             job.completed_at = datetime.now(timezone.utc)
             scrape_requests_total.labels(status="error").inc()
-            return ScrapeResponse(success=False, error=job.error, job_id=str(job.id))
+            return ScrapeResponse(success=False, error=job.error, error_code="TIMEOUT", job_id=str(job.id))
 
         try:
             # Scrape with overall timeout to prevent hanging
@@ -142,7 +146,7 @@ async def scrape(
             job.error = f"Scrape timed out after {settings.SCRAPE_API_TIMEOUT}s. The site may be too slow or heavily protected."
             job.completed_at = datetime.now(timezone.utc)
             scrape_requests_total.labels(status="error").inc()
-            return ScrapeResponse(success=False, error=job.error, job_id=str(job.id))
+            return ScrapeResponse(success=False, error=job.error, error_code="TIMEOUT", job_id=str(job.id))
         finally:
             sem.release()
 
@@ -191,18 +195,45 @@ async def scrape(
             job.completed_pages = 1
             job.completed_at = datetime.now(timezone.utc)
             scrape_requests_total.labels(status="success").inc()
-            return ScrapeResponse(success=True, data=result, job_id=str(job.id))
+            resp = ScrapeResponse(success=True, data=result, job_id=str(job.id))
         else:
             job.status = "failed"
             job.error = "All scraping strategies failed — the site may be blocking requests from this server. Try enabling a residential proxy."
             job.completed_at = datetime.now(timezone.utc)
             scrape_requests_total.labels(status="error").inc()
-            return ScrapeResponse(
+            error_code = classify_error(
+                job.error,
+                html=result.raw_html or result.html,
+                status_code=result.metadata.status_code if result.metadata else 0,
+            )
+            resp = ScrapeResponse(
                 success=False,
                 data=result,
                 error=job.error,
+                error_code=error_code,
                 job_id=str(job.id),
             )
+
+        # Fire webhook if configured (best-effort, non-blocking)
+        if request.webhook_url:
+            try:
+                from app.services.webhook import send_webhook
+                await send_webhook(
+                    url=request.webhook_url,
+                    payload={
+                        "event": f"job.{job.status}",
+                        "job_id": str(job.id),
+                        "job_type": "scrape",
+                        "status": job.status,
+                        "url": request.url,
+                        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                    },
+                    secret=request.webhook_secret,
+                )
+            except Exception as wh_err:
+                logger.warning(f"Webhook delivery failed for scrape {job.id}: {wh_err}")
+
+        return resp
 
     except BadRequestError:
         job.status = "failed"
@@ -214,7 +245,28 @@ async def scrape(
         job.error = str(e)
         job.completed_at = datetime.now(timezone.utc)
         scrape_requests_total.labels(status="error").inc()
-        return ScrapeResponse(success=False, error=str(e), job_id=str(job.id))
+        error_code = classify_error(str(e))
+
+        # Fire failure webhook
+        if request.webhook_url:
+            try:
+                from app.services.webhook import send_webhook
+                await send_webhook(
+                    url=request.webhook_url,
+                    payload={
+                        "event": "job.failed",
+                        "job_id": str(job.id),
+                        "job_type": "scrape",
+                        "status": "failed",
+                        "url": request.url,
+                        "error": str(e),
+                    },
+                    secret=request.webhook_secret,
+                )
+            except Exception:
+                pass
+
+        return ScrapeResponse(success=False, error=str(e), error_code=error_code, job_id=str(job.id))
 
 
 @router.get("/{job_id}")

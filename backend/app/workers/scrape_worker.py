@@ -87,6 +87,24 @@ def process_scrape(self, job_id: str, url: str, config: dict):
                 job.completed_at = datetime.now(timezone.utc)
                 await db.commit()
 
+            # Fire webhook if configured
+            if request.webhook_url:
+                try:
+                    from app.services.webhook import send_webhook
+                    await send_webhook(
+                        url=request.webhook_url,
+                        payload={
+                            "event": "job.completed",
+                            "job_id": job_id,
+                            "job_type": "scrape",
+                            "status": "completed",
+                            "url": url,
+                        },
+                        secret=request.webhook_secret,
+                    )
+                except Exception as wh_err:
+                    logger.warning(f"Webhook delivery failed for scrape {job_id}: {wh_err}")
+
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
@@ -97,6 +115,25 @@ def process_scrape(self, job_id: str, url: str, config: dict):
                     job.status = "failed"
                     job.error = f"{e}\n{tb[-500:]}"
                     await db.commit()
+
+            # Fire failure webhook
+            if request.webhook_url:
+                try:
+                    from app.services.webhook import send_webhook
+                    await send_webhook(
+                        url=request.webhook_url,
+                        payload={
+                            "event": "job.failed",
+                            "job_id": job_id,
+                            "job_type": "scrape",
+                            "status": "failed",
+                            "error": str(e),
+                        },
+                        secret=request.webhook_secret,
+                    )
+                except Exception:
+                    pass
+
             raise
         finally:
             await db_engine.dispose()

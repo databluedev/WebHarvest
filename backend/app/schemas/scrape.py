@@ -30,6 +30,11 @@ class ScrapeRequest(BaseModel):
     actions: list[ActionStep] | None = None
     extract: ExtractConfig | None = None
     use_proxy: bool = False
+    headers: dict[str, str] | None = None  # Custom HTTP headers to send
+    cookies: dict[str, str] | None = None  # Custom cookies to send (name: value)
+    mobile: bool = False  # Emulate mobile viewport (iPhone 14)
+    webhook_url: str | None = None  # Webhook URL for job completion notification
+    webhook_secret: str | None = None  # HMAC secret for webhook signature
 
 
 class PageMetadata(BaseModel):
@@ -66,4 +71,5 @@ class ScrapeResponse(BaseModel):
     success: bool
     data: ScrapeData | None = None
     error: str | None = None
+    error_code: str | None = None  # BLOCKED_BY_WAF, CAPTCHA_REQUIRED, TIMEOUT, JS_REQUIRED, NETWORK_ERROR
     job_id: str | None = None

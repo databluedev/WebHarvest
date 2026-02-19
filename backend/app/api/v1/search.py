@@ -7,7 +7,7 @@ import re
 import zipfile
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.exceptions import NotFoundError, RateLimitError
-from app.core.rate_limiter import check_rate_limit
+from app.core.rate_limiter import check_rate_limit_full
 from app.core.metrics import search_jobs_total
 from app.config import settings
 from app.models.job import Job
@@ -77,15 +77,19 @@ def _build_search_dicts(results) -> list[dict]:
 @router.post("", response_model=SearchStartResponse)
 async def start_search(
     request: SearchRequest,
+    response: Response,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Search the web and scrape top results."""
     # Rate limiting
-    allowed, _ = await check_rate_limit(
+    rl = await check_rate_limit_full(
         f"rate:search:{user.id}", settings.RATE_LIMIT_SEARCH
     )
-    if not allowed:
+    response.headers["X-RateLimit-Limit"] = str(rl.limit)
+    response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
+    response.headers["X-RateLimit-Reset"] = str(rl.reset)
+    if not rl.allowed:
         raise RateLimitError("Search rate limit exceeded. Try again in a minute.")
 
     if request.num_results > settings.MAX_SEARCH_RESULTS:

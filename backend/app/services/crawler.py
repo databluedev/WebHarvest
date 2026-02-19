@@ -181,6 +181,9 @@ class WebCrawler:
             timeout=opts.timeout,
             include_tags=opts.include_tags,
             exclude_tags=opts.exclude_tags,
+            headers=getattr(opts, "headers", None),
+            cookies=getattr(opts, "cookies", None),
+            mobile=getattr(opts, "mobile", False),
         )
 
         result = await scrape_url(request, proxy_manager=self._proxy_manager,
@@ -207,6 +210,9 @@ class WebCrawler:
             timeout=opts.timeout,
             include_tags=opts.include_tags,
             exclude_tags=opts.exclude_tags,
+            headers=getattr(opts, "headers", None),
+            cookies=getattr(opts, "cookies", None),
+            mobile=getattr(opts, "mobile", False),
         )
 
         fetch_result = await scrape_url_fetch_only(

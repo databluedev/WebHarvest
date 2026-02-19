@@ -811,11 +811,14 @@ async def scrape_url(
         last_tier = strategy_data.get("last_success_tier", 1)
         tier_start = time.time()
 
+        _custom_headers = getattr(request, "headers", None)
+        _custom_cookies = getattr(request, "cookies", None)
         try:
             if last_strategy.startswith("curl_cffi:") and not needs_browser:
                 profile = last_strategy.split(":", 1)[1]
                 result = await _fetch_with_curl_cffi_single(
-                    url, request.timeout, profile=profile, proxy_url=proxy_url
+                    url, request.timeout, profile=profile, proxy_url=proxy_url,
+                    custom_headers=_custom_headers, custom_cookies=_custom_cookies,
                 )
                 html, sc, hdrs = result
                 if html and sc < 400 and not _looks_blocked(html):
@@ -825,7 +828,10 @@ async def scrape_url(
                     winning_tier = 0
                     logger.info(f"Strategy cache hit for {url}: {last_strategy}")
             elif last_strategy == "httpx" and not needs_browser:
-                result = await _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)
+                result = await _fetch_with_httpx(
+                    url, request.timeout, proxy_url=proxy_url,
+                    custom_headers=_custom_headers, custom_cookies=_custom_cookies,
+                )
                 html, sc, hdrs = result
                 if html and sc < 400 and not _looks_blocked(html):
                     raw_html, status_code, response_headers = html, sc, hdrs
@@ -909,15 +915,23 @@ async def scrape_url(
         return bool(html) and not _looks_blocked(html)
 
     # === Tier 1: HTTP parallel — race(curl_cffi_multi, httpx) ===
+    custom_headers = getattr(request, "headers", None)
+    custom_cookies = getattr(request, "cookies", None)
     if not fetched and not needs_browser and starting_tier <= 1:
         tier_start = time.time()
 
         http_coros = [
-            ("curl_cffi_multi", _fetch_with_curl_cffi_multi(url, request.timeout, proxy_url=proxy_url)),
+            ("curl_cffi_multi", _fetch_with_curl_cffi_multi(
+                url, request.timeout, proxy_url=proxy_url,
+                custom_headers=custom_headers, custom_cookies=custom_cookies,
+            )),
         ]
         if not hard_site:
             http_coros.append(
-                ("httpx", _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)),
+                ("httpx", _fetch_with_httpx(
+                    url, request.timeout, proxy_url=proxy_url,
+                    custom_headers=custom_headers, custom_cookies=custom_cookies,
+                )),
             )
 
         race = await _race_strategies(http_coros, url, timeout=10)
@@ -1156,6 +1170,56 @@ async def scrape_url(
     return scrape_data
 
 
+def classify_error(error: str | None, html: str | None = None, status_code: int = 0) -> str | None:
+    """Classify a scrape failure into a structured error code.
+
+    Returns one of: BLOCKED_BY_WAF, CAPTCHA_REQUIRED, TIMEOUT, JS_REQUIRED,
+    NETWORK_ERROR, or None if no specific classification applies.
+    """
+    if not error and not html:
+        return None
+
+    err_lower = (error or "").lower()
+
+    # Timeout errors
+    if any(kw in err_lower for kw in ("timeout", "timed out", "timedout")):
+        return "TIMEOUT"
+
+    # Network errors
+    if any(kw in err_lower for kw in (
+        "connection", "dns", "resolve", "refused", "unreachable",
+        "network", "ssl", "certificate", "eof",
+    )):
+        return "NETWORK_ERROR"
+
+    # Check HTML content for specific block patterns
+    html_lower = (html or "").lower()
+    if any(kw in html_lower for kw in ("captcha", "recaptcha", "hcaptcha", "verify you are human", "verify you're human")):
+        return "CAPTCHA_REQUIRED"
+
+    if any(kw in html_lower for kw in (
+        "access denied", "blocked", "403 forbidden",
+        "cloudflare", "performance & security by",
+        "sucuri", "incapsula", "datadome", "perimeterx",
+    )):
+        return "BLOCKED_BY_WAF"
+
+    if status_code == 403 or status_code == 451:
+        return "BLOCKED_BY_WAF"
+
+    if any(kw in html_lower for kw in (
+        "javascript is disabled", "enable javascript",
+        "requires javascript", "javascript is required",
+    )):
+        return "JS_REQUIRED"
+
+    # All strategies failed = likely blocked
+    if "all scraping strategies failed" in err_lower:
+        return "BLOCKED_BY_WAF"
+
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Document handling (PDF, DOCX)
 # ---------------------------------------------------------------------------
@@ -1261,11 +1325,19 @@ async def _handle_document_url(
 # ---------------------------------------------------------------------------
 
 async def _fetch_with_curl_cffi_single(
-    url: str, timeout: int, profile: str = "chrome124", proxy_url: str | None = None
+    url: str, timeout: int, profile: str = "chrome124", proxy_url: str | None = None,
+    custom_headers: dict[str, str] | None = None, custom_cookies: dict[str, str] | None = None,
 ) -> tuple[str, int, dict[str, str]]:
     """HTTP fetch with a single TLS fingerprint profile (pooled session)."""
     timeout_seconds = timeout / 1000
     headers = _get_headers_for_profile(profile, url)
+    if custom_headers:
+        headers.update(custom_headers)
+
+    cookie_str = ""
+    if custom_cookies:
+        cookie_str = "; ".join(f"{k}={v}" for k, v in custom_cookies.items())
+        headers["Cookie"] = cookie_str
 
     if proxy_url:
         # Proxied requests use fresh sessions
@@ -1283,7 +1355,8 @@ async def _fetch_with_curl_cffi_single(
 
 
 async def _fetch_with_curl_cffi_multi(
-    url: str, timeout: int, proxy_url: str | None = None
+    url: str, timeout: int, proxy_url: str | None = None,
+    custom_headers: dict[str, str] | None = None, custom_cookies: dict[str, str] | None = None,
 ) -> tuple[str, int, dict[str, str]]:
     """HTTP fetch racing 3 TLS fingerprints concurrently (batch 1), then 2 more if needed."""
     from curl_cffi.requests import AsyncSession
@@ -1291,7 +1364,10 @@ async def _fetch_with_curl_cffi_multi(
     # Batch 1: race first 3 profiles concurrently
     batch1 = _CURL_CFFI_PROFILES[:3]
     batch1_coros = [
-        (f"curl_cffi:{p}", _fetch_with_curl_cffi_single(url, timeout, profile=p, proxy_url=proxy_url))
+        (f"curl_cffi:{p}", _fetch_with_curl_cffi_single(
+            url, timeout, profile=p, proxy_url=proxy_url,
+            custom_headers=custom_headers, custom_cookies=custom_cookies,
+        ))
         for p in batch1
     ]
 
@@ -1314,7 +1390,10 @@ async def _fetch_with_curl_cffi_multi(
     batch2 = _CURL_CFFI_PROFILES[3:]
     if batch2:
         batch2_coros = [
-            (f"curl_cffi:{p}", _fetch_with_curl_cffi_single(url, timeout, profile=p, proxy_url=proxy_url))
+            (f"curl_cffi:{p}", _fetch_with_curl_cffi_single(
+                url, timeout, profile=p, proxy_url=proxy_url,
+                custom_headers=custom_headers, custom_cookies=custom_cookies,
+            ))
             for p in batch2
         ]
 
@@ -1333,17 +1412,22 @@ async def _fetch_with_curl_cffi_multi(
 # ---------------------------------------------------------------------------
 
 async def _fetch_with_httpx(
-    url: str, timeout: int, proxy_url: str | None = None
+    url: str, timeout: int, proxy_url: str | None = None,
+    custom_headers: dict[str, str] | None = None, custom_cookies: dict[str, str] | None = None,
 ) -> tuple[str, int, dict[str, str]]:
     timeout_seconds = timeout / 1000
     headers = random.choice(_HEADER_ROTATION_POOL).copy()
+    if custom_headers:
+        headers.update(custom_headers)
+
+    cookies_kwarg = custom_cookies if custom_cookies else None
 
     if proxy_url:
         async with httpx.AsyncClient(follow_redirects=True, timeout=timeout_seconds, headers=headers, http2=True, proxy=proxy_url) as client:
-            response = await client.get(url)
+            response = await client.get(url, cookies=cookies_kwarg)
     else:
         client = await _get_httpx_client()
-        response = await client.get(url, headers=headers, timeout=timeout_seconds)
+        response = await client.get(url, headers=headers, timeout=timeout_seconds, cookies=cookies_kwarg)
 
     resp_headers = {k.lower(): v for k, v in response.headers.items()}
     return response.text, response.status_code, resp_headers
@@ -1402,6 +1486,26 @@ async def _fetch_with_browser_stealth(
     response_headers: dict[str, str] = {}
 
     async with browser_pool.get_page(proxy=proxy, use_firefox=use_firefox, target_url=url) as page:
+        # Mobile viewport emulation
+        if getattr(request, "mobile", False):
+            await page.set_viewport_size({"width": 390, "height": 844})
+            await page.set_extra_http_headers({
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            })
+
+        # Inject custom cookies before navigation
+        if getattr(request, "cookies", None):
+            from urllib.parse import urlparse as _urlparse
+            _domain = _urlparse(url).netloc
+            await page.context.add_cookies([
+                {"name": k, "value": v, "domain": _domain, "path": "/"}
+                for k, v in request.cookies.items()
+            ])
+
+        # Inject custom headers
+        if getattr(request, "headers", None):
+            await page.set_extra_http_headers(request.headers)
+
         # Set up request interception (blocks third-party bot detection on hard sites)
         await _setup_request_interception(page, url)
 
@@ -1505,6 +1609,26 @@ async def _fetch_with_browser_session(
 
     page = await crawl_session.new_page()
     try:
+        # Mobile viewport emulation
+        if getattr(request, "mobile", False):
+            await page.set_viewport_size({"width": 390, "height": 844})
+            await page.set_extra_http_headers({
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            })
+
+        # Inject custom cookies
+        if getattr(request, "cookies", None):
+            from urllib.parse import urlparse as _urlparse
+            _domain = _urlparse(url).netloc
+            await page.context.add_cookies([
+                {"name": k, "value": v, "domain": _domain, "path": "/"}
+                for k, v in request.cookies.items()
+            ])
+
+        # Inject custom headers
+        if getattr(request, "headers", None):
+            await page.set_extra_http_headers(request.headers)
+
         await _setup_request_interception(page, url)
 
         referrer = random.choice(_GOOGLE_REFERRERS)
@@ -2070,6 +2194,10 @@ async def scrape_url_fetch_only(
     strategy_data = await get_domain_strategy(url)
     starting_tier = get_starting_tier(strategy_data, hard_site)
 
+    # Custom headers/cookies for HTTP strategies
+    _custom_h = getattr(request, "headers", None)
+    _custom_c = getattr(request, "cookies", None)
+
     # === Tier 0: Strategy cache hit ===
     if starting_tier == 0 and strategy_data and not needs_browser:
         last_strategy = strategy_data.get("last_success_strategy", "")
@@ -2077,7 +2205,10 @@ async def scrape_url_fetch_only(
         try:
             if last_strategy.startswith("curl_cffi:"):
                 profile = last_strategy.split(":", 1)[1]
-                result = await _fetch_with_curl_cffi_single(url, request.timeout, profile=profile, proxy_url=proxy_url)
+                result = await _fetch_with_curl_cffi_single(
+                    url, request.timeout, profile=profile, proxy_url=proxy_url,
+                    custom_headers=_custom_h, custom_cookies=_custom_c,
+                )
                 html, sc, hdrs = result
                 if html and sc < 400 and not _looks_blocked(html):
                     raw_html, status_code, response_headers = html, sc, hdrs
@@ -2085,7 +2216,10 @@ async def scrape_url_fetch_only(
                     winning_strategy = last_strategy
                     winning_tier = 0
             elif last_strategy == "httpx":
-                result = await _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)
+                result = await _fetch_with_httpx(
+                    url, request.timeout, proxy_url=proxy_url,
+                    custom_headers=_custom_h, custom_cookies=_custom_c,
+                )
                 html, sc, hdrs = result
                 if html and sc < 400 and not _looks_blocked(html):
                     raw_html, status_code, response_headers = html, sc, hdrs
@@ -2130,10 +2264,16 @@ async def scrape_url_fetch_only(
     if not fetched and not needs_browser and starting_tier <= 1:
         tier_start = time.time()
         http_coros = [
-            ("curl_cffi_multi", _fetch_with_curl_cffi_multi(url, request.timeout, proxy_url=proxy_url)),
+            ("curl_cffi_multi", _fetch_with_curl_cffi_multi(
+                url, request.timeout, proxy_url=proxy_url,
+                custom_headers=_custom_h, custom_cookies=_custom_c,
+            )),
         ]
         if not hard_site:
-            http_coros.append(("httpx", _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)))
+            http_coros.append(("httpx", _fetch_with_httpx(
+                url, request.timeout, proxy_url=proxy_url,
+                custom_headers=_custom_h, custom_cookies=_custom_c,
+            )))
 
         race = await _race_strategies(http_coros, url, timeout=10)
         if race.best_html and len(race.best_html) > len(raw_html_best):

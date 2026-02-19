@@ -13,6 +13,9 @@ class ScrapeOptions(BaseModel):
     timeout: int = 30000
     include_tags: list[str] | None = None
     exclude_tags: list[str] | None = None
+    headers: dict[str, str] | None = None
+    cookies: dict[str, str] | None = None
+    mobile: bool = False
 
 
 class CrawlRequest(BaseModel):
