@@ -533,68 +533,77 @@ def _strip_wayback_toolbar(html: str) -> str:
 # Race helper — runs multiple strategy coroutines, returns first success
 # ---------------------------------------------------------------------------
 
+class RaceResult:
+    """Result from _race_strategies including winner and best fallback."""
+    __slots__ = ("winner_name", "winner_result", "best_html", "best_result")
+
+    def __init__(self):
+        self.winner_name: str | None = None
+        self.winner_result = None
+        self.best_html: str = ""
+        self.best_result = None
+
+    @property
+    def success(self) -> bool:
+        return self.winner_name is not None
+
+
 async def _race_strategies(
     coros: list[tuple[str, Any]],
     url: str,
     validate_fn=None,
-) -> tuple[str, Any] | None:
+    timeout: float | None = None,
+) -> RaceResult:
     """Run multiple strategy coroutines concurrently, return first success.
 
     Args:
         coros: List of (strategy_name, coroutine) tuples
         url: URL being scraped (for logging)
-        validate_fn: Optional function to validate result. Receives the result
-                     and returns True if it's good. Defaults to checking
-                     non-empty HTML and not blocked.
+        validate_fn: Optional function to validate result.
+        timeout: Max seconds for this race. None = no timeout.
 
     Returns:
-        (strategy_name, result) tuple on first success, or None if all fail.
+        RaceResult with winner (if any) and best fallback HTML.
     """
+    race = RaceResult()
     if not coros:
-        return None
+        return race
 
     if validate_fn is None:
         def validate_fn(result):
-            # Result is a tuple; first element is always html
             html = result[0] if isinstance(result, tuple) else result
             if not html:
                 return False
-            # For HTTP strategies (html, status, headers)
             if isinstance(result, tuple) and len(result) == 3:
                 return result[1] < 400 and not _looks_blocked(html)
-            # For browser strategies (html, status, screenshot, action_screenshots, headers)
             if isinstance(result, tuple) and len(result) == 5:
                 return not _looks_blocked(html)
             return not _looks_blocked(html)
 
-    # Wrap each coro to include its name in the return value
     async def _named_wrapper(name: str, coro):
         try:
             result = await coro
             return name, result
         except asyncio.CancelledError:
-            logger.debug(f"Race: {name} cancelled for {url}")
             raise
         except Exception as e:
             logger.debug(f"Race: {name} exception for {url}: {e}")
             raise
 
-    # Suppress expected TargetClosedError warnings from Playwright when
-    # we cancel browser strategies mid-navigation
+    # Suppress expected Playwright TargetClosedError during race cancellation
     loop = asyncio.get_running_loop()
     _original_handler = loop.get_exception_handler()
 
-    def _suppress_playwright_errors(loop, context):
+    def _suppress_playwright_errors(loop_ref, context):
         exc = context.get("exception")
-        if exc and "Target" in type(exc).__name__ and "closed" in str(exc).lower():
-            logger.debug(f"Suppressed expected Playwright error during race: {exc}")
-            return
-        if exc and "TargetClosedError" in str(type(exc)):
-            return
+        if exc:
+            exc_name = type(exc).__name__
+            if "TargetClosedError" in exc_name or "Target" in exc_name:
+                return
         if _original_handler:
-            _original_handler(loop, context)
+            _original_handler(loop_ref, context)
         else:
-            loop.default_exception_handler(context)
+            loop_ref.default_exception_handler(context)
 
     loop.set_exception_handler(_suppress_playwright_errors)
 
@@ -603,21 +612,43 @@ async def _race_strategies(
         for name, coro in coros
     ]
 
-    winner_name = None
-    winner_result = None
-
     pending = set(tasks)
+    race_start = time.time()
+
     try:
         while pending:
-            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            # Calculate remaining timeout
+            wait_timeout = None
+            if timeout is not None:
+                elapsed = time.time() - race_start
+                wait_timeout = max(0.1, timeout - elapsed)
+                if elapsed >= timeout:
+                    logger.debug(f"Race timeout ({timeout}s) for {url}")
+                    break
+
+            done, pending = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED, timeout=wait_timeout,
+            )
+
+            if not done:
+                # Timeout on wait — no task completed in time
+                logger.debug(f"Race: wait timeout for {url}")
+                break
+
             for task in done:
                 try:
                     name, result = task.result()
+
+                    # Track best HTML for fallback regardless of validation
+                    html = result[0] if isinstance(result, tuple) else ""
+                    if html and len(html) > len(race.best_html):
+                        race.best_html = html
+                        race.best_result = result
+
                     if validate_fn(result):
-                        winner_name = name
-                        winner_result = result
+                        race.winner_name = name
+                        race.winner_result = result
                         logger.info(f"Race winner: {name} for {url}")
-                        # Cancel all remaining
                         for p in pending:
                             p.cancel()
                         pending = set()
@@ -627,18 +658,13 @@ async def _race_strategies(
                 except (asyncio.CancelledError, Exception) as e:
                     logger.debug(f"Race: strategy exception for {url}: {e}")
     finally:
-        # Ensure all pending tasks are cancelled
         for task in pending:
             task.cancel()
-        # Wait for cancellations to settle (shielded cleanup continues in background)
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
-        # Restore original exception handler
         loop.set_exception_handler(_original_handler)
 
-    if winner_name:
-        return winner_name, winner_result
-    return None
+    return race
 
 
 # ---------------------------------------------------------------------------
@@ -783,6 +809,16 @@ async def scrape_url(
         except Exception as e:
             logger.debug(f"Strategy cache hit attempt failed for {url}: {e}")
 
+    # Helper to accumulate best HTML from race losers
+    def _update_best(race: RaceResult):
+        nonlocal raw_html_best
+        if race.best_html and len(race.best_html) > len(raw_html_best):
+            raw_html_best = race.best_html
+
+    def _validate_browser(result):
+        html = result[0] if isinstance(result, tuple) else result
+        return bool(html) and not _looks_blocked(html)
+
     # === Tier 1: HTTP parallel — race(curl_cffi_multi, httpx) ===
     if not fetched and not needs_browser and starting_tier <= 1:
         tier_start = time.time()
@@ -795,17 +831,13 @@ async def scrape_url(
                 ("httpx", _fetch_with_httpx(url, request.timeout, proxy_url=proxy_url)),
             )
 
-        race_result = await _race_strategies(http_coros, url)
-        if race_result:
-            winner_name, result = race_result
-            html, sc, hdrs = _unpack_http_result(result)
+        race = await _race_strategies(http_coros, url, timeout=15)
+        _update_best(race)
+        if race.success:
+            html, sc, hdrs = _unpack_http_result(race.winner_result)
             raw_html, status_code, response_headers = html, sc, hdrs
             fetched = True
-            # Map winner name to strategy for cache
-            if winner_name == "curl_cffi_multi":
-                winning_strategy = "curl_cffi:chrome124"  # Best guess; exact profile tracked inside
-            else:
-                winning_strategy = winner_name
+            winning_strategy = "curl_cffi:chrome124" if race.winner_name == "curl_cffi_multi" else race.winner_name
             winning_tier = 1
             elapsed_ms = (time.time() - tier_start) * 1000
             await record_strategy_result(url, winning_strategy, 1, True, elapsed_ms)
@@ -822,16 +854,12 @@ async def scrape_url(
             ("firefox_stealth", _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, use_firefox=True)),
         ]
 
-        def _validate_browser(result):
-            html = result[0] if isinstance(result, tuple) else result
-            return bool(html) and not _looks_blocked(html)
-
-        race_result = await _race_strategies(browser_coros, url, validate_fn=_validate_browser)
-        if race_result:
-            winner_name, result = race_result
-            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(result)
+        race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=30)
+        _update_best(race)
+        if race.success:
+            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(race.winner_result)
             fetched = True
-            winning_strategy = winner_name
+            winning_strategy = race.winner_name
             winning_tier = 2
             elapsed_ms = (time.time() - tier_start) * 1000
             await record_strategy_result(url, winning_strategy, 2, True, elapsed_ms)
@@ -848,12 +876,12 @@ async def scrape_url(
             ("advanced_prewarm", _fetch_with_advanced_prewarm(url, request, proxy=proxy_playwright)),
         ]
 
-        race_result = await _race_strategies(heavy_coros, url, validate_fn=_validate_browser)
-        if race_result:
-            winner_name, result = race_result
-            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(result)
+        race = await _race_strategies(heavy_coros, url, validate_fn=_validate_browser, timeout=45)
+        _update_best(race)
+        if race.success:
+            raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(race.winner_result)
             fetched = True
-            winning_strategy = winner_name
+            winning_strategy = race.winner_name
             winning_tier = 3
             elapsed_ms = (time.time() - tier_start) * 1000
             await record_strategy_result(url, winning_strategy, 3, True, elapsed_ms)
@@ -874,13 +902,13 @@ async def scrape_url(
             html = result[0] if isinstance(result, tuple) else result
             return bool(html) and len(html) > 500 and not _looks_blocked(html)
 
-        race_result = await _race_strategies(fallback_coros, url, validate_fn=_validate_fallback)
-        if race_result:
-            winner_name, result = race_result
-            html, sc, hdrs = _unpack_http_result(result)
+        race = await _race_strategies(fallback_coros, url, validate_fn=_validate_fallback, timeout=20)
+        _update_best(race)
+        if race.success:
+            html, sc, hdrs = _unpack_http_result(race.winner_result)
             raw_html, status_code, response_headers = html, sc, hdrs
             fetched = True
-            winning_strategy = winner_name
+            winning_strategy = race.winner_name
             winning_tier = 4
             elapsed_ms = (time.time() - tier_start) * 1000
             await record_strategy_result(url, winning_strategy, 4, True, elapsed_ms)
@@ -1135,11 +1163,16 @@ async def _fetch_with_curl_cffi_multi(
         html, sc, _ = result
         return bool(html) and sc < 400 and not _looks_blocked(html)
 
-    race_result = await _race_strategies(batch1_coros, url, validate_fn=_validate_http)
-    if race_result:
-        name, result = race_result
-        logger.info(f"{name} succeeded for {url} ({len(result[0])} chars)")
-        return result
+    best_html = ""
+    best_result = ("", 0, {})
+
+    race = await _race_strategies(batch1_coros, url, validate_fn=_validate_http, timeout=10)
+    if race.success:
+        logger.info(f"{race.winner_name} succeeded for {url} ({len(race.winner_result[0])} chars)")
+        return race.winner_result
+    if race.best_html and len(race.best_html) > len(best_html):
+        best_html = race.best_html
+        best_result = race.best_result
 
     # Batch 2: race remaining 2 profiles
     batch2 = _CURL_CFFI_PROFILES[3:]
@@ -1149,13 +1182,14 @@ async def _fetch_with_curl_cffi_multi(
             for p in batch2
         ]
 
-        race_result = await _race_strategies(batch2_coros, url, validate_fn=_validate_http)
-        if race_result:
-            name, result = race_result
-            logger.info(f"{name} succeeded for {url} ({len(result[0])} chars)")
-            return result
+        race = await _race_strategies(batch2_coros, url, validate_fn=_validate_http, timeout=10)
+        if race.success:
+            logger.info(f"{race.winner_name} succeeded for {url} ({len(race.winner_result[0])} chars)")
+            return race.winner_result
+        if race.best_html and len(race.best_html) > len(best_html):
+            best_result = race.best_result
 
-    return "", 0, {}
+    return best_result
 
 
 # ---------------------------------------------------------------------------
