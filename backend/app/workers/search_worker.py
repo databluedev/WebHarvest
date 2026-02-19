@@ -17,7 +17,7 @@ def _run_async(coro):
 
 
 @celery_app.task(name="app.workers.search_worker.process_search", bind=True, max_retries=1,
-                 soft_time_limit=600, time_limit=660)
+                 soft_time_limit=3600, time_limit=3660)
 def process_search(self, job_id: str, config: dict):
     """Process a search job — search web, then scrape top results."""
 
@@ -140,12 +140,15 @@ def process_search(self, job_id: str, config: dict):
                     if request.extract and result.markdown:
                         try:
                             async with session_factory() as llm_db:
-                                extract_data = await extract_with_llm(
-                                    db=llm_db,
-                                    user_id=user_id,
-                                    content=result.markdown,
-                                    prompt=request.extract.prompt,
-                                    schema=request.extract.schema_,
+                                extract_data = await asyncio.wait_for(
+                                    extract_with_llm(
+                                        db=llm_db,
+                                        user_id=user_id,
+                                        content=result.markdown,
+                                        prompt=request.extract.prompt,
+                                        schema=request.extract.schema_,
+                                    ),
+                                    timeout=90,
                                 )
                         except Exception as e:
                             logger.warning(f"LLM extraction failed for {sr.url}: {e}")

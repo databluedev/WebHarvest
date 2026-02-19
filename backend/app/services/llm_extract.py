@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from typing import Any
@@ -86,16 +87,19 @@ async def extract_with_llm(
         user_prompt = " ".join(words[:8000]) + "\n\n[Content truncated...]"
 
     try:
-        response = await litellm.acompletion(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            api_key=api_key,
-            response_format={"type": "json_object"} if schema else None,
-            temperature=0.1,
-            max_tokens=4096,
+        response = await asyncio.wait_for(
+            litellm.acompletion(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                api_key=api_key,
+                response_format={"type": "json_object"} if schema else None,
+                temperature=0.1,
+                max_tokens=4096,
+            ),
+            timeout=60,
         )
 
         result_text = response.choices[0].message.content

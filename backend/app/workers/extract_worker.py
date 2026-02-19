@@ -101,13 +101,16 @@ def process_extract(self, job_id: str, config: dict):
                         raise ValueError("Job not found")
 
                     async with session_factory() as db:
-                        extract_result = await extract_with_llm(
-                            db=db,
-                            user_id=user_id,
-                            content=content,
-                            prompt=prompt,
-                            schema=schema,
-                            provider=provider,
+                        extract_result = await asyncio.wait_for(
+                            extract_with_llm(
+                                db=db,
+                                user_id=user_id,
+                                content=content,
+                                prompt=prompt,
+                                schema=schema,
+                                provider=provider,
+                            ),
+                            timeout=90,
                         )
 
                     # Save result

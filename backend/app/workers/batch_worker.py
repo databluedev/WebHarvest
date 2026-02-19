@@ -139,12 +139,15 @@ def process_batch(self, job_id: str, config: dict):
                     if request.extract and result.markdown:
                         try:
                             async with session_factory() as llm_db:
-                                extract_data = await extract_with_llm(
-                                    db=llm_db,
-                                    user_id=user_id,
-                                    content=result.markdown,
-                                    prompt=request.extract.prompt,
-                                    schema=request.extract.schema_,
+                                extract_data = await asyncio.wait_for(
+                                    extract_with_llm(
+                                        db=llm_db,
+                                        user_id=user_id,
+                                        content=result.markdown,
+                                        prompt=request.extract.prompt,
+                                        schema=request.extract.schema_,
+                                    ),
+                                    timeout=90,
                                 )
                         except Exception as e:
                             logger.warning(f"LLM extraction failed for {url}: {e}")
