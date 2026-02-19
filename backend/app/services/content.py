@@ -9,20 +9,59 @@ from markdownify import MarkdownConverter
 
 logger = logging.getLogger(__name__)
 
-# Tags that are always junk
-JUNK_TAGS = {"script", "style", "noscript", "iframe", "svg", "path", "meta", "link"}
+# Tags that are always junk — can't be rendered as meaningful markdown
+JUNK_TAGS = {
+    "script", "style", "noscript", "iframe", "svg", "path", "meta", "link",
+    "video", "audio", "canvas", "object", "embed", "source", "track",
+    "dialog", "template", "select", "option", "datalist",
+}
 
-# Selectors for elements that are typically navigation/boilerplate
+# Selectors ALWAYS removed — these are never useful page content
 BOILERPLATE_SELECTORS = [
-    "nav:not([role='main'])",
-    "header nav",
-    ".cookie-banner",
-    ".cookie-popup",
-    "#cookie-consent",
-    ".gdpr-banner",
+    # Navigation — always boilerplate (mega-menus, site nav, etc.)
+    "nav",
+    "[role='navigation']",
+    # Cookie/consent/GDPR banners
+    ".cookie-banner", ".cookie-popup", "#cookie-consent", ".gdpr-banner",
+    ".cookie-notice", "#cookie-notice", ".consent-banner",
+    "[class*='cookie-consent']", "[class*='cookie-banner']",
+    "[class*='cookie-notice']", "[class*='consent-']",
+    # Modals/popups/overlays
+    "[role='dialog']", "[role='alertdialog']",
+    ".modal", ".popup", ".overlay-content",
+    "[class*='-modal']", "[class*='modal-']",
+    # Video/media player UI (controls, settings, captions)
+    ".vjs-control-bar", ".vjs-menu", ".vjs-text-track-settings",
+    ".vjs-modal-dialog", "[class*='video-player']",
+    "[class*='caption-window']", "[class*='caption-settings']",
+    "[class*='player-controls']",
+    # Accessibility/screen-reader-only (not visible content)
+    ".skip-link", ".skip-nav", ".sr-only", ".visually-hidden",
+    ".screen-reader-only", "[class*='skip-to']",
+    # Social sharing
+    ".share-buttons", ".social-share", "[class*='social-links']",
+    "[class*='share-bar']", "[class*='share-buttons']",
+    # Search forms
+    "[role='search']",
+    # Announcement/promo bars
+    ".announcement-bar", ".promo-bar", ".top-banner", ".alert-bar",
+    # Newsletter signup
+    "[class*='newsletter']", "[class*='subscribe-form']",
+    "[class*='email-signup']",
+    # Back to top
+    ".back-to-top", "#back-to-top", "[class*='scroll-to-top']",
+    # Breadcrumbs
+    ".breadcrumb", ".breadcrumbs", "[class*='breadcrumb']",
+    # Pagination
+    ".pagination", ".pager", "[class*='pagination']",
+    # Sidebar elements that are typically ads/promos
+    ".sidebar-ad", "[class*='ad-slot']", "[class*='advertisement']",
+    # Chat widgets
+    "[class*='chat-widget']", "[class*='live-chat']",
+    "#hubspot-messages-iframe-container",
 ]
 
-# Selectors for elements that should ALWAYS be kept (even if they look like nav)
+# Selectors for elements that should ALWAYS be kept
 PRESERVE_SELECTORS = [
     "main",
     "article",
@@ -31,10 +70,8 @@ PRESERVE_SELECTORS = [
     "#content",
     ".post",
     ".entry",
-    ".scenario",
-    ".card",
     ".product",
-    ".review",
+    ".product-detail",
 ]
 
 
@@ -84,39 +121,73 @@ class WebHarvestConverter(MarkdownConverter):
         return f"\n```{lang}\n{text}\n```\n"
 
 
+def _is_inside_main_content(el: Tag) -> bool:
+    """Check if element is inside a main content container (main, article, etc.)."""
+    for parent in el.parents:
+        if not isinstance(parent, Tag):
+            continue
+        tag = parent.name
+        if tag in ("main", "article"):
+            return True
+        role = parent.get("role", "")
+        if role == "main":
+            return True
+        el_id = parent.get("id", "")
+        if el_id in ("content", "main-content"):
+            return True
+        classes = parent.get("class", [])
+        if any(c in ("content", "main-content", "post", "entry", "product", "product-detail") for c in classes):
+            return True
+    return False
+
+
 def extract_main_content(html: str, url: str = "") -> str:
     """
-    Multi-pass content extraction that captures ALL meaningful content.
+    Multi-pass content extraction that produces clean, Firecrawl-quality output.
 
     Strategy:
-    1. Clean junk tags (script, style, etc.)
-    2. Try to find explicit main content container
-    3. If no container found, use smart body extraction
-    4. Compare trafilatura result - use whichever is more complete
-    5. Never throw away card grids, structured data, or link-rich content
+    1. Clean junk tags (script, style, video, audio, etc.)
+    2. Aggressively remove ALL boilerplate (nav, modals, cookie banners, etc.)
+    3. Remove hidden/invisible elements
+    4. Try to find explicit main content container
+    5. If no container found, use aggressive body extraction
+    6. Compare trafilatura result - use whichever is more complete
     """
     soup = BeautifulSoup(html, "lxml")
 
-    # Step 1: Remove definite junk
+    # Step 1: Remove definite junk tags
     for tag in soup.find_all(list(JUNK_TAGS)):
         tag.decompose()
 
-    # Step 2: Remove obvious boilerplate (but be conservative)
+    # Step 2: Remove ALL boilerplate — no text-length mercy
     for selector in BOILERPLATE_SELECTORS:
-        for el in soup.select(selector):
-            # Don't remove if it contains substantial content
-            text_len = len(el.get_text(strip=True))
-            if text_len < 200:
+        try:
+            for el in soup.select(selector):
+                # Protect elements inside main/article content containers
+                if _is_inside_main_content(el):
+                    continue
                 el.decompose()
+        except Exception:
+            pass
 
-    # Step 3: Try to find main content container
+    # Step 3: Remove hidden/invisible elements
+    _remove_hidden_elements(soup)
+
+    # Step 4: Remove form elements (search bars, dropdowns, inputs)
+    for form in soup.find_all("form"):
+        # Keep forms that contain substantial text (contact forms, etc.)
+        form_text = form.get_text(strip=True)
+        if len(form_text) < 300:
+            form.decompose()
+
+    # Step 5: Try to find main content container
     main_content = _find_main_container(soup)
 
-    # Step 4: Smart body extraction as fallback
+    # Step 6: Aggressive body extraction as fallback
     if not main_content:
         main_content = _smart_body_extract(soup)
 
-    # Step 5: Compare with trafilatura and pick the more complete result
+    # Step 7: Compare with trafilatura and pick the more complete result
     bs4_html = str(main_content) if main_content else ""
     bs4_text_len = len(BeautifulSoup(bs4_html, "lxml").get_text(strip=True)) if bs4_html else 0
 
@@ -139,7 +210,7 @@ def extract_main_content(html: str, url: str = "") -> str:
 
     traf_text_len = len(BeautifulSoup(traf_html, "lxml").get_text(strip=True)) if traf_html else 0
 
-    # Pick whichever captured MORE content (the key insight - trafilatura is often too aggressive)
+    # Pick whichever captured MORE content
     if bs4_text_len > traf_text_len * 1.2:
         logger.debug(f"Using BS4 extraction ({bs4_text_len} chars > trafilatura {traf_text_len} chars)")
         return bs4_html
@@ -150,9 +221,30 @@ def extract_main_content(html: str, url: str = "") -> str:
         return bs4_html or str(soup.body) if soup.body else str(soup)
 
 
+def _remove_hidden_elements(soup: BeautifulSoup) -> None:
+    """Remove elements that are hidden/invisible via inline styles or attributes."""
+    # Elements with display:none or visibility:hidden in inline style
+    for el in soup.find_all(style=True):
+        style = el.get("style", "")
+        if "display:none" in style.replace(" ", "") or "display: none" in style:
+            el.decompose()
+            continue
+        if "visibility:hidden" in style.replace(" ", "") or "visibility: hidden" in style:
+            el.decompose()
+
+    # Elements with hidden attribute
+    for el in soup.find_all(attrs={"hidden": True}):
+        el.decompose()
+
+    # aria-hidden elements (usually decorative)
+    for el in soup.find_all(attrs={"aria-hidden": "true"}):
+        # Only remove if it doesn't contain substantial text
+        if len(el.get_text(strip=True)) < 100:
+            el.decompose()
+
+
 def _find_main_container(soup: BeautifulSoup) -> Tag | None:
     """Find the main content container using semantic HTML and heuristics."""
-    # Try semantic containers first
     for selector in ["main", "article", "[role='main']", "#content", "#main-content", ".main-content"]:
         el = soup.select_one(selector)
         if el and len(el.get_text(strip=True)) > 200:
@@ -163,22 +255,25 @@ def _find_main_container(soup: BeautifulSoup) -> Tag | None:
 
 def _smart_body_extract(soup: BeautifulSoup) -> Tag | None:
     """
-    Extract the body, removing only minimal boilerplate.
-    Much less aggressive than trafilatura - preserves cards, grids, structured content.
+    Extract body content aggressively stripping chrome (header, footer, aside).
+    If we got here, there's no <main> or <article>, so be more aggressive.
     """
     body = soup.find("body")
     if not body:
         return None
 
-    # Only remove clearly identified header/footer if they're small relative to body
-    body_text_len = len(body.get_text(strip=True))
+    # Always remove top-level header — it's site chrome, not content
+    for el in body.find_all("header", recursive=False):
+        el.decompose()
 
-    for tag_name in ["header", "footer"]:
-        for el in body.find_all(tag_name, recursive=False):
-            el_text_len = len(el.get_text(strip=True))
-            # Only remove if it's less than 15% of body content
-            if el_text_len < body_text_len * 0.15:
-                el.decompose()
+    # Always remove top-level footer — site links, legal, etc.
+    for el in body.find_all("footer", recursive=False):
+        el.decompose()
+
+    # Remove asides that are small (sidebars, ad blocks)
+    for el in body.find_all("aside", recursive=False):
+        if len(el.get_text(strip=True)) < 500:
+            el.decompose()
 
     return body
 
@@ -209,6 +304,7 @@ def html_to_markdown(html: str) -> str:
     """
     Convert HTML to clean GitHub Flavored Markdown.
     Uses custom converter that preserves links, images, code blocks, and structure.
+    Includes aggressive post-processing for Firecrawl-quality output.
     """
     converter = WebHarvestConverter(
         heading_style="ATX",
@@ -218,16 +314,80 @@ def html_to_markdown(html: str) -> str:
     )
     markdown = converter.convert(html)
 
-    # Post-processing: clean up but preserve structure
-    # Collapse 3+ newlines into 2
+    # === Post-processing pipeline for clean output ===
+
+    # 1. Collapse 3+ newlines into 2
     markdown = re.sub(r"\n{3,}", "\n\n", markdown)
-    # Remove trailing whitespace on lines
+    # 2. Remove trailing whitespace on lines
     markdown = re.sub(r"[ \t]+\n", "\n", markdown)
-    # Remove excessive spaces (but preserve indentation)
+    # 3. Remove excessive spaces (but preserve indentation)
     markdown = re.sub(r"([^\n]) {3,}", r"\1 ", markdown)
+
+    # 4. Remove navigation-like link clusters (5+ consecutive short link-only lines)
+    markdown = _remove_link_clusters(markdown)
+
+    # 5. Deduplicate repeated content (carousel slides, repeated sections)
+    markdown = _deduplicate_content(markdown)
+
+    # 6. Remove empty headings and orphaned markers
+    markdown = re.sub(r"^#{1,6}\s*$", "", markdown, flags=re.MULTILINE)
+    # Remove lines that are just dashes, pipes, or bullets with no content
+    markdown = re.sub(r"^[\s\-\|*>]+$", "", markdown, flags=re.MULTILINE)
+
+    # 7. Final collapse of excessive newlines
+    markdown = re.sub(r"\n{3,}", "\n\n", markdown)
     markdown = markdown.strip()
 
     return markdown
+
+
+def _remove_link_clusters(markdown: str) -> str:
+    """Remove clusters of 5+ consecutive lines that are just short links (nav menus)."""
+    lines = markdown.split("\n")
+    result = []
+    link_cluster = []
+
+    # Pattern: line that is primarily a markdown link with short text
+    link_line_re = re.compile(r"^\s*[-*]?\s*\[.{1,60}\]\(.*\)\s*$")
+
+    for line in lines:
+        if link_line_re.match(line):
+            link_cluster.append(line)
+        else:
+            if len(link_cluster) >= 5:
+                # This was a nav-like link cluster — drop it
+                link_cluster = []
+            else:
+                # Short cluster — keep it (could be a legit list of links)
+                result.extend(link_cluster)
+                link_cluster = []
+            result.append(line)
+
+    # Handle trailing cluster
+    if len(link_cluster) < 5:
+        result.extend(link_cluster)
+
+    return "\n".join(result)
+
+
+def _deduplicate_content(markdown: str) -> str:
+    """Remove duplicate paragraphs/sections (e.g., repeated carousel slides)."""
+    blocks = re.split(r"\n{2,}", markdown)
+    seen = set()
+    unique_blocks = []
+
+    for block in blocks:
+        # Normalize for comparison: lowercase, collapse whitespace
+        normalized = re.sub(r"\s+", " ", block.strip().lower())
+        # Skip very short blocks (empty lines, single words)
+        if len(normalized) < 20:
+            unique_blocks.append(block)
+            continue
+        if normalized not in seen:
+            seen.add(normalized)
+            unique_blocks.append(block)
+
+    return "\n\n".join(unique_blocks)
 
 
 def extract_links(html: str, base_url: str) -> list[str]:
