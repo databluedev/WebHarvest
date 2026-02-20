@@ -1134,14 +1134,24 @@ async def scrape_url(
 
         if crawl_session:
             # Use persistent CrawlSession — no context creation overhead
-            # Hard sites never reach here (crawler skips session for them)
             browser_coros = [
                 (
                     "chromium_stealth",
                     _fetch_with_browser_session(url, request, crawl_session),
                 ),
             ]
-            t2_timeout = 30 if hard_site else 20
+            # For hard sites, also race a fresh browser — the crawl session may be
+            # flagged by anti-bot systems, so a standalone browser gives a second chance.
+            if hard_site:
+                browser_coros.append(
+                    (
+                        "chromium_stealth_fresh",
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright),
+                    ),
+                )
+                t2_timeout = 35
+            else:
+                t2_timeout = 20
         else:
             browser_coros = [
                 (
@@ -2908,14 +2918,23 @@ async def scrape_url_fetch_only(
             return bool(html) and not _looks_blocked(html)
 
         if crawl_session:
-            # Hard sites never reach here (crawler skips session for them)
             browser_coros = [
                 (
                     "chromium_stealth",
                     _fetch_with_browser_session(url, request, crawl_session),
                 )
             ]
-            t2_timeout = 30 if hard_site else 20
+            # For hard sites, also race a fresh browser alongside the session
+            if hard_site:
+                browser_coros.append(
+                    (
+                        "chromium_stealth_fresh",
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright),
+                    ),
+                )
+                t2_timeout = 35
+            else:
+                t2_timeout = 20
         else:
             browser_coros = [
                 (
