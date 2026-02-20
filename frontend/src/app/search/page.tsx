@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
+import { ModeSwitcher } from "@/components/layout/mode-switcher";
+import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,8 +93,14 @@ export default function SearchPage() {
       <Sidebar />
       <main className="flex-1 overflow-auto bg-background">
         <MobileMenuButton />
-        <div className="p-8 max-w-4xl mx-auto">
-          <div className="mb-8 animate-float-in">
+        <div className="min-h-screen flex flex-col">
+        <div className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
+          {/* Mode Switcher */}
+          <div className="pt-4 pb-6 animate-float-in">
+            <ModeSwitcher />
+          </div>
+
+          <div className="mb-8 animate-float-in" style={{ animationDelay: "0.05s" }}>
             <h1 className="text-3xl font-bold">Search & Scrape</h1>
             <p className="text-muted-foreground mt-1">
               Search the web and automatically scrape the top results. Get structured content from any search query.
@@ -349,6 +357,8 @@ export default function SearchPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
+        <Footer />
         </div>
       </main>
     </div>

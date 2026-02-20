@@ -3,23 +3,32 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
+import { ModeSwitcher } from "@/components/layout/mode-switcher";
+import { Footer } from "@/components/layout/footer";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import {
   Globe,
   Search,
   Map,
+  Layers,
   ArrowRight,
   Clock,
   FileText,
-  Activity,
-  Shield,
-  Cpu,
-  Layers,
-  Zap,
-  Lock,
-  Play,
+  Code,
+  Link2,
+  Camera,
+  Braces,
+  List,
+  Image as ImageIcon,
+  ExternalLink,
+  Loader2,
+  Settings2,
+  LayoutGrid,
+  FileCode,
+  ChevronDown,
+  Radar,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -43,13 +52,18 @@ function getJobUrl(job: any): string {
   return "";
 }
 
-function getStatusVariant(status: string): "success" | "destructive" | "warning" | "secondary" {
-  switch (status) {
-    case "completed": return "success";
-    case "failed": return "destructive";
-    case "running": return "warning";
-    default: return "secondary";
+function getDomain(url: string): string {
+  try {
+    const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
+    return parsed.hostname;
+  } catch {
+    return url;
   }
+}
+
+function getFavicon(url: string): string {
+  const domain = getDomain(url);
+  return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
 }
 
 function getTypeIcon(type: string) {
@@ -57,72 +71,50 @@ function getTypeIcon(type: string) {
     case "scrape": return Search;
     case "crawl": return Globe;
     case "map": return Map;
-    case "search": return Search;
+    case "search": return Radar;
     case "batch": return Layers;
     default: return FileText;
   }
 }
 
-function timeAgo(dateStr: string): string {
-  const now = new Date();
-  const date = new Date(dateStr);
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function getTypeColor(type: string) {
+  switch (type) {
+    case "scrape": return "text-orange-400";
+    case "crawl": return "text-blue-400";
+    case "map": return "text-violet-400";
+    case "search": return "text-emerald-400";
+    case "batch": return "text-cyan-400";
+    default: return "text-muted-foreground";
+  }
 }
 
-const features = [
-  { icon: Cpu, label: "5-Tier engine" },
-  { icon: Shield, label: "Stealth mode" },
-  { icon: Lock, label: "Self-hosted" },
-];
+function formatDate(dateStr: string): { date: string; time: string } {
+  const d = new Date(dateStr);
+  return {
+    date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+  };
+}
 
-const metrics = [
-  { label: "Engine", value: "5-Tier", desc: "Parallel extraction" },
-  { label: "Strategies", value: "4+", desc: "Per page fallback" },
-  { label: "License", value: "OSS", desc: "No vendor lock-in" },
-];
+// Format badge icons
+const formatIcons: Record<string, { icon: any; label: string }> = {
+  markdown: { icon: FileText, label: "Markdown" },
+  html: { icon: Code, label: "HTML" },
+  links: { icon: Link2, label: "Links" },
+  screenshot: { icon: Camera, label: "Screenshot" },
+  structured_data: { icon: Braces, label: "JSON" },
+  headings: { icon: List, label: "Summary" },
+  images: { icon: ImageIcon, label: "Images" },
+};
 
-const actions = [
-  {
-    href: "/scrape",
-    icon: Search,
-    title: "Scrape",
-    subtitle: "Single Page",
-    desc: "Extract content from any URL with JS rendering and stealth mode",
-    color: "text-emerald-400",
-    bg: "bg-emerald-500/8",
-  },
-  {
-    href: "/crawl",
-    icon: Globe,
-    title: "Crawl",
-    subtitle: "Full Website",
-    desc: "Recursively crawl entire sites with BFS and persistent sessions",
-    color: "text-blue-400",
-    bg: "bg-blue-500/8",
-  },
-  {
-    href: "/map",
-    icon: Map,
-    title: "Map",
-    subtitle: "URL Discovery",
-    desc: "Fast sitemap discovery and URL mapping without content extraction",
-    color: "text-violet-400",
-    bg: "bg-violet-500/8",
-  },
-];
-
-export default function Dashboard() {
+export default function HomePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
   const [recentJobs, setRecentJobs] = useState<any[]>([]);
+  const [selectedFormat, setSelectedFormat] = useState("markdown");
+  const [showFormatDropdown, setShowFormatDropdown] = useState(false);
 
   useEffect(() => {
     const token = api.getToken();
@@ -131,8 +123,43 @@ export default function Dashboard() {
       return;
     }
     api.getMe().then(setUser).catch(() => router.push("/auth/login"));
-    api.getUsageHistory({ per_page: 6 }).then((res) => setRecentJobs(res.jobs)).catch(() => {});
+    api
+      .getUsageHistory({ per_page: 9 })
+      .then((res) => setRecentJobs(res.jobs))
+      .catch(() => {});
   }, [router]);
+
+  const handleScrape = async () => {
+    if (!url.trim()) return;
+    setLoading(true);
+    try {
+      const fullUrl = url.startsWith("http") ? url : `https://${url}`;
+      const res = await api.scrape({
+        url: fullUrl,
+        formats: [selectedFormat],
+        only_main_content: true,
+      });
+      if (res.job_id) {
+        router.push(`/scrape/${res.job_id}`);
+      } else if (res.data) {
+        // Synchronous result — go to scrape page with result
+        router.push("/scrape");
+      }
+    } catch {
+      router.push("/scrape");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGetCode = () => {
+    const fullUrl = url.startsWith("http") ? url : `https://${url}`;
+    const code = `curl -X POST ${window.location.origin}/v1/scrape \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"url": "${fullUrl || "https://example.com"}", "formats": ["${selectedFormat}"]}'`;
+    navigator.clipboard.writeText(code);
+  };
 
   if (!user) return null;
 
@@ -142,230 +169,283 @@ export default function Dashboard() {
         <Sidebar />
         <main className="flex-1 overflow-auto bg-background">
           <MobileMenuButton />
-          <div className="p-6 lg:p-8 md:p-14 max-w-5xl mx-auto">
-
-            {/* Hero Section */}
-            <section className="mb-16 animate-float-in">
-              {/* Pill badge */}
-              <div className="bg-muted/50 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 mb-6 border border-border/30">
-                <div className="h-5 w-5 grid place-items-center rounded-full bg-emerald-500/10 text-emerald-400">
-                  <Shield className="h-3 w-3" />
-                </div>
-                <span className="text-[11px] text-foreground/50 font-medium">Open source platform</span>
+          <div className="min-h-screen flex flex-col">
+            <div className="flex-1 p-6 lg:p-8 max-w-6xl mx-auto w-full">
+              {/* Mode Switcher */}
+              <div className="pt-4 pb-8 animate-float-in">
+                <ModeSwitcher />
               </div>
 
-              {/* Large heading */}
-              <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[0.92]">
-                {user.name ? "Welcome back," : "Web scraping"}
-                <br />
-                <span className="text-foreground">
-                  {user.name ? `${user.name}.` : "made simple."}
-                </span>
-              </h1>
-
-              {/* Description */}
-              <p className="text-sm sm:text-base text-muted-foreground max-w-lg mt-6 leading-relaxed font-light">
-                A self-hosted web crawling platform with 5-tier parallel extraction,
-                stealth browsing, and AI-powered content analysis.
-              </p>
-
-              {/* Feature chips */}
-              <div className="mt-6 flex flex-wrap gap-2">
-                {features.map((f) => (
-                  <div
-                    key={f.label}
-                    className="bg-muted/50 inline-flex items-center gap-2 rounded-full px-3 py-1.5 border border-border/20 hover:border-border/40 transition-colors cursor-default"
-                  >
-                    <f.icon className="h-3.5 w-3.5 text-muted-foreground/60" />
-                    <span className="text-[11px] text-foreground/50">{f.label}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* CTAs */}
-              <div className="flex flex-col sm:flex-row gap-3 mt-8">
-                <Link href="/scrape">
-                  <Button variant="default" size="lg" className="rounded-lg px-6 gap-2 hover:-translate-y-0.5 transition-all">
-                    <Play className="h-4 w-4" />
-                    Start scraping
-                  </Button>
-                </Link>
-                <Link href="/api-keys">
-                  <Button variant="outline" size="lg" className="rounded-lg px-6 gap-2 hover:-translate-y-0.5 transition-all">
-                    <ArrowRight className="h-4 w-4" />
-                    Get API key
-                  </Button>
-                </Link>
-              </div>
-
-              {/* Divider */}
-              <div className="mt-10 h-px w-full bg-gradient-to-r from-transparent via-border/50 to-transparent" />
-
-              {/* Mini metrics */}
-              <div className="mt-6 grid grid-cols-3 gap-3 max-w-md">
-                {metrics.map((m) => (
-                  <div key={m.label} className="rounded-lg border border-border/50 bg-card p-4 hover:bg-muted/50 transition-colors">
-                    <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/50">{m.label}</div>
-                    <div className="mt-1 text-lg font-bold tracking-tight">{m.value}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Action Cards */}
-            <section className="mb-12">
-              <div className="grid gap-3 md:grid-cols-3 stagger-children">
-                {actions.map((item) => (
-                  <Link key={item.href} href={item.href}>
-                    <div className="group rounded-lg border border-border/50 bg-card p-5 hover:bg-muted/50 transition-colors cursor-pointer h-full">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className={`h-9 w-9 rounded-xl ${item.bg} grid place-items-center`}>
-                          <item.icon className={`h-4 w-4 ${item.color}`} />
-                        </div>
-                        <ArrowRight className="h-4 w-4 text-foreground/15 group-hover:text-foreground/40 group-hover:translate-x-0.5 transition-all" />
-                      </div>
-                      <h3 className="font-semibold tracking-tight">{item.title}</h3>
-                      <p className="text-xs text-muted-foreground/70 mt-0.5">{item.subtitle}</p>
-                      <p className="text-[11px] text-muted-foreground/50 mt-2 leading-relaxed">{item.desc}</p>
+              {/* Decorative grid lines (subtle) */}
+              <div className="relative">
+                {/* URL Input Section */}
+                <section className="max-w-2xl mx-auto mb-12 animate-float-in" style={{ animationDelay: "0.05s" }}>
+                  <div className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-4 shadow-lg shadow-black/5">
+                    {/* URL Input */}
+                    <div className="flex items-center gap-0 rounded-lg bg-background border border-border/50 px-3 h-11 mb-3">
+                      <span className="text-sm text-muted-foreground/50 shrink-0 select-none">
+                        https://
+                      </span>
+                      <input
+                        type="text"
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && !loading && handleScrape()}
+                        placeholder="example.com"
+                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/30 ml-1"
+                      />
                     </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
 
-            {/* Recent Activity */}
-            {recentJobs.length > 0 && (
-              <section className="mb-12 animate-float-in" style={{ animationDelay: "0.15s" }}>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-sm font-medium flex items-center gap-2 text-foreground/70">
-                    <Activity className="h-4 w-4 text-muted-foreground/50" />
-                    Recent activity
-                  </h2>
-                  <Link href="/jobs">
-                    <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground/60 text-xs">
-                      View all
-                      <ArrowRight className="h-3 w-3" />
-                    </Button>
-                  </Link>
-                </div>
-                <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 stagger-children">
-                  {recentJobs.map((job) => {
-                    const Icon = getTypeIcon(job.type);
-                    const jobUrl = getJobUrl(job);
-                    return (
-                      <Link key={job.id} href={getJobDetailPath(job)}>
-                        <div className="rounded-lg border border-border/50 bg-card p-4 hover:bg-muted/50 transition-colors cursor-pointer h-full">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5">
-                              <Badge variant="outline" className="capitalize text-[10px] gap-1">
-                                <Icon className="h-3 w-3" />
-                                {job.type}
-                              </Badge>
-                              <Badge variant={getStatusVariant(job.status)} className="text-[10px]">
-                                {job.status}
-                              </Badge>
-                            </div>
-                            <span className="text-[10px] text-muted-foreground/50 flex items-center gap-1">
-                              <Clock className="h-2.5 w-2.5" />
-                              {timeAgo(job.created_at)}
-                            </span>
-                          </div>
-                          {jobUrl && (
-                            <p className="text-xs font-mono truncate text-foreground/60" title={jobUrl}>
-                              {jobUrl}
-                            </p>
-                          )}
-                          {job.total_pages > 0 && (
-                            <div className="flex items-center gap-2 mt-2">
-                              <div className="flex-1 h-1 bg-foreground/5 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-primary/40 rounded-full transition-all duration-500"
-                                  style={{ width: `${Math.min(100, (job.completed_pages / job.total_pages) * 100)}%` }}
-                                />
-                              </div>
-                              <span className="text-[10px] font-mono text-muted-foreground/50">
-                                {job.completed_pages}/{job.total_pages}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
+                    {/* Controls Row */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        {/* Settings icon */}
+                        <button
+                          onClick={() => router.push("/scrape")}
+                          className="h-8 w-8 rounded-md bg-muted/50 grid place-items-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
+                          title="Advanced settings"
+                        >
+                          <Settings2 className="h-3.5 w-3.5" />
+                        </button>
+                        {/* Grid icon */}
+                        <button
+                          onClick={() => router.push("/batch")}
+                          className="h-8 w-8 rounded-md bg-muted/50 grid place-items-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
+                          title="Batch scrape"
+                        >
+                          <LayoutGrid className="h-3.5 w-3.5" />
+                        </button>
+                        {/* File icon */}
+                        <button
+                          onClick={() => router.push("/docs")}
+                          className="h-8 w-8 rounded-md bg-muted/50 grid place-items-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
+                          title="API Docs"
+                        >
+                          <FileCode className="h-3.5 w-3.5" />
+                        </button>
 
-            {/* Bottom Grid: Capabilities + Quickstart */}
-            <section className="animate-float-in" style={{ animationDelay: "0.25s" }}>
-              <div className="grid gap-3 md:grid-cols-2">
-                {/* Capabilities */}
-                <div className="rounded-lg border border-border/50 bg-card p-6">
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-4 text-foreground/80">
-                    <Zap className="h-4 w-4 text-emerald-400" />
-                    Capabilities
-                  </h3>
-                  <div className="space-y-2.5">
-                    {[
-                      { label: "Bring Your Own Key", desc: "Use your own OpenAI, Anthropic, or Groq keys", tag: "BYOK" },
-                      { label: "5-Tier Parallel Engine", desc: "HTTP race, browser stealth, and archive fallback", tag: "FAST" },
-                      { label: "Open Source", desc: "Self-hosted, no limits, no vendor lock-in", tag: "OSS" },
-                    ].map((item) => (
-                      <div key={item.tag} className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-foreground/[0.02] transition-colors">
-                        <Badge variant="outline" className="text-[10px] mt-0.5 text-emerald-400 border-emerald-500/15">
-                          {item.tag}
-                        </Badge>
-                        <div>
-                          <p className="text-xs font-medium">{item.label}</p>
-                          <p className="text-[11px] text-muted-foreground/50 mt-0.5">{item.desc}</p>
+                        {/* Format Dropdown */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowFormatDropdown(!showFormatDropdown)}
+                            className="flex items-center gap-1.5 h-8 rounded-md bg-muted/50 px-2.5 text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            <span>Format: {selectedFormat.charAt(0).toUpperCase() + selectedFormat.slice(1)}</span>
+                            <ChevronDown className="h-3 w-3" />
+                          </button>
+                          {showFormatDropdown && (
+                            <div className="absolute top-10 left-0 z-50 w-44 rounded-lg border border-border/60 bg-card shadow-xl p-1 animate-scale-in">
+                              {["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"].map(
+                                (fmt) => (
+                                  <button
+                                    key={fmt}
+                                    onClick={() => {
+                                      setSelectedFormat(fmt);
+                                      setShowFormatDropdown(false);
+                                    }}
+                                    className={`flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-[12px] transition-colors ${
+                                      selectedFormat === fmt
+                                        ? "bg-primary/10 text-primary"
+                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    }`}
+                                  >
+                                    {(() => {
+                                      const FIcon = formatIcons[fmt]?.icon;
+                                      return FIcon ? <FIcon className="h-3 w-3" /> : null;
+                                    })()}
+                                    {fmt.charAt(0).toUpperCase() + fmt.slice(1).replace("_", " ")}
+                                  </button>
+                                )
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Quickstart */}
-                <div className="rounded-lg border border-border/50 bg-card p-6">
-                  <h3 className="text-sm font-medium flex items-center gap-2 mb-4 text-foreground/80">
-                    <Play className="h-4 w-4 text-blue-400" />
-                    Quickstart
-                  </h3>
-                  <div className="space-y-1">
-                    {[
-                      { step: "01", label: "Generate an API key", desc: "For programmatic access", href: "/api-keys" },
-                      { step: "02", label: "Add your LLM key", desc: "For AI-powered extraction", href: "/settings" },
-                      { step: "03", label: "Start scraping", desc: "Try the scrape playground", href: "/scrape" },
-                    ].map((item) => (
-                      <Link key={item.step} href={item.href}>
-                        <div className="flex items-center justify-between p-2.5 rounded-xl hover:bg-foreground/[0.02] transition-colors group">
-                          <div className="flex items-center gap-3">
-                            <span className="text-primary/70 font-mono text-xs font-bold">{item.step}</span>
-                            <div>
-                              <p className="text-xs font-medium">{item.label}</p>
-                              <p className="text-[11px] text-muted-foreground/40">{item.desc}</p>
-                            </div>
-                          </div>
-                          <ArrowRight className="h-3.5 w-3.5 text-foreground/15 group-hover:text-foreground/40 transition-colors" />
-                        </div>
+                      <div className="flex items-center gap-2">
+                        {/* Get Code */}
+                        <button
+                          onClick={handleGetCode}
+                          className="flex items-center gap-1.5 h-8 rounded-md px-3 text-[12px] font-medium text-muted-foreground hover:text-foreground border border-border/50 hover:bg-muted transition-colors"
+                        >
+                          <Code className="h-3.5 w-3.5" />
+                          Get code
+                        </button>
+
+                        {/* Start Scraping */}
+                        <button
+                          onClick={handleScrape}
+                          disabled={loading || !url.trim()}
+                          className="flex items-center gap-1.5 h-8 rounded-md px-4 text-[12px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm shadow-primary/20"
+                        >
+                          {loading ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <>Start scraping</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* No format warning */}
+                  {!selectedFormat && (
+                    <p className="text-[11px] text-amber-400/70 mt-2 text-center">
+                      No format selected — only metadata will be returned
+                    </p>
+                  )}
+                </section>
+
+                {/* Recent Runs */}
+                {recentJobs.length > 0 && (
+                  <section className="animate-float-in" style={{ animationDelay: "0.1s" }}>
+                    <div className="flex items-center justify-between mb-5">
+                      <h2 className="text-lg font-semibold tracking-tight">Recent Runs</h2>
+                      <Link
+                        href="/jobs"
+                        className="text-[12px] text-muted-foreground/60 hover:text-foreground transition-colors flex items-center gap-1"
+                      >
+                        View all
+                        <ArrowRight className="h-3 w-3" />
                       </Link>
-                    ))}
-                  </div>
+                    </div>
 
-                  <div className="mt-4 p-3 rounded-xl bg-foreground/[0.02] border border-border/30">
-                    <p className="text-[11px] font-mono text-foreground/40">
-                      <span className="text-primary/60">$</span> curl -X POST /api/v1/scrape \
+                    {/* Scrollbar indicator dots */}
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="flex-1 h-[2px] rounded-full bg-primary/30" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/20" />
+                      <div className="flex-1 h-[2px] rounded-full bg-muted-foreground/10" />
+                    </div>
+
+                    {/* Cards Grid */}
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
+                      {recentJobs.map((job) => {
+                        const jobUrl = getJobUrl(job);
+                        const domain = getDomain(jobUrl);
+                        const TypeIcon = getTypeIcon(job.type);
+                        const typeColor = getTypeColor(job.type);
+                        const { date, time } = job.created_at
+                          ? formatDate(job.created_at)
+                          : { date: "", time: "" };
+                        const jobFormats: string[] = job.config?.formats || [];
+
+                        return (
+                          <Link key={job.id} href={getJobDetailPath(job)}>
+                            <div className="rounded-xl border border-border/40 bg-card hover:bg-card/80 hover:border-border/60 transition-all duration-200 cursor-pointer group">
+                              {/* Domain Header */}
+                              <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border/30">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {jobUrl && !jobUrl.includes("URLs") && (
+                                    <img
+                                      src={getFavicon(jobUrl)}
+                                      alt=""
+                                      className="h-4 w-4 rounded-sm shrink-0"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = "none";
+                                      }}
+                                    />
+                                  )}
+                                  <span className="text-sm font-medium truncate">
+                                    {domain || "No URL"}
+                                  </span>
+                                </div>
+                                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors shrink-0" />
+                              </div>
+
+                              {/* Details */}
+                              <div className="px-4 py-3 space-y-2.5">
+                                {/* Endpoint */}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[12px] text-muted-foreground/50">Endpoint</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <TypeIcon className={`h-3.5 w-3.5 ${typeColor}`} />
+                                    <span className="text-[12px] font-medium capitalize">{job.type}</span>
+                                  </div>
+                                </div>
+
+                                {/* Status */}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[12px] text-muted-foreground/50">Status</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <div
+                                      className={`h-2 w-2 rounded-full ${
+                                        job.status === "completed"
+                                          ? "bg-emerald-400"
+                                          : job.status === "failed"
+                                          ? "bg-red-400"
+                                          : job.status === "running"
+                                          ? "bg-amber-400 animate-pulse"
+                                          : "bg-muted-foreground/40"
+                                      }`}
+                                    />
+                                    <span className="text-[12px] font-medium capitalize">
+                                      {job.status === "completed" ? "Success" : job.status}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Started */}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[12px] text-muted-foreground/50">Started</span>
+                                  <div className="text-right">
+                                    <span className="text-[12px] font-medium">{date}</span>
+                                    {time && (
+                                      <span className="text-[11px] text-muted-foreground/40 ml-1.5">
+                                        {time}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Formats */}
+                                {jobFormats.length > 0 && (
+                                  <div className="pt-1">
+                                    <span className="text-[12px] text-muted-foreground/50 block mb-1.5">
+                                      Formats
+                                    </span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {jobFormats.map((fmt: string) => {
+                                        const fmtInfo = formatIcons[fmt];
+                                        const FmtIcon = fmtInfo?.icon || FileText;
+                                        const fmtLabel = fmtInfo?.label || fmt;
+                                        return (
+                                          <span
+                                            key={fmt}
+                                            className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70"
+                                          >
+                                            <FmtIcon className="h-2.5 w-2.5" />
+                                            {fmtLabel}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                {/* Empty state when no recent jobs */}
+                {recentJobs.length === 0 && (
+                  <section className="text-center py-16 animate-float-in" style={{ animationDelay: "0.1s" }}>
+                    <Search className="h-12 w-12 text-muted-foreground/20 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-1">No recent runs</h3>
+                    <p className="text-sm text-muted-foreground/50">
+                      Enter a URL above to start scraping
                     </p>
-                    <p className="text-[11px] font-mono text-foreground/40 pl-4">
-                      -H &quot;Authorization: Bearer wh_...&quot; \
-                    </p>
-                    <p className="text-[11px] font-mono text-foreground/40 pl-4">
-                      -d &apos;{`{"url": "https://example.com"}`}&apos;
-                    </p>
-                  </div>
-                </div>
+                  </section>
+                )}
               </div>
-            </section>
+            </div>
 
+            {/* Footer */}
+            <Footer />
           </div>
         </main>
       </div>

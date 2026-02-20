@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
+import { ModeSwitcher } from "@/components/layout/mode-switcher";
+import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -245,8 +247,14 @@ export default function ScrapePage() {
       <Sidebar />
       <main className="flex-1 overflow-auto bg-background">
         <MobileMenuButton />
-        <div className="p-8 max-w-6xl mx-auto">
-          <div className="mb-6 animate-float-in">
+        <div className="min-h-screen flex flex-col">
+        <div className="flex-1 p-6 lg:p-8 max-w-6xl mx-auto w-full">
+          {/* Mode Switcher */}
+          <div className="pt-4 pb-6 animate-float-in">
+            <ModeSwitcher />
+          </div>
+
+          <div className="mb-6 animate-float-in" style={{ animationDelay: "0.05s" }}>
             <h1 className="text-3xl font-bold">Scrape</h1>
             <p className="text-muted-foreground">Extract rich content from any URL</p>
           </div>
@@ -775,6 +783,8 @@ export default function ScrapePage() {
               )}
             </div>
           </div>
+        </div>
+        <Footer />
         </div>
       </main>
     </div>

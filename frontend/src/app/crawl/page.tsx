@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
+import { ModeSwitcher } from "@/components/layout/mode-switcher";
+import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -135,8 +137,14 @@ export default function CrawlPage() {
       <Sidebar />
       <main className="flex-1 overflow-auto bg-background">
         <MobileMenuButton />
-        <div className="p-8 max-w-4xl mx-auto">
-          <div className="mb-8 animate-float-in">
+        <div className="min-h-screen flex flex-col">
+        <div className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
+          {/* Mode Switcher */}
+          <div className="pt-4 pb-6 animate-float-in">
+            <ModeSwitcher />
+          </div>
+
+          <div className="mb-8 animate-float-in" style={{ animationDelay: "0.05s" }}>
             <h1 className="text-3xl font-bold">Crawl</h1>
             <p className="text-muted-foreground mt-1">
               Enter a website URL and we'll recursively discover and scrape every page.
@@ -495,6 +503,8 @@ export default function CrawlPage() {
               )}
             </CardContent>
           </Card>
+        </div>
+        <Footer />
         </div>
       </main>
     </div>
