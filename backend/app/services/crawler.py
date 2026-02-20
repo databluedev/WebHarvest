@@ -324,10 +324,56 @@ class WebCrawler:
             "discovered_links": discovered_links,
         }
 
+    async def take_screenshot(self, url: str, raw_html: str) -> str | None:
+        """Take a screenshot using the crawl session browser.
+
+        Renders the raw HTML in a browser page with a <base> tag so relative
+        resources resolve.  Returns base64-encoded JPEG or None on failure.
+        """
+        import base64
+
+        if not self._crawl_session:
+            return None
+        page = None
+        try:
+            page = await self._crawl_session.new_page()
+            # Inject <base> so images/CSS with relative URLs load from the site
+            html = raw_html
+            if "<head" in html.lower():
+                html = html.replace("<head>", f'<head><base href="{url}">', 1)
+                if "<head>" not in raw_html:
+                    # Handle <head ...attrs>
+                    import re as _re
+
+                    html = _re.sub(
+                        r"(<head[^>]*>)",
+                        rf'\1<base href="{url}">',
+                        raw_html,
+                        count=1,
+                        flags=_re.IGNORECASE,
+                    )
+            await page.set_content(html, wait_until="domcontentloaded")
+            await page.wait_for_timeout(500)
+            ss_bytes = await page.screenshot(
+                type="jpeg", quality=80, full_page=True
+            )
+            return base64.b64encode(ss_bytes).decode()
+        except Exception as e:
+            logger.debug(f"Screenshot failed for {url}: {e}")
+            return None
+        finally:
+            if page:
+                try:
+                    await self._crawl_session.close_page(page)
+                except Exception:
+                    pass
+
     async def fetch_page_only(self, url: str) -> dict | None:
         """Fetch-only phase for pipeline mode — returns raw data without extraction."""
         opts = self.config.scrape_options or ScrapeOptions()
-        formats = list(set(opts.formats) | {"links"})
+        # Exclude "screenshot" so needs_browser=False → fast HTTP tiers can run.
+        # Screenshots are captured separately by the crawl worker consumer.
+        formats = list((set(opts.formats) | {"links"}) - {"screenshot"})
 
         request = ScrapeRequest(
             url=url,

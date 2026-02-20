@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import logging
 import time as _time_mod
 from concurrent.futures import ThreadPoolExecutor
@@ -209,6 +210,8 @@ def process_crawl(self, job_id: str, config: dict):
                     for result in results:
                         if result is None:
                             continue
+                        if pages_crawled >= request.max_pages or cancelled:
+                            break
                         await extract_queue.put(result)
 
                 extract_done.set()
@@ -312,6 +315,15 @@ def process_crawl(self, job_id: str, config: dict):
                             # task_done() is called in the finally block
                             continue
 
+                        # Enforce page limit — producer may have queued
+                        # extra items before the counter caught up.
+                        if pages_crawled >= request.max_pages:
+                            if discovered_links:
+                                await crawler.add_to_frontier(
+                                    discovered_links, depth + 1
+                                )
+                            continue
+
                         # Build rich metadata
                         metadata = {}
                         if scrape_data.metadata:
@@ -345,6 +357,22 @@ def process_crawl(self, job_id: str, config: dict):
                             except Exception as e:
                                 logger.warning(f"LLM extraction failed for {url}: {e}")
 
+                        # Capture screenshot — only for pages that pass
+                        # the quality gate to avoid wasting browser time.
+                        screenshot_val = scrape_data.screenshot
+                        if not screenshot_val:
+                            _raw_for_ss = ""
+                            if "fetch_result" in item:
+                                _raw_for_ss = item["fetch_result"].get(
+                                    "raw_html", ""
+                                )
+                            elif scrape_data.html:
+                                _raw_for_ss = scrape_data.html
+                            if _raw_for_ss:
+                                screenshot_val = await crawler.take_screenshot(
+                                    url, _raw_for_ss
+                                )
+
                         # Store result
                         async with session_factory() as db:
                             job_result = JobResult(
@@ -355,7 +383,7 @@ def process_crawl(self, job_id: str, config: dict):
                                 links=scrape_data.links if scrape_data.links else None,
                                 extract=extract_data,
                                 metadata_=metadata if metadata else None,
-                                screenshot_url=scrape_data.screenshot,
+                                screenshot_url=screenshot_val,
                             )
                             db.add(job_result)
 
