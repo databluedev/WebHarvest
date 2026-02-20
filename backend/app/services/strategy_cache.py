@@ -149,11 +149,27 @@ def get_starting_tier(strategy_data: dict | None, is_hard_site: bool) -> int:
         3: Start from tier 3 (heavy strategies)
     """
     if not strategy_data:
+        # Hard sites: skip HTTP tier entirely — it almost never works and
+        # wastes ~10s on timeout before falling back to browser.
+        if is_hard_site:
+            return 2
         return 1  # No cache, start from tier 1
 
     last_tier = strategy_data.get("last_success_tier")
+    last_strategy = strategy_data.get("last_success_strategy", "")
+
     if last_tier is not None:
-        # We have a cached success — start from tier 0 (cache hit attempt)
+        # Cached strategy is HTTP-based → Tier 0 can replay it
+        if last_strategy.startswith("curl_cffi") or last_strategy in (
+            "httpx",
+            "cookie_http",
+        ):
+            return 0
+        # Cached strategy is browser-based → skip straight to Tier 2
+        # (Tier 0 has no handler for browser strategies, and Tier 1 HTTP
+        # would waste time on sites that need a browser)
+        if last_tier >= 2:
+            return 2
         return 0
 
     # No success recorded but we have fail data
@@ -162,7 +178,7 @@ def get_starting_tier(strategy_data: dict | None, is_hard_site: bool) -> int:
 
     if tier1_fails >= 3 and tier2_fails >= 3:
         return 3  # Skip straight to heavy strategies
-    if tier1_fails >= 3:
+    if tier1_fails >= 3 or is_hard_site:
         return 2  # Skip HTTP, go to browsers
 
     return 1
