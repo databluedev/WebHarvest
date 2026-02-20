@@ -215,16 +215,36 @@ async def client(db_session: AsyncSession, mock_redis):
     """
 
     # Patch rate limiter to always allow — patch at every import site
+    from app.core.rate_limiter import RateLimitInfo
+
     async def _always_allow(*args, **kwargs):
-        return (True, 99)
+        return RateLimitInfo(allowed=True, remaining=99, limit=100, reset=60)
 
     with (
-        patch("app.core.rate_limiter.check_rate_limit", side_effect=_always_allow),
-        patch("app.api.v1.scrape.check_rate_limit", side_effect=_always_allow),
-        patch("app.api.v1.crawl.check_rate_limit", side_effect=_always_allow),
-        patch("app.api.v1.batch.check_rate_limit", side_effect=_always_allow),
-        patch("app.api.v1.search.check_rate_limit", side_effect=_always_allow),
-        patch("app.api.v1.map.check_rate_limit", side_effect=_always_allow),
+        patch(
+            "app.core.rate_limiter.check_rate_limit_full",
+            side_effect=_always_allow,
+        ),
+        patch(
+            "app.api.v1.scrape.check_rate_limit_full",
+            side_effect=_always_allow,
+        ),
+        patch(
+            "app.api.v1.crawl.check_rate_limit_full",
+            side_effect=_always_allow,
+        ),
+        patch(
+            "app.api.v1.batch.check_rate_limit_full",
+            side_effect=_always_allow,
+        ),
+        patch(
+            "app.api.v1.search.check_rate_limit_full",
+            side_effect=_always_allow,
+        ),
+        patch(
+            "app.api.v1.map.check_rate_limit_full",
+            side_effect=_always_allow,
+        ),
         patch("app.core.rate_limiter.redis_client", mock_redis),
         patch("app.services.browser.browser_pool") as bp_mock,
     ):
