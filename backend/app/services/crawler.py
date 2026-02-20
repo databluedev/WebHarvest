@@ -331,6 +331,7 @@ class WebCrawler:
         resources resolve.  Returns base64-encoded JPEG or None on failure.
         """
         import base64
+        import re as _re
 
         if not self._crawl_session:
             return None
@@ -338,20 +339,13 @@ class WebCrawler:
         try:
             page = await self._crawl_session.new_page()
             # Inject <base> so images/CSS with relative URLs load from the site
-            html = raw_html
-            if "<head" in html.lower():
-                html = html.replace("<head>", f'<head><base href="{url}">', 1)
-                if "<head>" not in raw_html:
-                    # Handle <head ...attrs>
-                    import re as _re
-
-                    html = _re.sub(
-                        r"(<head[^>]*>)",
-                        rf'\1<base href="{url}">',
-                        raw_html,
-                        count=1,
-                        flags=_re.IGNORECASE,
-                    )
+            html = _re.sub(
+                r"(<head[^>]*>)",
+                rf'\1<base href="{url}">',
+                raw_html,
+                count=1,
+                flags=_re.IGNORECASE,
+            )
             await page.set_content(html, wait_until="domcontentloaded")
             await page.wait_for_timeout(500)
             ss_bytes = await page.screenshot(

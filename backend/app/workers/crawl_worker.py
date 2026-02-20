@@ -121,6 +121,9 @@ def process_crawl(self, job_id: str, config: dict):
             # Producer-consumer pipeline queue
             extract_queue = asyncio.Queue(maxsize=concurrency * 2)
             extract_done = asyncio.Event()
+            # Track content fingerprints to skip duplicate pages
+            # (catches identical login walls / interstitials)
+            _content_fingerprints: set[str] = set()
 
             async def fetch_producer():
                 """BFS loop: fetch pages, put raw results on extract_queue."""
@@ -300,6 +303,19 @@ def process_crawl(self, job_id: str, config: dict):
                         elif _link_density > 2.0 and _heading_count <= 2:
                             _skip = True  # page is almost entirely links
 
+                        # Duplicate content detection — identical login walls,
+                        # interstitials, etc. share the same text.  Hash the
+                        # first 300 chars of markdown to detect near-dupes.
+                        if not _skip and md_text:
+                            _fp = md_text[:300]
+                            if _fp in _content_fingerprints:
+                                _skip = True
+                                logger.info(
+                                    f"Skipping duplicate content "
+                                    f"({_word_count}w): {url}"
+                                )
+                            _content_fingerprints.add(_fp)
+
                         if _skip:
                             logger.info(
                                 f"Skipping low-quality page "
@@ -369,9 +385,37 @@ def process_crawl(self, job_id: str, config: dict):
                             elif scrape_data.html:
                                 _raw_for_ss = scrape_data.html
                             if _raw_for_ss:
+                                # Try crawl session first, fallback to
+                                # browser_pool if session is dead
                                 screenshot_val = await crawler.take_screenshot(
                                     url, _raw_for_ss
                                 )
+                                if not screenshot_val:
+                                    try:
+                                        from app.services.browser import (
+                                            browser_pool,
+                                        )
+
+                                        async with browser_pool.get_page(
+                                            target_url=url
+                                        ) as _ss_page:
+                                            await _ss_page.set_content(
+                                                _raw_for_ss,
+                                                wait_until="domcontentloaded",
+                                            )
+                                            await _ss_page.wait_for_timeout(500)
+                                            _ss_bytes = (
+                                                await _ss_page.screenshot(
+                                                    type="jpeg",
+                                                    quality=80,
+                                                    full_page=True,
+                                                )
+                                            )
+                                            screenshot_val = base64.b64encode(
+                                                _ss_bytes
+                                            ).decode()
+                                    except Exception:
+                                        pass
 
                         # Store result
                         async with session_factory() as db:
