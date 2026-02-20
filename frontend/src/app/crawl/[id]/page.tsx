@@ -409,18 +409,23 @@ export default function CrawlStatusPage() {
   const params = useParams();
   const jobId = params.id as string;
   const [status, setStatus] = useState<any>(null);
+  const [allData, setAllData] = useState<any[]>([]);
+  const [totalResults, setTotalResults] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [polling, setPolling] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "error">("all");
   const [sortBy, setSortBy] = useState<"index" | "url" | "words">("index");
+  const PER_PAGE = 20;
 
   useEffect(() => {
     if (!api.getToken()) {
       router.push("/auth/login");
       return;
     }
-    fetchStatus();
+    fetchStatus(1);
   }, [jobId]);
 
   // SSE for real-time updates — falls back to polling on failure
@@ -442,7 +447,7 @@ export default function CrawlStatusPage() {
       es.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          fetchStatus();
+          fetchStatus(1);
           if (data.done || ["completed", "failed", "cancelled"].includes(data.status)) {
             setPolling(false);
             es.close();
@@ -451,20 +456,27 @@ export default function CrawlStatusPage() {
       };
       es.onerror = () => {
         es.close();
-        const interval = setInterval(fetchStatus, 2000);
+        const interval = setInterval(() => fetchStatus(1), 2000);
         return () => clearInterval(interval);
       };
       return () => es.close();
     } catch {
-      const interval = setInterval(fetchStatus, 2000);
+      const interval = setInterval(() => fetchStatus(1), 2000);
       return () => clearInterval(interval);
     }
   }, [polling, status?.status]);
 
-  const fetchStatus = useCallback(async () => {
+  const fetchStatus = useCallback(async (page: number) => {
     try {
-      const res = await api.getCrawlStatus(jobId);
+      const res = await api.getCrawlStatus(jobId, page, PER_PAGE);
       setStatus(res);
+      setTotalResults(res.total_results || 0);
+      if (page === 1) {
+        setAllData(res.data || []);
+      } else {
+        setAllData((prev) => [...prev, ...(res.data || [])]);
+      }
+      setCurrentPage(page);
       if (["completed", "failed", "cancelled"].includes(res.status)) {
         setPolling(false);
       }
@@ -474,10 +486,16 @@ export default function CrawlStatusPage() {
     }
   }, [jobId]);
 
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    await fetchStatus(currentPage + 1);
+    setLoadingMore(false);
+  }, [currentPage, fetchStatus]);
+
   const handleCancel = async () => {
     try {
       await api.cancelCrawl(jobId);
-      fetchStatus();
+      fetchStatus(1);
     } catch (err: any) {
       setError(err.message);
     }
@@ -501,15 +519,17 @@ export default function CrawlStatusPage() {
       : 0;
 
   // Count screenshots
-  const screenshotCount = useMemo(() => status?.data?.filter((p: any) => p.screenshot)?.length || 0, [status?.data]);
-  const totalWords = useMemo(() => status?.data?.reduce(
+  const screenshotCount = useMemo(() => allData.filter((p: any) => p.screenshot)?.length || 0, [allData]);
+  const totalWords = useMemo(() => allData.reduce(
     (sum: number, p: any) => sum + (p.metadata?.word_count || 0),
     0
-  ) || 0, [status?.data]);
+  ) || 0, [allData]);
+
+  const hasMore = allData.length < totalResults;
 
   const filteredData = useMemo(() => {
-    if (!status?.data) return [];
-    let data = status.data.map((p: any, i: number) => ({ ...p, _index: i }));
+    if (!allData.length) return [];
+    let data = allData.map((p: any, i: number) => ({ ...p, _index: i }));
     if (searchFilter) {
       const q = searchFilter.toLowerCase();
       data = data.filter((p: any) => p.url?.toLowerCase().includes(q) || p.metadata?.title?.toLowerCase().includes(q));
@@ -525,7 +545,7 @@ export default function CrawlStatusPage() {
       data.sort((a: any, b: any) => (b.metadata?.word_count || 0) - (a.metadata?.word_count || 0));
     }
     return data;
-  }, [status?.data, searchFilter, statusFilter, sortBy]);
+  }, [allData, searchFilter, statusFilter, sortBy]);
 
   return (
     <SidebarProvider>
@@ -594,7 +614,7 @@ export default function CrawlStatusPage() {
                           Stop
                         </Button>
                       )}
-                      {status.data && status.data.length > 0 && (
+                      {totalResults > 0 && (
                         <ExportDropdown onExport={handleExport} />
                       )}
                     </div>
@@ -635,11 +655,11 @@ export default function CrawlStatusPage() {
                   </div>
 
                   {/* Stats row */}
-                  {status.data && status.data.length > 0 && (
+                  {totalResults > 0 && (
                     <div className="flex gap-6 mt-4 pt-4 border-t border-border text-xs text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <FileText className="h-3.5 w-3.5" />
-                        <span>{status.data.length} pages</span>
+                        <span>{totalResults} pages</span>
                       </div>
                       {screenshotCount > 0 && (
                         <div className="flex items-center gap-1.5">
@@ -665,7 +685,7 @@ export default function CrawlStatusPage() {
               </Card>
 
               {/* Filter Bar */}
-              {status.data && status.data.length > 0 && (
+              {allData.length > 0 && (
                 <div className="mb-4 flex flex-wrap items-center gap-3">
                   <div className="relative flex-1 min-w-[200px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -701,13 +721,14 @@ export default function CrawlStatusPage() {
                     <option value="words">Sort: Words</option>
                   </select>
                   <span className="text-xs text-muted-foreground">
-                    {filteredData.length} of {status.data.length} pages
+                    {filteredData.length} of {totalResults} pages
+                    {allData.length < totalResults && ` (${allData.length} loaded)`}
                   </span>
                 </div>
               )}
 
               {/* Results List */}
-              {status.data && status.data.length > 0 ? (
+              {allData.length > 0 ? (
                 <div className="space-y-3">
                   <h2 className="text-lg font-semibold flex items-center gap-2 mb-3">
                     <Globe className="h-5 w-5" />
@@ -716,6 +737,23 @@ export default function CrawlStatusPage() {
                   {filteredData.map((page: any) => (
                     <PageResultCard key={page._index} page={page} index={page._index} />
                   ))}
+                  {hasMore && (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={loadMore}
+                        disabled={loadingMore}
+                        className="gap-2"
+                      >
+                        {loadingMore ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : null}
+                        {loadingMore
+                          ? "Loading..."
+                          : `Load More (${totalResults - allData.length} remaining)`}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : isRunning ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">

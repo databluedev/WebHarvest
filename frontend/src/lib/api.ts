@@ -167,16 +167,17 @@ class ApiClient {
     });
   }
 
-  async getCrawlStatus(jobId: string) {
+  async getCrawlStatus(jobId: string, page: number = 1, perPage: number = 20) {
     return this.request<{
       success: boolean; job_id: string; status: string;
       total_pages: number; completed_pages: number;
+      total_results: number; page: number; per_page: number;
       data?: Array<{
         url: string; markdown?: string; html?: string; links?: string[];
         links_detail?: any; screenshot?: string; structured_data?: any;
         headings?: any[]; images?: any[]; extract?: any; metadata?: any;
       }>;
-    }>(`/v1/crawl/${jobId}`);
+    }>(`/v1/crawl/${jobId}?page=${page}&per_page=${perPage}`);
   }
 
   async cancelCrawl(jobId: string) {

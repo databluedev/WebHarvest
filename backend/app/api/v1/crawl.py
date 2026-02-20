@@ -9,7 +9,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -126,19 +126,34 @@ async def start_crawl(
 @router.get("/{job_id}", response_model=CrawlStatusResponse)
 async def get_crawl_status(
     job_id: str,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get the status and results of a crawl job."""
+    """Get the status and results of a crawl job (paginated)."""
     job = await db.get(Job, UUID(job_id))
     if not job or job.user_id != user.id:
         raise NotFoundError("Crawl job not found")
 
-    # Get results (return partial results while still running)
+    # Get paginated results (return partial results while still running)
     data = None
+    total_results = 0
     if job.status in ("pending", "running", "completed", "started"):
+        # Count total results first (lightweight query)
+        count_result = await db.execute(
+            select(func.count()).select_from(JobResult).where(JobResult.job_id == job.id)
+        )
+        total_results = count_result.scalar() or 0
+
+        # Fetch only the requested page
+        offset = (page - 1) * per_page
         result = await db.execute(
-            select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+            select(JobResult)
+            .where(JobResult.job_id == job.id)
+            .order_by(JobResult.created_at)
+            .offset(offset)
+            .limit(per_page)
         )
         results = result.scalars().all()
 
@@ -199,6 +214,9 @@ async def get_crawl_status(
         total_pages=job.total_pages,
         completed_pages=job.completed_pages,
         data=data,
+        total_results=total_results,
+        page=page,
+        per_page=per_page,
         error=job.error,
     )
 

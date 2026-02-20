@@ -63,4 +63,7 @@ class CrawlStatusResponse(BaseModel):
     total_pages: int
     completed_pages: int
     data: list[CrawlPageData] | None = None
+    total_results: int = 0
+    page: int = 1
+    per_page: int = 20
     error: str | None = None
