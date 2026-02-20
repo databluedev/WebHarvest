@@ -59,11 +59,11 @@ class TestExtractWithContent:
                 "app.api.v1.extract.extract_with_llm", new_callable=AsyncMock
             ) as mock_extract,
             patch(
-                "app.api.v1.extract.html_to_markdown",
+                "app.services.content.html_to_markdown",
                 return_value="Product: Widget $9.99",
             ),
             patch(
-                "app.api.v1.extract.extract_main_content",
+                "app.services.content.extract_main_content",
                 return_value="<p>Product: Widget $9.99</p>",
             ),
         ):

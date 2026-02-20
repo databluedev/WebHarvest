@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
 from httpx import AsyncClient
+from app.schemas.map import LinkResult
 
 
 class TestMapSite:
@@ -12,33 +13,15 @@ class TestMapSite:
     async def test_map_site_success(self, client: AsyncClient, auth_headers):
         """POST /v1/map with mocked mapper returns discovered links."""
         mock_links = [
-            MagicMock(
+            LinkResult(
                 url="https://example.com/page1",
                 title="Page 1",
                 description="First page",
-                lastmod=None,
-                priority=None,
-                model_dump=lambda: {
-                    "url": "https://example.com/page1",
-                    "title": "Page 1",
-                    "description": "First page",
-                    "lastmod": None,
-                    "priority": None,
-                },
             ),
-            MagicMock(
+            LinkResult(
                 url="https://example.com/page2",
                 title="Page 2",
                 description="Second page",
-                lastmod=None,
-                priority=None,
-                model_dump=lambda: {
-                    "url": "https://example.com/page2",
-                    "title": "Page 2",
-                    "description": "Second page",
-                    "lastmod": None,
-                    "priority": None,
-                },
             ),
         ]
 
