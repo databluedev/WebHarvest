@@ -166,7 +166,8 @@ export default function ScrapeDetailPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-5xl mx-auto">
           <div className="mb-6 flex items-center gap-4">
             <Link href="/scrape">
@@ -175,7 +176,7 @@ export default function ScrapeDetailPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold">Scrape Result</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Scrape Result</h1>
               <p className="text-sm text-muted-foreground font-mono">{jobId}</p>
             </div>
           </div>
@@ -534,6 +535,7 @@ export default function ScrapeDetailPage() {
               )}
             </>
           )}
+        </div>
         </div>
       </main>
     </div>

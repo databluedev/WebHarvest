@@ -282,12 +282,13 @@ export default function WebhooksPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8">
           {/* Header */}
-          <div className="mb-8 flex items-center justify-between">
+          <div className="mb-8 flex items-center justify-between animate-float-in">
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
                 <Webhook className="h-8 w-8 text-primary" />
                 Webhooks
               </h1>
@@ -312,7 +313,7 @@ export default function WebhooksPage() {
 
           {/* Stats Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-            <Card className="border-gradient">
+            <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Total Deliveries
@@ -333,7 +334,7 @@ export default function WebhooksPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-gradient">
+            <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Success Rate
@@ -359,7 +360,7 @@ export default function WebhooksPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-gradient">
+            <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Avg Response Time
@@ -380,7 +381,7 @@ export default function WebhooksPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-gradient">
+            <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Failed Deliveries
@@ -403,7 +404,7 @@ export default function WebhooksPage() {
           </div>
 
           {/* Test Webhook Section */}
-          <Card className="mb-8 border-gradient">
+          <Card className="mb-8 glass-card">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Send className="h-5 w-5 text-primary" />
@@ -668,6 +669,7 @@ export default function WebhooksPage() {
               )}
             </CardContent>
           </Card>
+        </div>
         </div>
       </main>
     </div>

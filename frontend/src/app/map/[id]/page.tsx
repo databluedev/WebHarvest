@@ -82,7 +82,8 @@ export default function MapDetailPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-5xl mx-auto">
           <div className="mb-6 flex items-center gap-4">
             <Link href="/map">
@@ -91,7 +92,7 @@ export default function MapDetailPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold">Map Result</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Map Result</h1>
               <p className="text-sm text-muted-foreground font-mono">{jobId}</p>
             </div>
           </div>
@@ -259,6 +260,7 @@ export default function MapDetailPage() {
               )}
             </>
           )}
+        </div>
         </div>
       </main>
     </div>

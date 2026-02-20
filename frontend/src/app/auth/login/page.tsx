@@ -34,11 +34,15 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background grid-bg noise">
       <div className="mesh-gradient fixed inset-0 pointer-events-none" />
+
+      {/* Ambient glow */}
+      <div className="fixed top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-primary/[0.04] blur-[120px] pointer-events-none animate-breathe" />
+
       <div className="w-full max-w-md px-6 animate-float-in relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center animate-glow-pulse">
+            <div className="h-12 w-12 rounded-2xl bg-primary/8 border border-primary/15 grid place-items-center animate-glow-pulse">
               <Globe className="h-6 w-6 text-primary" />
             </div>
             <span className="text-2xl font-bold tracking-tight">WebHarvest</span>
@@ -49,19 +53,19 @@ export default function LoginPage() {
         <div className="glass-card rounded-2xl p-8">
           <div className="mb-6">
             <h1 className="text-2xl font-bold tracking-tight">Sign in</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground/60 mt-1">
               Enter your credentials to continue
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+              <div className="rounded-xl border border-red-500/15 bg-red-500/8 p-3 text-sm text-red-400">
                 {error}
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-xs text-muted-foreground font-medium">Email</label>
+              <label className="text-xs text-muted-foreground/60 font-medium">Email</label>
               <Input
                 type="email"
                 placeholder="you@example.com"
@@ -72,7 +76,7 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs text-muted-foreground font-medium">Password</label>
+              <label className="text-xs text-muted-foreground/60 font-medium">Password</label>
               <Input
                 type="password"
                 placeholder="Enter your password"
@@ -93,12 +97,12 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-border/50" />
-            <span className="text-xs text-muted-foreground/50">or</span>
-            <div className="h-px flex-1 bg-border/50" />
+            <div className="h-px flex-1 bg-border/30" />
+            <span className="text-xs text-muted-foreground/30">or</span>
+            <div className="h-px flex-1 bg-border/30" />
           </div>
 
-          <p className="text-center text-sm text-muted-foreground mt-4">
+          <p className="text-center text-sm text-muted-foreground/60 mt-4">
             No account?{" "}
             <Link href="/auth/register" className="text-primary hover:underline">
               Create one
@@ -106,7 +110,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <p className="text-center text-[11px] text-muted-foreground/40 mt-6">
+        <p className="text-center text-[11px] text-muted-foreground/25 mt-6">
           Open source web crawling platform
         </p>
       </div>

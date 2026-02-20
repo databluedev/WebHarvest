@@ -132,9 +132,10 @@ export default function CrawlPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-4xl mx-auto">
-          <div className="mb-8">
+          <div className="mb-8 animate-float-in">
             <h1 className="text-3xl font-bold">Crawl</h1>
             <p className="text-muted-foreground mt-1">
               Enter a website URL and we'll recursively discover and scrape every page.
@@ -493,6 +494,7 @@ export default function CrawlPage() {
               )}
             </CardContent>
           </Card>
+        </div>
         </div>
       </main>
     </div>

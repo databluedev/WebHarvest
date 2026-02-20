@@ -106,9 +106,10 @@ export default function MapPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8">
-          <div className="mb-6">
+          <div className="mb-6 animate-float-in">
             <h1 className="text-3xl font-bold">Map</h1>
             <p className="text-muted-foreground">Discover all URLs on a website</p>
           </div>
@@ -245,6 +246,7 @@ export default function MapPage() {
               )}
             </div>
           </div>
+        </div>
         </div>
       </main>
     </div>

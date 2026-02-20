@@ -294,7 +294,8 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-[1400px] mx-auto">
           {/* Header */}
           <div className="mb-8 flex items-center justify-between animate-float-in">
@@ -845,6 +846,7 @@ export default function DashboardPage() {
               </Card>
             </>
           )}
+        </div>
         </div>
       </main>
     </div>

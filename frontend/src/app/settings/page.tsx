@@ -138,11 +138,12 @@ export default function SettingsPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-8 max-w-4xl">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold">Settings</h1>
-            <p className="text-muted-foreground">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
+        <div className="p-8 max-w-4xl mx-auto">
+          <div className="mb-8 animate-float-in">
+            <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+            <p className="text-muted-foreground mt-1">
               Manage your LLM API keys and proxy configuration
             </p>
           </div>
@@ -380,6 +381,7 @@ export default function SettingsPage() {
               )}
             </CardContent>
           </Card>
+        </div>
         </div>
       </main>
     </div>

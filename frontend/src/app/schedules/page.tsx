@@ -179,11 +179,12 @@ export default function SchedulesPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-5xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-8 animate-float-in">
             <div>
-              <h1 className="text-3xl font-bold">Schedules</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Schedules</h1>
               <p className="text-muted-foreground mt-1">
                 Set up recurring scrapes, crawls, and batch jobs
               </p>
@@ -475,6 +476,7 @@ export default function SchedulesPage() {
               )}
             </CardContent>
           </Card>
+        </div>
         </div>
       </main>
     </div>

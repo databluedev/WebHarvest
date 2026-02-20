@@ -70,23 +70,23 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-border/40 bg-card/60 backdrop-blur-sm">
+    <aside className="flex h-screen w-[260px] flex-col border-r border-border/30 bg-background/80 backdrop-blur-xl">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 border-b border-border/40 px-5">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20">
+      <div className="flex h-[60px] items-center gap-3 border-b border-border/30 px-5">
+        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/15">
           <Globe className="h-4 w-4 text-primary" />
         </div>
         <div className="flex flex-col">
-          <span className="text-sm font-semibold tracking-tight gradient-text">WebHarvest</span>
-          <span className="text-[10px] text-muted-foreground/60">v0.1.0</span>
+          <span className="text-[13px] font-semibold tracking-tight gradient-text">WebHarvest</span>
+          <span className="text-[10px] text-muted-foreground/40 font-mono">v0.1.0</span>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-4">
+      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5">
         {navSections.map((section) => (
           <div key={section.label}>
-            <p className="px-3 mb-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/50">
+            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/40">
               {section.label}
             </p>
             <div className="space-y-0.5">
@@ -97,16 +97,16 @@ export function Sidebar() {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-150",
+                      "relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200",
                       isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground/80"
+                        ? "bg-primary/8 text-primary"
+                        : "text-muted-foreground/70 hover:bg-foreground/[0.03] hover:text-foreground/80"
                     )}
                   >
                     {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full bg-primary" />
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full bg-primary shadow-[0_0_8px_hsla(var(--primary),0.4)]" />
                     )}
-                    <item.icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground/60")} />
+                    <item.icon className={cn("h-[15px] w-[15px] shrink-0", isActive ? "text-primary" : "text-muted-foreground/50")} />
                     <span>{item.label}</span>
                   </Link>
                 );
@@ -117,13 +117,13 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border/40 p-3 space-y-0.5">
+      <div className="border-t border-border/30 p-3 space-y-0.5">
         <ThemeToggle />
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-muted-foreground transition-all duration-150 hover:bg-red-500/10 hover:text-red-400"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-muted-foreground/60 transition-all duration-200 hover:bg-red-500/8 hover:text-red-400"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-[15px] w-[15px]" />
           Logout
         </button>
       </div>

@@ -217,9 +217,10 @@ export default function ScrapePage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-6xl mx-auto">
-          <div className="mb-6">
+          <div className="mb-6 animate-float-in">
             <h1 className="text-3xl font-bold">Scrape</h1>
             <p className="text-muted-foreground">Extract rich content from any URL</p>
           </div>
@@ -724,6 +725,7 @@ export default function ScrapePage() {
               )}
             </div>
           </div>
+        </div>
         </div>
       </main>
     </div>

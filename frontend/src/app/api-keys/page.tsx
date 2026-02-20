@@ -69,11 +69,12 @@ export default function ApiKeysPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="p-8 max-w-4xl">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold">API Keys</h1>
-            <p className="text-muted-foreground">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
+        <div className="p-8 max-w-4xl mx-auto">
+          <div className="mb-8 animate-float-in">
+            <h1 className="text-3xl font-bold tracking-tight">API Keys</h1>
+            <p className="text-muted-foreground mt-1">
               Manage your API keys for programmatic access
             </p>
           </div>
@@ -307,6 +308,7 @@ print(status["data"][0]["markdown"][:500])`}
               </div>
             </CardContent>
           </Card>
+        </div>
         </div>
       </main>
     </div>

@@ -11,7 +11,7 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        sans: ["'Outfit'", "system-ui", "sans-serif"],
+        sans: ["'Be Vietnam Pro'", "system-ui", "-apple-system", "sans-serif"],
         mono: ["'JetBrains Mono'", "'Fira Code'", "'Cascadia Code'", "monospace"],
       },
       colors: {
@@ -56,23 +56,23 @@ const config: Config = {
       },
       keyframes: {
         "fade-in": {
-          from: { opacity: "0", transform: "translateY(8px)" },
+          from: { opacity: "0", transform: "translateY(6px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
         "slide-up": {
-          from: { opacity: "0", transform: "translateY(24px)" },
+          from: { opacity: "0", transform: "translateY(20px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
         "float-in": {
-          from: { opacity: "0", transform: "translateY(12px) scale(0.98)" },
+          from: { opacity: "0", transform: "translateY(16px) scale(0.97)" },
           to: { opacity: "1", transform: "translateY(0) scale(1)" },
         },
         "scale-in": {
-          from: { opacity: "0", transform: "scale(0.95)" },
+          from: { opacity: "0", transform: "scale(0.94)" },
           to: { opacity: "1", transform: "scale(1)" },
         },
         "pulse-soft": {
-          "0%, 100%": { opacity: "0.5" },
+          "0%, 100%": { opacity: "0.4" },
           "50%": { opacity: "1" },
         },
         shimmer: {
@@ -80,18 +80,23 @@ const config: Config = {
           "100%": { backgroundPosition: "200% 0" },
         },
         "glow-pulse": {
-          "0%, 100%": { boxShadow: "0 0 12px -3px hsla(160, 84%, 45%, 0.3)" },
-          "50%": { boxShadow: "0 0 20px -3px hsla(160, 84%, 45%, 0.5)" },
+          "0%, 100%": { boxShadow: "0 0 15px -4px hsla(175, 80%, 42%, 0.25)" },
+          "50%": { boxShadow: "0 0 25px -4px hsla(175, 80%, 42%, 0.45)" },
+        },
+        breathe: {
+          "0%, 100%": { opacity: "0.5", transform: "scale(1)" },
+          "50%": { opacity: "0.8", transform: "scale(1.02)" },
         },
       },
       animation: {
-        "fade-in": "fade-in 0.5s ease-out forwards",
-        "slide-up": "slide-up 0.6s ease-out forwards",
-        "float-in": "float-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards",
-        "scale-in": "scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards",
-        "pulse-soft": "pulse-soft 2.5s ease-in-out infinite",
-        shimmer: "shimmer 2s infinite",
-        "glow-pulse": "glow-pulse 2s ease-in-out infinite",
+        "fade-in": "fade-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards",
+        "slide-up": "slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards",
+        "float-in": "float-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        "scale-in": "scale-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards",
+        "pulse-soft": "pulse-soft 3s ease-in-out infinite",
+        shimmer: "shimmer 2.5s infinite",
+        "glow-pulse": "glow-pulse 2.5s ease-in-out infinite",
+        breathe: "breathe 4s ease-in-out infinite",
       },
     },
   },

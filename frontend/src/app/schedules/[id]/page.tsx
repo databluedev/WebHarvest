@@ -160,7 +160,8 @@ export default function ScheduleDetailPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-4xl mx-auto">
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
@@ -171,7 +172,7 @@ export default function ScheduleDetailPage() {
             </Link>
             <div className="flex-1">
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold">{schedule.name}</h1>
+                <h1 className="text-3xl font-bold tracking-tight">{schedule.name}</h1>
                 <Badge variant={schedule.is_active ? "success" : "outline"}>
                   {schedule.is_active ? "Active" : "Paused"}
                 </Badge>
@@ -426,6 +427,7 @@ export default function ScheduleDetailPage() {
               )}
             </CardContent>
           </Card>
+        </div>
         </div>
       </main>
     </div>

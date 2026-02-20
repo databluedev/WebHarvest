@@ -1381,7 +1381,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="border-gradient rounded-2xl overflow-hidden transition-all duration-200">
+    <div className="glass-card rounded-2xl overflow-hidden transition-all duration-200">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-3 p-4 text-left hover:bg-foreground/[0.02] transition-all duration-150"
@@ -1547,7 +1547,7 @@ export default function DocsPage() {
 
         {/* Sidebar Footer */}
         <div className="p-4 border-t border-border/40">
-          <div className="border-gradient rounded-xl p-3">
+          <div className="glass-card rounded-xl p-3">
             <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
               <span className="text-foreground/60 font-medium">{API_SECTIONS.length} sections</span>
               {" / "}
@@ -1568,7 +1568,7 @@ export default function DocsPage() {
         <div className="max-w-4xl mx-auto px-6 md:px-10 py-10">
           {/* Page Header */}
           <header className="mb-10 animate-float-in">
-            <div className="border-gradient glass-sm inline-flex items-center gap-2 rounded-2xl px-3.5 py-1.5 mb-5">
+            <div className="glass-card glass-sm inline-flex items-center gap-2 rounded-2xl px-3.5 py-1.5 mb-5">
               <FileText className="h-3.5 w-3.5 text-primary" />
               <span className="text-xs text-foreground/60">API Reference</span>
             </div>
@@ -1586,7 +1586,7 @@ export default function DocsPage() {
             </p>
 
             {/* Auth example */}
-            <div className="mt-5 border-gradient rounded-2xl p-4">
+            <div className="mt-5 glass-card rounded-2xl p-4">
               <p className="text-[10px] text-muted-foreground/50 uppercase tracking-widest font-medium mb-2">
                 Authorization Header
               </p>
@@ -1629,7 +1629,7 @@ export default function DocsPage() {
           {/* Sections */}
           <div className="space-y-12">
             {filteredSections.length === 0 && (
-              <div className="border-gradient rounded-2xl p-12 text-center">
+              <div className="glass-card rounded-2xl p-12 text-center">
                 <Search className="h-10 w-10 text-muted-foreground/30 mx-auto mb-4" />
                 <p className="text-muted-foreground text-sm">
                   No endpoints matching{" "}
@@ -1684,7 +1684,7 @@ export default function DocsPage() {
 
           {/* Footer */}
           <footer className="mt-16 mb-8 pt-8 border-t border-border/30">
-            <div className="border-gradient rounded-2xl p-6 text-center">
+            <div className="glass-card rounded-2xl p-6 text-center">
               <p className="text-sm text-muted-foreground">
                 Need help?{" "}
                 <a href="/api-keys" className="text-primary hover:underline">

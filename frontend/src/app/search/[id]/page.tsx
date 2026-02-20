@@ -434,7 +434,8 @@ export default function SearchStatusPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-5xl mx-auto">
           <div className="mb-6 flex items-center gap-4">
             <Link href="/search">
@@ -443,7 +444,7 @@ export default function SearchStatusPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold">Search Results</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Search Results</h1>
               {status?.query && (
                 <p className="text-sm text-muted-foreground mt-0.5">
                   Query: <span className="font-medium text-foreground">"{status.query}"</span>
@@ -612,6 +613,7 @@ export default function SearchStatusPage() {
               )}
             </>
           )}
+        </div>
         </div>
       </main>
     </div>

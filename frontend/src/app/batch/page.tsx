@@ -111,9 +111,10 @@ export default function BatchPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-4xl mx-auto">
-          <div className="mb-8">
+          <div className="mb-8 animate-float-in">
             <h1 className="text-3xl font-bold">Batch Scrape</h1>
             <p className="text-muted-foreground mt-1">
               Scrape multiple URLs in one go. Enter URLs below (one per line) and we'll process them concurrently.
@@ -409,6 +410,7 @@ export default function BatchPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
         </div>
       </main>
     </div>

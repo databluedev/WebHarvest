@@ -376,12 +376,13 @@ export default function MonitorsPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-5xl mx-auto">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-8 animate-float-in">
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
                 <div className="h-9 w-9 rounded-xl bg-primary/10 grid place-items-center">
                   <Eye className="h-4.5 w-4.5 text-primary" />
                 </div>
@@ -450,7 +451,7 @@ export default function MonitorsPage() {
 
           {/* ── Create Monitor Form ─────────────────────────── */}
           {showCreate && (
-            <div className="border-gradient rounded-2xl mb-6 animate-fade-in">
+            <div className="glass-card rounded-2xl mb-6 animate-fade-in">
               <Card className="border-0 bg-transparent">
                 <CardHeader className="pb-4">
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -613,14 +614,14 @@ export default function MonitorsPage() {
 
           {/* ── Monitor List ────────────────────────────────── */}
           {loading && monitors.length === 0 ? (
-            <div className="border-gradient rounded-2xl">
+            <div className="glass-card rounded-2xl">
               <div className="p-12 flex flex-col items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-3" />
                 <p className="text-sm text-muted-foreground">Loading monitors...</p>
               </div>
             </div>
           ) : monitors.length === 0 ? (
-            <div className="border-gradient rounded-2xl">
+            <div className="glass-card rounded-2xl">
               <div className="p-16 flex flex-col items-center justify-center text-center">
                 <div className="h-14 w-14 rounded-2xl bg-primary/10 grid place-items-center mb-4">
                   <Eye className="h-7 w-7 text-primary/60" />
@@ -648,7 +649,7 @@ export default function MonitorsPage() {
                 const currentAction = actionLoading[monitor.id];
 
                 return (
-                  <div key={monitor.id} className="border-gradient rounded-2xl">
+                  <div key={monitor.id} className="glass-card rounded-2xl">
                     <div className="p-5">
                       {/* Main row */}
                       <div className="flex items-start justify-between gap-4">
@@ -1020,6 +1021,7 @@ export default function MonitorsPage() {
               </span>
             </div>
           )}
+        </div>
         </div>
       </main>
     </div>

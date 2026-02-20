@@ -88,9 +88,10 @@ export default function SearchPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-4xl mx-auto">
-          <div className="mb-8">
+          <div className="mb-8 animate-float-in">
             <h1 className="text-3xl font-bold">Search & Scrape</h1>
             <p className="text-muted-foreground mt-1">
               Search the web and automatically scrape the top results. Get structured content from any search query.
@@ -347,6 +348,7 @@ export default function SearchPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
         </div>
       </main>
     </div>

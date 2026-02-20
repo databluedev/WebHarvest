@@ -35,34 +35,35 @@ export default function RegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background grid-bg noise">
       <div className="mesh-gradient fixed inset-0 pointer-events-none" />
-      <div className="w-full max-w-md px-6 animate-fade-in relative z-10">
+      <div className="fixed top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-primary/[0.04] blur-[120px] pointer-events-none animate-breathe" />
+      <div className="w-full max-w-md px-6 animate-float-in relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2.5">
-            <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center">
-              <Globe className="h-5 w-5 text-primary" />
+          <div className="inline-flex items-center gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-primary/8 border border-primary/15 grid place-items-center animate-glow-pulse">
+              <Globe className="h-6 w-6 text-primary" />
             </div>
-            <span className="text-xl font-semibold tracking-tight">WebHarvest</span>
+            <span className="text-2xl font-bold tracking-tight">WebHarvest</span>
           </div>
         </div>
 
         {/* Register Card */}
-        <div className="border-gradient rounded-2xl p-8">
+        <div className="glass-card rounded-2xl p-8">
           <div className="mb-6">
-            <h1 className="text-2xl font-semibold tracking-tight">Create account</h1>
-            <p className="text-sm text-foreground/50 mt-1">
+            <h1 className="text-2xl font-bold tracking-tight">Create account</h1>
+            <p className="text-sm text-muted-foreground/60 mt-1">
               Get started with WebHarvest
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+              <div className="rounded-xl border border-red-500/15 bg-red-500/8 p-3 text-sm text-red-400">
                 {error}
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-xs text-foreground/60 font-medium">
+              <label className="text-xs text-muted-foreground/60 font-medium">
                 Name <span className="text-foreground/30">(optional)</span>
               </label>
               <Input
@@ -73,7 +74,7 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs text-foreground/60 font-medium">Email</label>
+              <label className="text-xs text-muted-foreground/60 font-medium">Email</label>
               <Input
                 type="email"
                 placeholder="you@example.com"
@@ -84,7 +85,7 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs text-foreground/60 font-medium">Password</label>
+              <label className="text-xs text-muted-foreground/60 font-medium">Password</label>
               <Input
                 type="password"
                 placeholder="Create a password"
@@ -95,7 +96,7 @@ export default function RegisterPage() {
                 className="rounded-xl"
               />
             </div>
-            <Button type="submit" className="w-full rounded-xl gap-2" disabled={loading}>
+            <Button type="submit" variant="glow" className="w-full rounded-xl gap-2" disabled={loading}>
               {loading ? "Creating account..." : (
                 <>
                   Create Account
@@ -106,12 +107,12 @@ export default function RegisterPage() {
           </form>
 
           <div className="mt-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-foreground/10" />
-            <span className="text-xs text-foreground/40">or</span>
-            <div className="h-px flex-1 bg-foreground/10" />
+            <div className="h-px flex-1 bg-border/30" />
+            <span className="text-xs text-muted-foreground/30">or</span>
+            <div className="h-px flex-1 bg-border/30" />
           </div>
 
-          <p className="text-center text-sm text-foreground/50 mt-4">
+          <p className="text-center text-sm text-muted-foreground/60 mt-4">
             Already registered?{" "}
             <Link href="/auth/login" className="text-primary hover:underline">
               Sign in
@@ -119,7 +120,7 @@ export default function RegisterPage() {
           </p>
         </div>
 
-        <p className="text-center text-[11px] text-foreground/30 mt-6">
+        <p className="text-center text-[11px] text-muted-foreground/25 mt-6">
           Open source web crawling platform
         </p>
       </div>

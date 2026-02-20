@@ -20,13 +20,13 @@ const formatConfig = {
   },
   json: {
     icon: FileJson,
-    color: "text-yellow-400",
+    color: "text-amber-400",
     label: "JSON",
     description: "Full structured data",
   },
   csv: {
     icon: FileSpreadsheet,
-    color: "text-green-400",
+    color: "text-emerald-400",
     label: "CSV Spreadsheet",
     description: "URL, title, word count, metadata",
   },
@@ -85,7 +85,7 @@ export function ExportDropdown({
         <ChevronDown className="h-3 w-3 ml-0.5" />
       </Button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-56 rounded-md border border-border bg-popover shadow-lg z-50 py-1">
+        <div className="absolute right-0 top-full mt-1.5 w-56 rounded-xl border border-border/50 bg-popover/95 backdrop-blur-xl shadow-2xl shadow-black/20 z-50 py-1.5 animate-scale-in">
           {formats.map((fmt) => {
             const config = formatConfig[fmt];
             const Icon = config.icon;
@@ -93,12 +93,13 @@ export function ExportDropdown({
               <button
                 key={fmt}
                 onClick={() => handleExport(fmt)}
-                className="flex items-center gap-3 w-full px-3 py-2.5 text-sm hover:bg-muted transition-colors text-left"
+                className="flex items-center gap-3 w-full px-3 py-2.5 text-sm hover:bg-foreground/[0.04] transition-colors text-left rounded-lg mx-0.5"
+                style={{ width: "calc(100% - 4px)" }}
               >
                 <Icon className={`h-4 w-4 ${config.color}`} />
                 <div>
-                  <div className="font-medium">{config.label}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="font-medium text-[13px]">{config.label}</div>
+                  <div className="text-[11px] text-muted-foreground/60">
                     {config.description}
                   </div>
                 </div>

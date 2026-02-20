@@ -234,12 +234,13 @@ export default function ExtractPage() {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto grid-bg">
+        <div className="mesh-gradient min-h-full">
         <div className="p-8 max-w-7xl mx-auto">
           {/* Header */}
-          <div className="mb-6">
+          <div className="mb-6 animate-float-in">
             <div className="flex items-center gap-3 mb-1">
-              <div className="h-9 w-9 rounded-xl bg-purple-500/10 grid place-items-center">
+              <div className="h-9 w-9 rounded-xl bg-purple-500/10 grid place-items-center animate-glow-pulse">
                 <Sparkles className="h-4.5 w-4.5 text-purple-400" />
               </div>
               <div>
@@ -632,7 +633,7 @@ export default function ExtractPage() {
                       ].map((item) => (
                         <div
                           key={item.step}
-                          className="border-gradient rounded-xl p-3 text-center"
+                          className="glass-card rounded-xl p-3 text-center"
                         >
                           <div className="text-xs font-bold text-purple-400 font-mono mb-1">
                             {item.step}
@@ -664,6 +665,7 @@ export default function ExtractPage() {
               )}
             </div>
           </div>
+        </div>
         </div>
       </main>
     </div>
