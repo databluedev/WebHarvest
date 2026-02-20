@@ -32,14 +32,14 @@ DEVICE_PRESETS = {
     },
     # iPads
     "ipad_pro_12": {
-        "name": "iPad Pro 12.9\"",
+        "name": 'iPad Pro 12.9"',
         "width": 1024,
         "height": 1366,
         "device_scale_factor": 2,
         "user_agent": "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     },
     "ipad_pro_11": {
-        "name": "iPad Pro 11\"",
+        "name": 'iPad Pro 11"',
         "width": 834,
         "height": 1194,
         "device_scale_factor": 2,
@@ -98,7 +98,7 @@ DEVICE_PRESETS = {
     },
     # Desktop presets
     "macbook_pro_16": {
-        "name": "MacBook Pro 16\"",
+        "name": 'MacBook Pro 16"',
         "width": 1728,
         "height": 1117,
         "device_scale_factor": 2,
@@ -137,8 +137,10 @@ def list_device_presets() -> list[dict]:
             "width": preset["width"],
             "height": preset["height"],
             "type": (
-                "phone" if preset["width"] <= 430
-                else "tablet" if preset["width"] <= 1024
+                "phone"
+                if preset["width"] <= 430
+                else "tablet"
+                if preset["width"] <= 1024
                 else "desktop"
             ),
         }

@@ -1,6 +1,22 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, scrape, crawl, map, settings, proxy, batch, search, usage, schedule, events, extract, monitor, webhook, jobs
+from app.api.v1 import (
+    auth,
+    scrape,
+    crawl,
+    map,
+    settings,
+    proxy,
+    batch,
+    search,
+    usage,
+    schedule,
+    events,
+    extract,
+    monitor,
+    webhook,
+    jobs,
+)
 
 api_router = APIRouter(prefix="/v1")
 

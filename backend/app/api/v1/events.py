@@ -25,6 +25,7 @@ async def _get_user_from_token(token: str, db: AsyncSession) -> User:
 
     if token.startswith("wh_"):
         from app.services.auth import get_user_by_api_key
+
         user = await get_user_by_api_key(db, token)
         if not user:
             raise AuthenticationError("Invalid API key")
@@ -68,11 +69,13 @@ async def job_events(
             completed = job.completed_pages or 0
 
             if status != prev_status or completed != prev_completed:
-                data = json.dumps({
-                    "status": status,
-                    "completed_pages": completed,
-                    "total_pages": job.total_pages or 0,
-                })
+                data = json.dumps(
+                    {
+                        "status": status,
+                        "completed_pages": completed,
+                        "total_pages": job.total_pages or 0,
+                    }
+                )
                 yield f"data: {data}\n\n"
                 prev_status = status
                 prev_completed = completed

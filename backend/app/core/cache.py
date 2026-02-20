@@ -34,7 +34,9 @@ async def get_cached_scrape(url: str, formats: list[str]) -> dict | None:
     return None
 
 
-async def set_cached_scrape(url: str, formats: list[str], data: dict, ttl: int | None = None) -> None:
+async def set_cached_scrape(
+    url: str, formats: list[str], data: dict, ttl: int | None = None
+) -> None:
     """Store a scrape result in cache."""
     if not settings.CACHE_ENABLED:
         return

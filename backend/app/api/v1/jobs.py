@@ -104,18 +104,23 @@ async def retry_job(
 
     if original_job.type == "crawl":
         from app.workers.crawl_worker import process_crawl
+
         process_crawl.delay(new_job_id, config)
     elif original_job.type == "scrape":
         from app.workers.scrape_worker import process_scrape
+
         process_scrape.delay(new_job_id, config)
     elif original_job.type == "map":
         from app.workers.map_worker import process_map
+
         process_map.delay(new_job_id, config)
     elif original_job.type == "batch":
         from app.workers.batch_worker import process_batch
+
         process_batch.delay(new_job_id, config)
     elif original_job.type == "search":
         from app.workers.search_worker import process_search
+
         process_search.delay(new_job_id, config)
     else:
         raise BadRequestError(f"Cannot retry jobs of type '{original_job.type}'")

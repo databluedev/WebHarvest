@@ -16,7 +16,9 @@ class NotFoundError(HTTPException):
 
 
 class RateLimitError(HTTPException):
-    def __init__(self, detail: str = "Rate limit exceeded", headers: dict[str, str] | None = None):
+    def __init__(
+        self, detail: str = "Rate limit exceeded", headers: dict[str, str] | None = None
+    ):
         super().__init__(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=detail,

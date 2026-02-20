@@ -1,5 +1,3 @@
-from contextlib import asynccontextmanager
-
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -47,4 +45,6 @@ def create_worker_session_factory():
         pool_pre_ping=True,
         pool_recycle=3600,
     )
-    return async_sessionmaker(worker_engine, class_=AsyncSession, expire_on_commit=False), worker_engine
+    return async_sessionmaker(
+        worker_engine, class_=AsyncSession, expire_on_commit=False
+    ), worker_engine

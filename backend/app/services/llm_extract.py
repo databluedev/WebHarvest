@@ -74,7 +74,9 @@ async def extract_with_llm(
 
     if schema:
         system_prompt += f"\n\nReturn a JSON object matching this schema:\n```json\n{json.dumps(schema, indent=2)}\n```"
-        system_prompt += "\n\nReturn ONLY valid JSON, no markdown formatting or explanation."
+        system_prompt += (
+            "\n\nReturn ONLY valid JSON, no markdown formatting or explanation."
+        )
 
     user_prompt = ""
     if prompt:
@@ -120,7 +122,10 @@ async def extract_with_llm(
         logger.error(f"LLM extraction timed out for model={model}")
         raise BadRequestError(f"LLM extraction timed out after 60s (model={model})")
     except Exception as e:
-        logger.error(f"LLM extraction failed (model={model}, provider={llm_key.provider}): {type(e).__name__}: {e}", exc_info=True)
+        logger.error(
+            f"LLM extraction failed (model={model}, provider={llm_key.provider}): {type(e).__name__}: {e}",
+            exc_info=True,
+        )
         raise BadRequestError(f"LLM extraction failed: {type(e).__name__}: {e}")
 
 
@@ -130,9 +135,7 @@ async def _get_user_llm_key(
     """Get the user's LLM key, preferring the specified provider or default."""
     if provider:
         result = await db.execute(
-            select(LLMKey).where(
-                LLMKey.user_id == user_id, LLMKey.provider == provider
-            )
+            select(LLMKey).where(LLMKey.user_id == user_id, LLMKey.provider == provider)
         )
         key = result.scalar_one_or_none()
         if key:
@@ -140,14 +143,12 @@ async def _get_user_llm_key(
 
     # Try default key
     result = await db.execute(
-        select(LLMKey).where(LLMKey.user_id == user_id, LLMKey.is_default == True)
+        select(LLMKey).where(LLMKey.user_id == user_id, LLMKey.is_default == True)  # noqa: E712
     )
     key = result.scalar_one_or_none()
     if key:
         return key
 
     # Try any key
-    result = await db.execute(
-        select(LLMKey).where(LLMKey.user_id == user_id).limit(1)
-    )
+    result = await db.execute(select(LLMKey).where(LLMKey.user_id == user_id).limit(1))
     return result.scalar_one_or_none()

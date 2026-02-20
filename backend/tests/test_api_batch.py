@@ -1,10 +1,8 @@
 """Integration tests for /v1/batch endpoints."""
 
 import uuid
-from datetime import datetime, timezone
 
 import pytest
-import pytest_asyncio
 from unittest.mock import MagicMock, patch
 
 from httpx import AsyncClient
@@ -20,22 +18,25 @@ from app.models.job_result import JobResult
 
 
 class TestBatchScrape:
-
     @pytest.mark.asyncio
     async def test_batch_scrape_returns_job(self, client: AsyncClient, auth_headers):
         """POST /v1/batch/scrape creates a batch job and returns job_id."""
         with patch("app.api.v1.batch.process_batch") as mock_task:
             mock_task.delay = MagicMock()
 
-            resp = await client.post("/v1/batch/scrape", json={
-                "urls": [
-                    "https://example.com/page1",
-                    "https://example.com/page2",
-                    "https://example.com/page3",
-                ],
-                "formats": ["markdown"],
-                "concurrency": 3,
-            }, headers=auth_headers)
+            resp = await client.post(
+                "/v1/batch/scrape",
+                json={
+                    "urls": [
+                        "https://example.com/page1",
+                        "https://example.com/page2",
+                        "https://example.com/page3",
+                    ],
+                    "formats": ["markdown"],
+                    "concurrency": 3,
+                },
+                headers=auth_headers,
+            )
 
             assert resp.status_code == 200
             data = resp.json()
@@ -47,14 +48,20 @@ class TestBatchScrape:
             uuid.UUID(data["job_id"])
 
     @pytest.mark.asyncio
-    async def test_batch_scrape_dispatches_task(self, client: AsyncClient, auth_headers):
+    async def test_batch_scrape_dispatches_task(
+        self, client: AsyncClient, auth_headers
+    ):
         """POST /v1/batch/scrape dispatches a Celery task."""
         with patch("app.api.v1.batch.process_batch") as mock_task:
             mock_task.delay = MagicMock()
 
-            await client.post("/v1/batch/scrape", json={
-                "urls": ["https://a.com", "https://b.com"],
-            }, headers=auth_headers)
+            await client.post(
+                "/v1/batch/scrape",
+                json={
+                    "urls": ["https://a.com", "https://b.com"],
+                },
+                headers=auth_headers,
+            )
 
             mock_task.delay.assert_called_once()
             args = mock_task.delay.call_args[0]
@@ -64,9 +71,12 @@ class TestBatchScrape:
     @pytest.mark.asyncio
     async def test_batch_scrape_unauthenticated(self, client: AsyncClient):
         """POST /v1/batch/scrape without auth returns 401."""
-        resp = await client.post("/v1/batch/scrape", json={
-            "urls": ["https://example.com"],
-        })
+        resp = await client.post(
+            "/v1/batch/scrape",
+            json={
+                "urls": ["https://example.com"],
+            },
+        )
         assert resp.status_code == 401
 
     @pytest.mark.asyncio
@@ -75,9 +85,13 @@ class TestBatchScrape:
         with patch("app.api.v1.batch.process_batch") as mock_task:
             mock_task.delay = MagicMock()
 
-            resp = await client.post("/v1/batch/scrape", json={
-                "urls": [],
-            }, headers=auth_headers)
+            resp = await client.post(
+                "/v1/batch/scrape",
+                json={
+                    "urls": [],
+                },
+                headers=auth_headers,
+            )
 
             assert resp.status_code == 400
 
@@ -87,26 +101,36 @@ class TestBatchScrape:
         with patch("app.api.v1.batch.process_batch") as mock_task:
             mock_task.delay = MagicMock()
 
-            resp = await client.post("/v1/batch/scrape", json={
-                "items": [
-                    {"url": "https://a.com", "formats": ["markdown", "html"]},
-                    {"url": "https://b.com", "timeout": 60000},
-                ],
-            }, headers=auth_headers)
+            resp = await client.post(
+                "/v1/batch/scrape",
+                json={
+                    "items": [
+                        {"url": "https://a.com", "formats": ["markdown", "html"]},
+                        {"url": "https://b.com", "timeout": 60000},
+                    ],
+                },
+                headers=auth_headers,
+            )
 
             assert resp.status_code == 200
             data = resp.json()
             assert data["total_urls"] == 2
 
     @pytest.mark.asyncio
-    async def test_batch_scrape_message_includes_count(self, client: AsyncClient, auth_headers):
+    async def test_batch_scrape_message_includes_count(
+        self, client: AsyncClient, auth_headers
+    ):
         """The response message mentions the number of URLs."""
         with patch("app.api.v1.batch.process_batch") as mock_task:
             mock_task.delay = MagicMock()
 
-            resp = await client.post("/v1/batch/scrape", json={
-                "urls": ["https://a.com", "https://b.com", "https://c.com"],
-            }, headers=auth_headers)
+            resp = await client.post(
+                "/v1/batch/scrape",
+                json={
+                    "urls": ["https://a.com", "https://b.com", "https://c.com"],
+                },
+                headers=auth_headers,
+            )
 
             data = resp.json()
             assert "3" in data["message"]
@@ -118,9 +142,10 @@ class TestBatchScrape:
 
 
 class TestBatchStatus:
-
     @pytest.mark.asyncio
-    async def test_get_batch_status(self, client: AsyncClient, auth_headers, db_session: AsyncSession, test_user):
+    async def test_get_batch_status(
+        self, client: AsyncClient, auth_headers, db_session: AsyncSession, test_user
+    ):
         """GET /v1/batch/{id} returns batch job status with results."""
         job = Job(
             id=uuid.uuid4(),
@@ -169,7 +194,9 @@ class TestBatchStatus:
         assert resp.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_batch_status_wrong_type(self, client: AsyncClient, auth_headers, db_session: AsyncSession, test_user):
+    async def test_batch_status_wrong_type(
+        self, client: AsyncClient, auth_headers, db_session: AsyncSession, test_user
+    ):
         """GET /v1/batch/{id} for a non-batch job returns 404."""
         job = Job(
             id=uuid.uuid4(),

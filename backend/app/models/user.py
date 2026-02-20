@@ -14,7 +14,9 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    email: Mapped[str] = mapped_column(
+        String(255), unique=True, nullable=False, index=True
+    )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str | None] = mapped_column(String(255))
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -28,7 +30,13 @@ class User(Base):
     )
 
     # Relationships
-    api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
+    api_keys = relationship(
+        "ApiKey", back_populates="user", cascade="all, delete-orphan"
+    )
     jobs = relationship("Job", back_populates="user", cascade="all, delete-orphan")
-    llm_keys = relationship("LLMKey", back_populates="user", cascade="all, delete-orphan")
-    proxy_configs = relationship("ProxyConfig", back_populates="user", cascade="all, delete-orphan")
+    llm_keys = relationship(
+        "LLMKey", back_populates="user", cascade="all, delete-orphan"
+    )
+    proxy_configs = relationship(
+        "ProxyConfig", back_populates="user", cascade="all, delete-orphan"
+    )

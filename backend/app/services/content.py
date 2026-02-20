@@ -4,16 +4,33 @@ import math
 import re
 from urllib.parse import urljoin, urlparse
 
-from bs4 import BeautifulSoup, NavigableString, Tag
+from bs4 import BeautifulSoup, Tag
 from markdownify import MarkdownConverter
 
 logger = logging.getLogger(__name__)
 
 # Tags that are always junk — can't be rendered as meaningful markdown
 JUNK_TAGS = {
-    "script", "style", "noscript", "iframe", "svg", "path", "meta", "link",
-    "video", "audio", "canvas", "object", "embed", "source", "track",
-    "dialog", "template", "select", "option", "datalist",
+    "script",
+    "style",
+    "noscript",
+    "iframe",
+    "svg",
+    "path",
+    "meta",
+    "link",
+    "video",
+    "audio",
+    "canvas",
+    "object",
+    "embed",
+    "source",
+    "track",
+    "dialog",
+    "template",
+    "select",
+    "option",
+    "datalist",
 }
 
 # Selectors ALWAYS removed — these are never useful page content
@@ -22,42 +39,77 @@ BOILERPLATE_SELECTORS = [
     "nav",
     "[role='navigation']",
     # Cookie/consent/GDPR banners
-    ".cookie-banner", ".cookie-popup", "#cookie-consent", ".gdpr-banner",
-    ".cookie-notice", "#cookie-notice", ".consent-banner",
-    "[class*='cookie-consent']", "[class*='cookie-banner']",
-    "[class*='cookie-notice']", "[class*='consent-']",
+    ".cookie-banner",
+    ".cookie-popup",
+    "#cookie-consent",
+    ".gdpr-banner",
+    ".cookie-notice",
+    "#cookie-notice",
+    ".consent-banner",
+    "[class*='cookie-consent']",
+    "[class*='cookie-banner']",
+    "[class*='cookie-notice']",
+    "[class*='consent-']",
     # Modals/popups/overlays
-    "[role='dialog']", "[role='alertdialog']",
-    ".modal", ".popup", ".overlay-content",
-    "[class*='-modal']", "[class*='modal-']",
+    "[role='dialog']",
+    "[role='alertdialog']",
+    ".modal",
+    ".popup",
+    ".overlay-content",
+    "[class*='-modal']",
+    "[class*='modal-']",
     # Video/media player UI (controls, settings, captions)
-    ".vjs-control-bar", ".vjs-menu", ".vjs-text-track-settings",
-    ".vjs-modal-dialog", "[class*='video-player']",
-    "[class*='caption-window']", "[class*='caption-settings']",
+    ".vjs-control-bar",
+    ".vjs-menu",
+    ".vjs-text-track-settings",
+    ".vjs-modal-dialog",
+    "[class*='video-player']",
+    "[class*='caption-window']",
+    "[class*='caption-settings']",
     "[class*='player-controls']",
     # Accessibility/screen-reader-only (not visible content)
-    ".skip-link", ".skip-nav", ".sr-only", ".visually-hidden",
-    ".screen-reader-only", "[class*='skip-to']",
+    ".skip-link",
+    ".skip-nav",
+    ".sr-only",
+    ".visually-hidden",
+    ".screen-reader-only",
+    "[class*='skip-to']",
     # Social sharing
-    ".share-buttons", ".social-share", "[class*='social-links']",
-    "[class*='share-bar']", "[class*='share-buttons']",
+    ".share-buttons",
+    ".social-share",
+    "[class*='social-links']",
+    "[class*='share-bar']",
+    "[class*='share-buttons']",
     # Search forms
     "[role='search']",
     # Announcement/promo bars
-    ".announcement-bar", ".promo-bar", ".top-banner", ".alert-bar",
+    ".announcement-bar",
+    ".promo-bar",
+    ".top-banner",
+    ".alert-bar",
     # Newsletter signup
-    "[class*='newsletter']", "[class*='subscribe-form']",
+    "[class*='newsletter']",
+    "[class*='subscribe-form']",
     "[class*='email-signup']",
     # Back to top
-    ".back-to-top", "#back-to-top", "[class*='scroll-to-top']",
+    ".back-to-top",
+    "#back-to-top",
+    "[class*='scroll-to-top']",
     # Breadcrumbs
-    ".breadcrumb", ".breadcrumbs", "[class*='breadcrumb']",
+    ".breadcrumb",
+    ".breadcrumbs",
+    "[class*='breadcrumb']",
     # Pagination
-    ".pagination", ".pager", "[class*='pagination']",
+    ".pagination",
+    ".pager",
+    "[class*='pagination']",
     # Sidebar elements that are typically ads/promos
-    ".sidebar-ad", "[class*='ad-slot']", "[class*='advertisement']",
+    ".sidebar-ad",
+    "[class*='ad-slot']",
+    "[class*='advertisement']",
     # Chat widgets
-    "[class*='chat-widget']", "[class*='live-chat']",
+    "[class*='chat-widget']",
+    "[class*='live-chat']",
     "#hubspot-messages-iframe-container",
 ]
 
@@ -92,7 +144,7 @@ class WebHarvestConverter(MarkdownConverter):
             return text
 
         if title:
-            return f"[{text}]({href} \"{title}\")"
+            return f'[{text}]({href} "{title}")'
         return f"[{text}]({href})"
 
     def convert_img(self, el, text, *args, **kwargs):
@@ -136,7 +188,11 @@ def _is_inside_main_content(el: Tag) -> bool:
         if el_id in ("content", "main-content"):
             return True
         classes = parent.get("class", [])
-        if any(c in ("content", "main-content", "post", "entry", "product", "product-detail") for c in classes):
+        if any(
+            c
+            in ("content", "main-content", "post", "entry", "product", "product-detail")
+            for c in classes
+        ):
             return True
     return False
 
@@ -189,11 +245,14 @@ def extract_main_content(html: str, url: str = "") -> str:
 
     # Step 7: Compare with trafilatura and pick the more complete result
     bs4_html = str(main_content) if main_content else ""
-    bs4_text_len = len(BeautifulSoup(bs4_html, "lxml").get_text(strip=True)) if bs4_html else 0
+    bs4_text_len = (
+        len(BeautifulSoup(bs4_html, "lxml").get_text(strip=True)) if bs4_html else 0
+    )
 
     traf_html = ""
     try:
         import trafilatura
+
         traf_result = trafilatura.extract(
             html,
             include_links=True,
@@ -208,11 +267,15 @@ def extract_main_content(html: str, url: str = "") -> str:
     except Exception as e:
         logger.debug(f"Trafilatura extraction failed: {e}")
 
-    traf_text_len = len(BeautifulSoup(traf_html, "lxml").get_text(strip=True)) if traf_html else 0
+    traf_text_len = (
+        len(BeautifulSoup(traf_html, "lxml").get_text(strip=True)) if traf_html else 0
+    )
 
     # Pick whichever captured MORE content
     if bs4_text_len > traf_text_len * 1.2:
-        logger.debug(f"Using BS4 extraction ({bs4_text_len} chars > trafilatura {traf_text_len} chars)")
+        logger.debug(
+            f"Using BS4 extraction ({bs4_text_len} chars > trafilatura {traf_text_len} chars)"
+        )
         return bs4_html
     elif traf_text_len > 100:
         logger.debug(f"Using trafilatura extraction ({traf_text_len} chars)")
@@ -238,7 +301,10 @@ def _remove_hidden_elements(soup: BeautifulSoup) -> None:
         if "display:none" in style.replace(" ", "") or "display: none" in style:
             el.decompose()
             continue
-        if "visibility:hidden" in style.replace(" ", "") or "visibility: hidden" in style:
+        if (
+            "visibility:hidden" in style.replace(" ", "")
+            or "visibility: hidden" in style
+        ):
             el.decompose()
 
     # Elements with hidden attribute
@@ -261,7 +327,14 @@ def _remove_hidden_elements(soup: BeautifulSoup) -> None:
 
 def _find_main_container(soup: BeautifulSoup) -> Tag | None:
     """Find the main content container using semantic HTML and heuristics."""
-    for selector in ["main", "article", "[role='main']", "#content", "#main-content", ".main-content"]:
+    for selector in [
+        "main",
+        "article",
+        "[role='main']",
+        "#content",
+        "#main-content",
+        ".main-content",
+    ]:
         el = soup.select_one(selector)
         if el and len(el.get_text(strip=True)) > 200:
             return el
@@ -295,7 +368,9 @@ def _smart_body_extract(soup: BeautifulSoup) -> Tag | None:
 
 
 def apply_tag_filters(
-    html: str, include_tags: list[str] | None = None, exclude_tags: list[str] | None = None
+    html: str,
+    include_tags: list[str] | None = None,
+    exclude_tags: list[str] | None = None,
 ) -> str:
     """Apply include/exclude tag filters to HTML content."""
     soup = BeautifulSoup(html, "lxml")
@@ -584,7 +659,9 @@ def extract_images(html: str, base_url: str) -> list[dict]:
     return images
 
 
-def extract_metadata(html: str, url: str, status_code: int = 200, response_headers: dict | None = None) -> dict:
+def extract_metadata(
+    html: str, url: str, status_code: int = 200, response_headers: dict | None = None
+) -> dict:
     """
     Extract comprehensive page metadata from HTML.
     Much richer than basic title/description - includes SEO signals,
@@ -677,9 +754,17 @@ def extract_metadata(html: str, url: str, status_code: int = 200, response_heade
     if response_headers:
         # Pick the most useful headers
         useful_headers = {}
-        for key in ["content-type", "server", "x-powered-by", "cache-control",
-                     "x-frame-options", "content-security-policy", "x-robots-tag",
-                     "last-modified", "etag"]:
+        for key in [
+            "content-type",
+            "server",
+            "x-powered-by",
+            "cache-control",
+            "x-frame-options",
+            "content-security-policy",
+            "x-robots-tag",
+            "last-modified",
+            "etag",
+        ]:
             val = response_headers.get(key)
             if val:
                 useful_headers[key] = val

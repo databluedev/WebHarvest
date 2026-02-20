@@ -1,5 +1,4 @@
 import gzip
-import io
 import logging
 import random
 import xml.etree.ElementTree as ET
@@ -34,6 +33,7 @@ async def _fetch_url(url: str, timeout: int = 15) -> tuple[str, int]:
     # Try curl_cffi first
     try:
         from curl_cffi.requests import AsyncSession
+
         impersonate = random.choice(["chrome124", "chrome123", "chrome120"])
         async with AsyncSession(impersonate=impersonate) as session:
             resp = await session.get(
@@ -42,7 +42,9 @@ async def _fetch_url(url: str, timeout: int = 15) -> tuple[str, int]:
                 allow_redirects=True,
                 headers=random.choice(_HEADERS_LIST),
             )
-            logger.debug(f"curl_cffi {url} -> {resp.status_code} ({len(resp.text)} chars)")
+            logger.debug(
+                f"curl_cffi {url} -> {resp.status_code} ({len(resp.text)} chars)"
+            )
             return resp.text, resp.status_code
     except Exception as e:
         logger.debug(f"curl_cffi failed for {url}: {e}")
@@ -68,6 +70,7 @@ async def _fetch_bytes(url: str, timeout: int = 15) -> tuple[bytes, int]:
     """Fetch a URL and return raw bytes (for gzip handling)."""
     try:
         from curl_cffi.requests import AsyncSession
+
         impersonate = random.choice(["chrome124", "chrome123", "chrome120"])
         async with AsyncSession(impersonate=impersonate) as session:
             resp = await session.get(
@@ -99,9 +102,12 @@ async def _fetch_with_browser(url: str) -> str:
     """Fetch page content using browser for sites that block HTTP requests."""
     try:
         from app.services.browser import browser_pool
+
         async with browser_pool.get_page(target_url=url) as page:
             referrer = "https://www.google.com/"
-            await page.goto(url, wait_until="domcontentloaded", timeout=45000, referer=referrer)
+            await page.goto(
+                url, wait_until="domcontentloaded", timeout=45000, referer=referrer
+            )
             # Wait for network to settle but don't block forever
             try:
                 await page.wait_for_load_state("networkidle", timeout=10000)
@@ -262,7 +268,11 @@ def _parse_single_sitemap_xml(root: ET.Element, ns: dict) -> list[LinkResult]:
 
         # Parse optional fields
         lastmod_el = url_el.find("sm:lastmod", ns)
-        lastmod = lastmod_el.text.strip() if lastmod_el is not None and lastmod_el.text else None
+        lastmod = (
+            lastmod_el.text.strip()
+            if lastmod_el is not None and lastmod_el.text
+            else None
+        )
 
         priority_el = url_el.find("sm:priority", ns)
         priority = None
@@ -273,7 +283,11 @@ def _parse_single_sitemap_xml(root: ET.Element, ns: dict) -> list[LinkResult]:
                 pass
 
         changefreq_el = url_el.find("sm:changefreq", ns)
-        changefreq = changefreq_el.text.strip() if changefreq_el is not None and changefreq_el.text else None
+        changefreq = (
+            changefreq_el.text.strip()
+            if changefreq_el is not None and changefreq_el.text
+            else None
+        )
 
         # Parse image sitemap entries
         image_urls = []
@@ -294,13 +308,15 @@ def _parse_single_sitemap_xml(root: ET.Element, ns: dict) -> list[LinkResult]:
 
         description = " | ".join(desc_parts) if desc_parts else None
 
-        links.append(LinkResult(
-            url=url,
-            title=None,
-            description=description,
-            lastmod=lastmod,
-            priority=priority,
-        ))
+        links.append(
+            LinkResult(
+                url=url,
+                title=None,
+                description=description,
+                lastmod=lastmod,
+                priority=priority,
+            )
+        )
 
     return links
 
@@ -311,17 +327,19 @@ async def _crawl_homepage(base_url: str, include_subdomains: bool) -> list[LinkR
     parsed_base = urlparse(base_url)
     base_domain = parsed_base.netloc
     if base_domain.startswith("www."):
-        base_domain_nowww = base_domain[4:]
-    else:
-        base_domain_nowww = base_domain
+        base_domain = base_domain[4:]
 
     try:
         text, status = await _fetch_url(base_url, timeout=20)
         if not text:
             return links
 
-        links = _extract_links_from_html(text, base_url, base_domain, include_subdomains)
-        logger.info(f"Homepage crawl for {base_url}: status={status}, links={len(links)}")
+        links = _extract_links_from_html(
+            text, base_url, base_domain, include_subdomains
+        )
+        logger.info(
+            f"Homepage crawl for {base_url}: status={status}, links={len(links)}"
+        )
 
     except Exception as e:
         logger.warning(f"Homepage crawl failed for {base_url}: {e}")
@@ -329,7 +347,9 @@ async def _crawl_homepage(base_url: str, include_subdomains: bool) -> list[LinkR
     return links
 
 
-async def _crawl_homepage_browser(base_url: str, include_subdomains: bool) -> list[LinkResult]:
+async def _crawl_homepage_browser(
+    base_url: str, include_subdomains: bool
+) -> list[LinkResult]:
     """Crawl homepage using browser for sites that block HTTP requests."""
     parsed_base = urlparse(base_url)
     base_domain = parsed_base.netloc
@@ -354,8 +374,6 @@ def _extract_links_from_html(
     soup = BeautifulSoup(html, "lxml")
 
     # Get page title and description for context
-    page_title = soup.title.get_text(strip=True) if soup.title else None
-
     for a_tag in soup.find_all("a", href=True):
         href = a_tag["href"].strip()
         if href.startswith(("#", "mailto:", "tel:", "javascript:")):

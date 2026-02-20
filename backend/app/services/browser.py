@@ -1,9 +1,7 @@
 import asyncio
 import base64
-import hashlib
 import logging
 import random
-import time
 from contextlib import asynccontextmanager
 
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
@@ -57,13 +55,34 @@ TIMEZONES = [
 
 # Realistic WebGL renderer strings per GPU vendor
 WEBGL_RENDERERS = [
-    ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce GTX 1080 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-    ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-    ("Google Inc. (NVIDIA)", "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-    ("Google Inc. (Intel)", "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-    ("Google Inc. (Intel)", "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-    ("Google Inc. (AMD)", "ANGLE (AMD, AMD Radeon RX 580 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
-    ("Google Inc. (AMD)", "ANGLE (AMD, AMD Radeon RX 6700 XT Direct3D11 vs_5_0 ps_5_0, D3D11)"),
+    (
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 1080 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    ),
+    (
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    ),
+    (
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    ),
+    (
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    ),
+    (
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    ),
+    (
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon RX 580 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    ),
+    (
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon RX 6700 XT Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    ),
     ("Google Inc. (Apple)", "ANGLE (Apple, Apple M1, OpenGL 4.1)"),
     ("Google Inc. (Apple)", "ANGLE (Apple, Apple M2, OpenGL 4.1)"),
 ]
@@ -78,7 +97,13 @@ COLOR_DEPTHS = [24, 24, 24, 30, 32]
 # ---------------------------------------------------------------------------
 
 
-def _build_chromium_stealth(webgl_vendor: str, webgl_renderer: str, color_depth: int, hw_concurrency: int, device_mem: int) -> str:
+def _build_chromium_stealth(
+    webgl_vendor: str,
+    webgl_renderer: str,
+    color_depth: int,
+    hw_concurrency: int,
+    device_mem: int,
+) -> str:
     """Build a parameterized stealth script with unique fingerprint per session."""
     return f"""
 // ============================================================
@@ -705,8 +730,12 @@ class BrowserPool:
                 self._initialized = False
 
             # Also reinitialize if browsers have crashed/disconnected
-            if self._initialized and (not self._chromium or not self._chromium.is_connected()):
-                logger.warning("Chromium browser disconnected, reinitializing browser pool")
+            if self._initialized and (
+                not self._chromium or not self._chromium.is_connected()
+            ):
+                logger.warning(
+                    "Chromium browser disconnected, reinitializing browser pool"
+                )
                 self._force_kill_old_browsers()
                 self._playwright = None
                 self._chromium = None
@@ -728,7 +757,9 @@ class BrowserPool:
             self._firefox = None
 
             self._initialized = True
-            logger.info(f"Browser pool initialized (chromium={settings.CHROMIUM_POOL_SIZE}, firefox={settings.FIREFOX_POOL_SIZE})")
+            logger.info(
+                f"Browser pool initialized (chromium={settings.CHROMIUM_POOL_SIZE}, firefox={settings.FIREFOX_POOL_SIZE})"
+            )
 
     async def _ensure_firefox(self):
         """Lazy-launch Firefox on first use."""
@@ -775,21 +806,22 @@ class BrowserPool:
         """Synchronously kill old browser processes tied to a dead event loop."""
         import os
         import signal
+
         for browser in [self._chromium, self._firefox]:
             try:
-                if browser and hasattr(browser, '_impl_obj'):
-                    proc = getattr(browser._impl_obj, '_browser_process', None)
+                if browser and hasattr(browser, "_impl_obj"):
+                    proc = getattr(browser._impl_obj, "_browser_process", None)
                     if proc and proc.pid:
                         os.kill(proc.pid, signal.SIGKILL)
             except Exception:
                 pass
         try:
-            if self._playwright and hasattr(self._playwright, '_impl_obj'):
-                conn = getattr(self._playwright._impl_obj, '_connection', None)
+            if self._playwright and hasattr(self._playwright, "_impl_obj"):
+                conn = getattr(self._playwright._impl_obj, "_connection", None)
                 if conn:
-                    transport = getattr(conn, '_transport', None)
+                    transport = getattr(conn, "_transport", None)
                     if transport:
-                        proc = getattr(transport, '_proc', None)
+                        proc = getattr(transport, "_proc", None)
                         if proc:
                             proc.kill()
         except Exception:
@@ -810,6 +842,7 @@ class BrowserPool:
         """Extract domain from URL for cookie jar."""
         try:
             from urllib.parse import urlparse
+
             return urlparse(url).netloc.lower()
         except Exception:
             return ""
@@ -836,13 +869,16 @@ class BrowserPool:
     def _is_browser_closed_error(self, exc: Exception) -> bool:
         """Check if an exception indicates the browser process has died."""
         msg = str(exc).lower()
-        return any(phrase in msg for phrase in [
-            "browser has been closed",
-            "target page, context or browser has been closed",
-            "browser.new_context",
-            "connection closed",
-            "browser closed",
-        ])
+        return any(
+            phrase in msg
+            for phrase in [
+                "browser has been closed",
+                "target page, context or browser has been closed",
+                "browser.new_context",
+                "connection closed",
+                "browser closed",
+            ]
+        )
 
     @asynccontextmanager
     async def get_page(
@@ -877,7 +913,9 @@ class BrowserPool:
                 # Resolve the browser reference, relaunching if it crashed
                 browser = self._firefox if is_firefox else self._chromium
                 if browser is None or not browser.is_connected():
-                    logger.warning(f"{'Firefox' if is_firefox else 'Chromium'} browser not connected, relaunching")
+                    logger.warning(
+                        f"{'Firefox' if is_firefox else 'Chromium'} browser not connected, relaunching"
+                    )
                     await self._relaunch_browser(use_firefox=is_firefox)
                     browser = self._firefox if is_firefox else self._chromium
 
@@ -932,7 +970,11 @@ class BrowserPool:
                             "Accept-Encoding": "gzip, deflate, br",
                             "Sec-Ch-Ua": '"Chromium";v="125", "Google Chrome";v="125", "Not-A.Brand";v="99"',
                             "Sec-Ch-Ua-Mobile": "?0",
-                            "Sec-Ch-Ua-Platform": '"Windows"' if "Win" in ua else '"macOS"' if "Mac" in ua else '"Linux"',
+                            "Sec-Ch-Ua-Platform": '"Windows"'
+                            if "Win" in ua
+                            else '"macOS"'
+                            if "Mac" in ua
+                            else '"Linux"',
                             "Sec-Fetch-Dest": "document",
                             "Sec-Fetch-Mode": "navigate",
                             "Sec-Fetch-Site": "none",
@@ -946,14 +988,20 @@ class BrowserPool:
 
                 # Try to create context, relaunch browser on failure
                 try:
-                    context: BrowserContext = await browser.new_context(**context_kwargs)
+                    context: BrowserContext = await browser.new_context(
+                        **context_kwargs
+                    )
                 except Exception as e:
                     if self._is_browser_closed_error(e):
-                        logger.warning(f"Browser closed during new_context, relaunching {'Firefox' if is_firefox else 'Chromium'}")
+                        logger.warning(
+                            f"Browser closed during new_context, relaunching {'Firefox' if is_firefox else 'Chromium'}"
+                        )
                         await self._relaunch_browser(use_firefox=is_firefox)
                         browser = self._firefox if is_firefox else self._chromium
                         if browser is None:
-                            raise RuntimeError(f"{'Firefox' if is_firefox else 'Chromium'} browser failed to relaunch") from e
+                            raise RuntimeError(
+                                f"{'Firefox' if is_firefox else 'Chromium'} browser failed to relaunch"
+                            ) from e
                         context = await browser.new_context(**context_kwargs)
                     else:
                         raise
@@ -967,8 +1015,11 @@ class BrowserPool:
                         script = _build_firefox_stealth(hw_concurrency)
                     else:
                         script = _build_chromium_stealth(
-                            webgl_vendor, webgl_renderer, color_depth,
-                            hw_concurrency, device_mem,
+                            webgl_vendor,
+                            webgl_renderer,
+                            color_depth,
+                            hw_concurrency,
+                            device_mem,
                         )
                     await context.add_init_script(script)
 
@@ -1101,7 +1152,9 @@ class BrowserPool:
                             await page.fill(field_selector, field_value, timeout=3000)
                         except Exception:
                             try:
-                                await page.type(field_selector, field_value, delay=30, timeout=3000)
+                                await page.type(
+                                    field_selector, field_value, delay=30, timeout=3000
+                                )
                             except Exception:
                                 pass
                     # Small delay after filling form
@@ -1165,13 +1218,19 @@ class CrawlSession:
         """Acquire semaphore + create persistent context with stealth."""
         await self._pool.initialize()
 
-        if self._use_firefox and (not self._pool._firefox or not self._pool._firefox.is_connected()):
+        if self._use_firefox and (
+            not self._pool._firefox or not self._pool._firefox.is_connected()
+        ):
             await self._pool._ensure_firefox()
 
         from app.core.metrics import active_browser_contexts
 
         is_firefox = self._use_firefox and self._pool._firefox is not None
-        self._semaphore = self._pool._firefox_semaphore if is_firefox else self._pool._chromium_semaphore
+        self._semaphore = (
+            self._pool._firefox_semaphore
+            if is_firefox
+            else self._pool._chromium_semaphore
+        )
 
         await self._semaphore.acquire()
         self._semaphore_acquired = True
@@ -1231,7 +1290,11 @@ class CrawlSession:
                     "Accept-Encoding": "gzip, deflate, br",
                     "Sec-Ch-Ua": '"Chromium";v="125", "Google Chrome";v="125", "Not-A.Brand";v="99"',
                     "Sec-Ch-Ua-Mobile": "?0",
-                    "Sec-Ch-Ua-Platform": '"Windows"' if "Win" in ua else '"macOS"' if "Mac" in ua else '"Linux"',
+                    "Sec-Ch-Ua-Platform": '"Windows"'
+                    if "Win" in ua
+                    else '"macOS"'
+                    if "Mac" in ua
+                    else '"Linux"',
                     "Sec-Fetch-Dest": "document",
                     "Sec-Fetch-Mode": "navigate",
                     "Sec-Fetch-Site": "none",
@@ -1250,7 +1313,9 @@ class CrawlSession:
                 await self._pool._relaunch_browser(use_firefox=is_firefox)
                 browser = self._pool._firefox if is_firefox else self._pool._chromium
                 if browser is None:
-                    raise RuntimeError(f"{'Firefox' if is_firefox else 'Chromium'} browser failed to relaunch") from e
+                    raise RuntimeError(
+                        f"{'Firefox' if is_firefox else 'Chromium'} browser failed to relaunch"
+                    ) from e
                 self._context = await browser.new_context(**context_kwargs)
             else:
                 raise
@@ -1264,8 +1329,11 @@ class CrawlSession:
             script = _build_firefox_stealth(hw_concurrency)
         else:
             script = _build_chromium_stealth(
-                webgl_vendor, webgl_renderer, color_depth,
-                hw_concurrency, device_mem,
+                webgl_vendor,
+                webgl_renderer,
+                color_depth,
+                hw_concurrency,
+                device_mem,
             )
         await self._context.add_init_script(script)
 
@@ -1305,16 +1373,28 @@ class CrawlSession:
         if is_firefox:
             ua = random.choice(FIREFOX_USER_AGENTS)
             context_kwargs = dict(
-                user_agent=ua, viewport=vp, locale="en-US", timezone_id=tz,
-                ignore_https_errors=True, java_script_enabled=True,
-                has_touch=False, is_mobile=False, color_scheme="light",
+                user_agent=ua,
+                viewport=vp,
+                locale="en-US",
+                timezone_id=tz,
+                ignore_https_errors=True,
+                java_script_enabled=True,
+                has_touch=False,
+                is_mobile=False,
+                color_scheme="light",
             )
         else:
             ua = random.choice(CHROME_USER_AGENTS)
             context_kwargs = dict(
-                user_agent=ua, viewport=vp, locale="en-US", timezone_id=tz,
-                ignore_https_errors=True, java_script_enabled=True,
-                has_touch=False, is_mobile=False, color_scheme="light",
+                user_agent=ua,
+                viewport=vp,
+                locale="en-US",
+                timezone_id=tz,
+                ignore_https_errors=True,
+                java_script_enabled=True,
+                has_touch=False,
+                is_mobile=False,
+                color_scheme="light",
             )
 
         self._context = await browser.new_context(**context_kwargs)
@@ -1324,8 +1404,11 @@ class CrawlSession:
             script = _build_firefox_stealth(hw_concurrency)
         else:
             script = _build_chromium_stealth(
-                webgl_vendor, webgl_renderer, color_depth,
-                hw_concurrency, device_mem,
+                webgl_vendor,
+                webgl_renderer,
+                color_depth,
+                hw_concurrency,
+                device_mem,
             )
         await self._context.add_init_script(script)
 

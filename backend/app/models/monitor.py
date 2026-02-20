@@ -19,7 +19,10 @@ class Monitor(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     url: Mapped[str] = mapped_column(Text, nullable=False)
@@ -45,7 +48,9 @@ class Monitor(Base):
     last_content: Mapped[str | None] = mapped_column(Text)
     total_checks: Mapped[int] = mapped_column(Integer, default=0)
     total_changes: Mapped[int] = mapped_column(Integer, default=0)
-    next_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    next_check_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -58,8 +63,12 @@ class Monitor(Base):
 
     # Relationships
     user = relationship("User", backref="monitors")
-    checks = relationship("MonitorCheck", back_populates="monitor", cascade="all, delete-orphan",
-                          order_by="MonitorCheck.checked_at.desc()")
+    checks = relationship(
+        "MonitorCheck",
+        back_populates="monitor",
+        cascade="all, delete-orphan",
+        order_by="MonitorCheck.checked_at.desc()",
+    )
 
 
 class MonitorCheck(Base):
@@ -71,7 +80,10 @@ class MonitorCheck(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     monitor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("monitors.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("monitors.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     checked_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

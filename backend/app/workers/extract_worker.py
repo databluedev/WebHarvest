@@ -18,7 +18,9 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.workers.extract_worker.process_extract", bind=True, max_retries=1)
+@celery_app.task(
+    name="app.workers.extract_worker.process_extract", bind=True, max_retries=1
+)
 def process_extract(self, job_id: str, config: dict):
     """Process a multi-URL extraction job."""
 
@@ -50,6 +52,7 @@ def process_extract(self, job_id: str, config: dict):
         proxy_manager = None
         if use_proxy:
             from app.services.proxy import ProxyManager
+
             async with session_factory() as db:
                 job = await db.get(Job, UUID(job_id))
                 if job:
@@ -81,12 +84,16 @@ def process_extract(self, job_id: str, config: dict):
                         headers=custom_headers,
                         cookies=custom_cookies,
                     )
-                    result = await scrape_url(scrape_request, proxy_manager=proxy_manager)
+                    result = await scrape_url(
+                        scrape_request, proxy_manager=proxy_manager
+                    )
 
                     content = result.markdown or ""
                     if not content and result.html:
                         content = html_to_markdown(
-                            extract_main_content(result.html, url) if only_main_content else result.html
+                            extract_main_content(result.html, url)
+                            if only_main_content
+                            else result.html
                         )
 
                     if not content:
@@ -160,6 +167,7 @@ def process_extract(self, job_id: str, config: dict):
             if webhook_url:
                 try:
                     from app.services.webhook import send_webhook
+
                     await send_webhook(
                         url=webhook_url,
                         payload={
@@ -188,6 +196,7 @@ def process_extract(self, job_id: str, config: dict):
             if webhook_url:
                 try:
                     from app.services.webhook import send_webhook
+
                     await send_webhook(
                         url=webhook_url,
                         payload={

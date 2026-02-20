@@ -16,8 +16,13 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.workers.scrape_worker.process_scrape", bind=True, max_retries=2,
-                 soft_time_limit=300, time_limit=360)
+@celery_app.task(
+    name="app.workers.scrape_worker.process_scrape",
+    bind=True,
+    max_retries=2,
+    soft_time_limit=300,
+    time_limit=360,
+)
 def process_scrape(self, job_id: str, url: str, config: dict):
     """Process a single scrape job."""
 
@@ -38,6 +43,7 @@ def process_scrape(self, job_id: str, url: str, config: dict):
             request = ScrapeRequest(**config)
             if request.use_proxy:
                 from app.services.proxy import ProxyManager
+
                 async with session_factory() as db:
                     job = await db.get(Job, UUID(job_id))
                     if job:
@@ -95,6 +101,7 @@ def process_scrape(self, job_id: str, url: str, config: dict):
             if request.webhook_url:
                 try:
                     from app.services.webhook import send_webhook
+
                     await send_webhook(
                         url=request.webhook_url,
                         payload={
@@ -107,10 +114,13 @@ def process_scrape(self, job_id: str, url: str, config: dict):
                         secret=request.webhook_secret,
                     )
                 except Exception as wh_err:
-                    logger.warning(f"Webhook delivery failed for scrape {job_id}: {wh_err}")
+                    logger.warning(
+                        f"Webhook delivery failed for scrape {job_id}: {wh_err}"
+                    )
 
         except Exception as e:
             import traceback
+
             tb = traceback.format_exc()
             logger.error(f"Scrape job {job_id} failed: {e}\n{tb}")
             async with session_factory() as db:
@@ -124,6 +134,7 @@ def process_scrape(self, job_id: str, url: str, config: dict):
             if request.webhook_url:
                 try:
                     from app.services.webhook import send_webhook
+
                     await send_webhook(
                         url=request.webhook_url,
                         payload={

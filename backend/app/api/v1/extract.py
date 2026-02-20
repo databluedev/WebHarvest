@@ -1,9 +1,7 @@
 """Standalone /extract endpoint for LLM-powered data extraction."""
 
 import asyncio
-import json
 import logging
-from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response
@@ -55,10 +53,16 @@ async def extract(
     response.headers["X-RateLimit-Reset"] = str(rl.reset)
     if not rl.allowed:
         from app.core.exceptions import RateLimitError
+
         raise RateLimitError("Extract rate limit exceeded. Try again in a minute.")
 
     # Validate input
-    if not request.content and not request.html and not request.url and not request.urls:
+    if (
+        not request.content
+        and not request.html
+        and not request.url
+        and not request.urls
+    ):
         raise BadRequestError("Provide at least one of: content, html, url, or urls")
     if not request.prompt and not request.schema_:
         raise BadRequestError("Provide at least one of: prompt or schema")
@@ -76,6 +80,7 @@ async def extract(
     # If HTML provided, convert to markdown
     if not content and request.html:
         from app.services.content import html_to_markdown, extract_main_content
+
         html = request.html
         if request.only_main_content:
             html = extract_main_content(html, "")
@@ -93,6 +98,7 @@ async def extract(
         proxy_manager = None
         if request.use_proxy:
             from app.services.proxy import ProxyManager
+
             proxy_manager = await ProxyManager.from_user(db, user.id)
 
         scrape_request = ScrapeRequest(
@@ -114,8 +120,11 @@ async def extract(
             content = result.markdown or ""
             if not content and result.html:
                 from app.services.content import html_to_markdown, extract_main_content
+
                 content = html_to_markdown(
-                    extract_main_content(result.html, url) if request.only_main_content else result.html
+                    extract_main_content(result.html, url)
+                    if request.only_main_content
+                    else result.html
                 )
         except asyncio.TimeoutError:
             return ExtractResponse(
@@ -210,19 +219,23 @@ async def get_extract_status(
         raise NotFoundError("Extract job not found")
 
     result = await db.execute(
-        select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+        select(JobResult)
+        .where(JobResult.job_id == job.id)
+        .order_by(JobResult.created_at)
     )
     results = result.scalars().all()
 
     data = []
     for r in results:
         meta = r.metadata_ or {}
-        data.append(ExtractResult(
-            url=r.url,
-            extract=r.extract,
-            content_length=meta.get("content_length", 0),
-            error=meta.get("error"),
-        ))
+        data.append(
+            ExtractResult(
+                url=r.url,
+                extract=r.extract,
+                content_length=meta.get("content_length", 0),
+                error=meta.get("error"),
+            )
+        )
 
     return ExtractStatusResponse(
         success=True,

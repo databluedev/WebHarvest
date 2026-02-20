@@ -36,6 +36,7 @@ async def _get_redis():
     """Get the shared Redis connection."""
     try:
         from app.core.redis import get_redis
+
         return await get_redis()
     except Exception:
         return None
@@ -65,7 +66,9 @@ async def get_domain_strategy(url: str) -> dict | None:
         raw = await redis.get(_redis_key(domain))
         if raw:
             data = json.loads(raw)
-            logger.debug(f"Strategy cache hit for {domain}: tier={data.get('last_success_tier')}, strategy={data.get('last_success_strategy')}")
+            logger.debug(
+                f"Strategy cache hit for {domain}: tier={data.get('last_success_tier')}, strategy={data.get('last_success_strategy')}"
+            )
             return data
     except Exception as e:
         logger.debug(f"Strategy cache read error for {domain}: {e}")
@@ -103,10 +106,14 @@ async def record_strategy_result(
     try:
         # Read existing data
         raw = await redis.get(key)
-        data = json.loads(raw) if raw else {
-            "fail_count_tier1": 0,
-            "fail_count_tier2": 0,
-        }
+        data = (
+            json.loads(raw)
+            if raw
+            else {
+                "fail_count_tier1": 0,
+                "fail_count_tier2": 0,
+            }
+        )
 
         if success:
             data["last_success_strategy"] = strategy

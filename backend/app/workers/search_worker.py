@@ -16,8 +16,13 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.workers.search_worker.process_search", bind=True, max_retries=1,
-                 soft_time_limit=3600, time_limit=3660)
+@celery_app.task(
+    name="app.workers.search_worker.process_search",
+    bind=True,
+    max_retries=1,
+    soft_time_limit=3600,
+    time_limit=3660,
+)
 def process_search(self, job_id: str, config: dict):
     """Process a search job — search web, then scrape top results."""
 
@@ -39,6 +44,7 @@ def process_search(self, job_id: str, config: dict):
         proxy_manager = None
         if request.use_proxy:
             from app.services.proxy import ProxyManager
+
             async with session_factory() as db:
                 job = await db.get(Job, UUID(job_id))
                 if job:
@@ -80,7 +86,6 @@ def process_search(self, job_id: str, config: dict):
                 return
 
             # Deduplicate search result URLs
-            url_to_result = {sr.url: sr for sr in search_results}
             deduped_urls = deduplicate_urls([sr.url for sr in search_results])
             # Rebuild search_results in deduped order
             deduped_results = []
@@ -205,6 +210,7 @@ def process_search(self, job_id: str, config: dict):
             if request.webhook_url:
                 try:
                     from app.services.webhook import send_webhook
+
                     async with session_factory() as db:
                         job = await db.get(Job, UUID(job_id))
                         if job:
@@ -217,8 +223,12 @@ def process_search(self, job_id: str, config: dict):
                                     "status": job.status,
                                     "total_pages": job.total_pages,
                                     "completed_pages": job.completed_pages,
-                                    "created_at": job.created_at.isoformat() if job.created_at else None,
-                                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                                    "created_at": job.created_at.isoformat()
+                                    if job.created_at
+                                    else None,
+                                    "completed_at": job.completed_at.isoformat()
+                                    if job.completed_at
+                                    else None,
                                 },
                                 secret=request.webhook_secret,
                             )
@@ -238,6 +248,7 @@ def process_search(self, job_id: str, config: dict):
             if request.webhook_url:
                 try:
                     from app.services.webhook import send_webhook
+
                     await send_webhook(
                         url=request.webhook_url,
                         payload={

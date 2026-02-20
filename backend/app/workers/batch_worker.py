@@ -16,8 +16,13 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.workers.batch_worker.process_batch", bind=True, max_retries=1,
-                 soft_time_limit=1800, time_limit=1860)
+@celery_app.task(
+    name="app.workers.batch_worker.process_batch",
+    bind=True,
+    max_retries=1,
+    soft_time_limit=1800,
+    time_limit=1860,
+)
 def process_batch(self, job_id: str, config: dict):
     """Process a batch scrape job — scrape multiple URLs concurrently."""
 
@@ -48,30 +53,41 @@ def process_batch(self, job_id: str, config: dict):
             seen_urls = set()
             for item in request.items:
                 from app.services.dedup import normalize_url
+
                 norm = normalize_url(item.url)
                 if norm in seen_urls:
                     continue
                 seen_urls.add(norm)
-                url_configs.append({
-                    "url": item.url,
-                    "formats": item.formats or request.formats,
-                    "only_main_content": item.only_main_content if item.only_main_content is not None else request.only_main_content,
-                    "wait_for": item.wait_for if item.wait_for is not None else request.wait_for,
-                    "timeout": item.timeout if item.timeout is not None else request.timeout,
-                    **_shared,
-                })
+                url_configs.append(
+                    {
+                        "url": item.url,
+                        "formats": item.formats or request.formats,
+                        "only_main_content": item.only_main_content
+                        if item.only_main_content is not None
+                        else request.only_main_content,
+                        "wait_for": item.wait_for
+                        if item.wait_for is not None
+                        else request.wait_for,
+                        "timeout": item.timeout
+                        if item.timeout is not None
+                        else request.timeout,
+                        **_shared,
+                    }
+                )
         elif request.urls:
             # Deduplicate URL list
             deduped = deduplicate_urls(request.urls)
             for url in deduped:
-                url_configs.append({
-                    "url": url,
-                    "formats": request.formats,
-                    "only_main_content": request.only_main_content,
-                    "wait_for": request.wait_for,
-                    "timeout": request.timeout,
-                    **_shared,
-                })
+                url_configs.append(
+                    {
+                        "url": url,
+                        "formats": request.formats,
+                        "only_main_content": request.only_main_content,
+                        "wait_for": request.wait_for,
+                        "timeout": request.timeout,
+                        **_shared,
+                    }
+                )
 
         if not url_configs:
             async with session_factory() as db:
@@ -87,6 +103,7 @@ def process_batch(self, job_id: str, config: dict):
         proxy_manager = None
         if request.use_proxy:
             from app.services.proxy import ProxyManager
+
             async with session_factory() as db:
                 job = await db.get(Job, UUID(job_id))
                 if job:
@@ -163,11 +180,16 @@ def process_batch(self, job_id: str, config: dict):
                         "error": None,
                     }
                 except asyncio.TimeoutError:
-                    logger.warning(f"Batch scrape timed out for {url} after {PER_URL_TIMEOUT}s")
+                    logger.warning(
+                        f"Batch scrape timed out for {url} after {PER_URL_TIMEOUT}s"
+                    )
                     r = {
                         "url": url,
-                        "markdown": None, "html": None, "links": None,
-                        "screenshot": None, "extract": None,
+                        "markdown": None,
+                        "html": None,
+                        "links": None,
+                        "screenshot": None,
+                        "extract": None,
                         "metadata": {"error": f"Timed out after {PER_URL_TIMEOUT}s"},
                         "error": f"Timed out after {PER_URL_TIMEOUT}s",
                     }
@@ -175,8 +197,11 @@ def process_batch(self, job_id: str, config: dict):
                     logger.warning(f"Batch scrape failed for {url}: {e}")
                     r = {
                         "url": url,
-                        "markdown": None, "html": None, "links": None,
-                        "screenshot": None, "extract": None,
+                        "markdown": None,
+                        "html": None,
+                        "links": None,
+                        "screenshot": None,
+                        "extract": None,
                         "metadata": {"error": str(e)},
                         "error": str(e),
                     }
@@ -217,6 +242,7 @@ def process_batch(self, job_id: str, config: dict):
             if request.webhook_url:
                 try:
                     from app.services.webhook import send_webhook
+
                     async with session_factory() as db:
                         job = await db.get(Job, UUID(job_id))
                         if job:
@@ -229,8 +255,12 @@ def process_batch(self, job_id: str, config: dict):
                                     "status": job.status,
                                     "total_pages": job.total_pages,
                                     "completed_pages": job.completed_pages,
-                                    "created_at": job.created_at.isoformat() if job.created_at else None,
-                                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                                    "created_at": job.created_at.isoformat()
+                                    if job.created_at
+                                    else None,
+                                    "completed_at": job.completed_at.isoformat()
+                                    if job.completed_at
+                                    else None,
                                 },
                                 secret=request.webhook_secret,
                             )
@@ -250,6 +280,7 @@ def process_batch(self, job_id: str, config: dict):
             if request.webhook_url:
                 try:
                     from app.services.webhook import send_webhook
+
                     await send_webhook(
                         url=request.webhook_url,
                         payload={

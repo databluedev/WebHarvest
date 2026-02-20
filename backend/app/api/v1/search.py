@@ -30,7 +30,7 @@ from app.schemas.search import (
 )
 from app.schemas.scrape import PageMetadata
 from app.workers.search_worker import process_search
-from app.services.quota import check_quota, increment_usage
+from app.services.quota import check_quota
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -61,8 +61,8 @@ def _build_search_dicts(results) -> list[dict]:
         if r.screenshot_url:
             page["screenshot_base64"] = r.screenshot_url
         error = meta.pop("error", None)
-        title = meta.pop("title", None)
-        snippet = meta.pop("snippet", None)
+        meta.pop("title", None)
+        meta.pop("snippet", None)
         meta.pop("structured_data", None)
         meta.pop("headings", None)
         meta.pop("images", None)
@@ -157,7 +157,20 @@ async def get_search_status(
             meta = r.metadata_ or {}
             page_metadata = None
             if meta:
-                clean_meta = {k: v for k, v in meta.items() if k not in ("title", "snippet", "error", "structured_data", "headings", "images", "links_detail")}
+                clean_meta = {
+                    k: v
+                    for k, v in meta.items()
+                    if k
+                    not in (
+                        "title",
+                        "snippet",
+                        "error",
+                        "structured_data",
+                        "headings",
+                        "images",
+                        "links_detail",
+                    )
+                }
                 if clean_meta.get("source_url"):
                     page_metadata = PageMetadata(
                         source_url=clean_meta.get("source_url", r.url),
@@ -221,7 +234,9 @@ async def export_search(
     query = job.config.get("query", "") if job.config else ""
 
     result = await db.execute(
-        select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+        select(JobResult)
+        .where(JobResult.job_id == job.id)
+        .order_by(JobResult.created_at)
     )
     results = result.scalars().all()
     if not results:
@@ -236,31 +251,44 @@ async def export_search(
         return StreamingResponse(
             io.BytesIO(content.encode("utf-8")),
             media_type="application/json",
-            headers={"Content-Disposition": f'attachment; filename="search-{short_id}.json"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="search-{short_id}.json"'
+            },
         )
 
     if format == "csv":
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow([
-            "url", "title", "snippet", "success", "word_count",
-            "markdown_length", "error",
-        ])
+        writer.writerow(
+            [
+                "url",
+                "title",
+                "snippet",
+                "success",
+                "word_count",
+                "markdown_length",
+                "error",
+            ]
+        )
         for p in pages:
             meta = p.get("metadata", {})
-            writer.writerow([
-                p["url"],
-                p.get("title", ""),
-                p.get("snippet", ""),
-                p.get("success", True),
-                meta.get("word_count", ""),
-                len(p.get("markdown", "")),
-                p.get("error", ""),
-            ])
+            writer.writerow(
+                [
+                    p["url"],
+                    p.get("title", ""),
+                    p.get("snippet", ""),
+                    p.get("success", True),
+                    meta.get("word_count", ""),
+                    len(p.get("markdown", "")),
+                    p.get("error", ""),
+                ]
+            )
         return StreamingResponse(
             io.BytesIO(buf.getvalue().encode("utf-8")),
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="search-{short_id}.csv"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="search-{short_id}.csv"'
+            },
         )
 
     # ZIP
@@ -268,13 +296,15 @@ async def export_search(
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         index = [{"query": query}]
         for i, p in enumerate(pages):
-            index.append({
-                "index": i + 1,
-                "url": p["url"],
-                "title": p.get("title", ""),
-                "snippet": p.get("snippet", ""),
-                "success": p.get("success", True),
-            })
+            index.append(
+                {
+                    "index": i + 1,
+                    "url": p["url"],
+                    "title": p.get("title", ""),
+                    "snippet": p.get("snippet", ""),
+                    "success": p.get("success", True),
+                }
+            )
         zf.writestr("index.json", json.dumps(index, indent=2, ensure_ascii=False))
 
         for i, p in enumerate(pages):
@@ -285,7 +315,10 @@ async def export_search(
                 zf.writestr(f"{folder}/content.html", p["html"])
             if p.get("screenshot_base64"):
                 try:
-                    zf.writestr(f"{folder}/screenshot.jpg", base64.b64decode(p["screenshot_base64"]))
+                    zf.writestr(
+                        f"{folder}/screenshot.jpg",
+                        base64.b64decode(p["screenshot_base64"]),
+                    )
                 except Exception:
                     pass
             page_meta = {
@@ -298,14 +331,21 @@ async def export_search(
                 page_meta["metadata"] = p["metadata"]
             if p.get("error"):
                 page_meta["error"] = p["error"]
-            zf.writestr(f"{folder}/metadata.json", json.dumps(page_meta, indent=2, ensure_ascii=False))
+            zf.writestr(
+                f"{folder}/metadata.json",
+                json.dumps(page_meta, indent=2, ensure_ascii=False),
+            )
 
         export_data = {"query": query, "results": pages}
-        zf.writestr("full_data.json", json.dumps(export_data, indent=2, ensure_ascii=False))
+        zf.writestr(
+            "full_data.json", json.dumps(export_data, indent=2, ensure_ascii=False)
+        )
 
     buf.seek(0)
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="search-{short_id}.zip"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="search-{short_id}.zip"'
+        },
     )

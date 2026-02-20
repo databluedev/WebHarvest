@@ -12,7 +12,6 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.rate_limiter import check_rate_limit_full
-from app.config import settings
 from app.models.monitor import Monitor, MonitorCheck
 from app.models.user import User
 from app.schemas.monitor import (
@@ -65,6 +64,7 @@ async def create_monitor(
     response.headers["X-RateLimit-Reset"] = str(rl.reset)
     if not rl.allowed:
         from app.core.exceptions import RateLimitError
+
         raise RateLimitError("Monitor creation rate limit exceeded.")
 
     # Check quota
@@ -77,15 +77,23 @@ async def create_monitor(
         raise BadRequestError("Maximum check interval is 10080 minutes (1 week)")
 
     # Validate notify_on
-    valid_notify = {"any_change", "content_change", "status_change", "keyword_added", "keyword_removed"}
+    valid_notify = {
+        "any_change",
+        "content_change",
+        "status_change",
+        "keyword_added",
+        "keyword_removed",
+    }
     if request.notify_on not in valid_notify:
         raise BadRequestError(f"notify_on must be one of: {', '.join(valid_notify)}")
 
     # Check monitor count limit
     result = await db.execute(
-        select(func.count()).select_from(Monitor).where(
+        select(func.count())
+        .select_from(Monitor)
+        .where(
             Monitor.user_id == user.id,
-            Monitor.is_active == True,
+            Monitor.is_active == True,  # noqa: E712
         )
     )
     active_count = result.scalar() or 0
@@ -117,6 +125,7 @@ async def create_monitor(
     # Trigger initial check
     try:
         from app.workers.monitor_worker import check_single_monitor_task
+
         check_single_monitor_task.delay(str(monitor.id))
     except Exception as e:
         logger.warning(f"Failed to queue initial monitor check: {e}")
@@ -138,7 +147,7 @@ async def list_monitors(
     """List all monitors for the current user."""
     query = select(Monitor).where(Monitor.user_id == user.id)
     if active_only:
-        query = query.where(Monitor.is_active == True)
+        query = query.where(Monitor.is_active == True)  # noqa: E712
     query = query.order_by(Monitor.created_at.desc())
 
     result = await db.execute(query)
@@ -188,7 +197,9 @@ async def update_monitor(
         monitor.check_interval_minutes = request.check_interval_minutes
         # Recalculate next check
         if monitor.last_check_at:
-            monitor.next_check_at = monitor.last_check_at + timedelta(minutes=request.check_interval_minutes)
+            monitor.next_check_at = monitor.last_check_at + timedelta(
+                minutes=request.check_interval_minutes
+            )
     if request.css_selector is not None:
         monitor.css_selector = request.css_selector
     if request.notify_on is not None:
@@ -243,6 +254,7 @@ async def trigger_check(
         raise NotFoundError("Monitor not found")
 
     from app.workers.monitor_worker import check_single_monitor_task
+
     check_single_monitor_task.delay(str(monitor.id))
 
     return {"success": True, "message": "Check triggered"}
@@ -263,7 +275,9 @@ async def get_monitor_history(
 
     # Get total count
     count_result = await db.execute(
-        select(func.count()).select_from(MonitorCheck).where(MonitorCheck.monitor_id == monitor.id)
+        select(func.count())
+        .select_from(MonitorCheck)
+        .where(MonitorCheck.monitor_id == monitor.id)
     )
     total = count_result.scalar() or 0
 

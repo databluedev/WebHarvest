@@ -7,7 +7,15 @@ from app.schemas.scrape import PageMetadata, ExtractConfig
 
 
 class ScrapeOptions(BaseModel):
-    formats: list[str] = ["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"]
+    formats: list[str] = [
+        "markdown",
+        "html",
+        "links",
+        "screenshot",
+        "structured_data",
+        "headings",
+        "images",
+    ]
     only_main_content: bool = True
     wait_for: int = 0
     timeout: int = 30000

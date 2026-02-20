@@ -17,7 +17,6 @@ from app.services.document import (
 
 
 class TestDetectDocumentType:
-
     def test_pdf_by_url_extension(self):
         assert detect_document_type("https://example.com/report.pdf") == "pdf"
 
@@ -41,10 +40,13 @@ class TestDetectDocumentType:
         assert detect_document_type("https://example.com/data.xlsx") == "xlsx"
 
     def test_pdf_by_content_type(self):
-        assert detect_document_type(
-            "https://example.com/download",
-            content_type="application/pdf",
-        ) == "pdf"
+        assert (
+            detect_document_type(
+                "https://example.com/download",
+                content_type="application/pdf",
+            )
+            == "pdf"
+        )
 
     def test_docx_by_content_type(self):
         ct = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -55,42 +57,60 @@ class TestDetectDocumentType:
         assert detect_document_type("https://example.com/dl", content_type=ct) == "xlsx"
 
     def test_msword_content_type(self):
-        assert detect_document_type(
-            "https://example.com/dl",
-            content_type="application/msword",
-        ) == "docx"
+        assert (
+            detect_document_type(
+                "https://example.com/dl",
+                content_type="application/msword",
+            )
+            == "docx"
+        )
 
     def test_html_by_content_type(self):
-        assert detect_document_type(
-            "https://example.com/page",
-            content_type="text/html; charset=utf-8",
-        ) == "html"
+        assert (
+            detect_document_type(
+                "https://example.com/page",
+                content_type="text/html; charset=utf-8",
+            )
+            == "html"
+        )
 
     def test_xhtml_by_content_type(self):
-        assert detect_document_type(
-            "https://example.com/page",
-            content_type="application/xhtml+xml",
-        ) == "html"
+        assert (
+            detect_document_type(
+                "https://example.com/page",
+                content_type="application/xhtml+xml",
+            )
+            == "html"
+        )
 
     def test_pdf_by_magic_bytes(self):
-        assert detect_document_type(
-            "https://example.com/download",
-            raw_bytes=b"%PDF-1.4 fake pdf content",
-        ) == "pdf"
+        assert (
+            detect_document_type(
+                "https://example.com/download",
+                raw_bytes=b"%PDF-1.4 fake pdf content",
+            )
+            == "pdf"
+        )
 
     def test_zip_based_defaults_to_docx(self):
         """PK ZIP magic without .xlsx extension defaults to docx."""
-        assert detect_document_type(
-            "https://example.com/unknown",
-            raw_bytes=b"PK\x03\x04some-zip-content",
-        ) == "docx"
+        assert (
+            detect_document_type(
+                "https://example.com/unknown",
+                raw_bytes=b"PK\x03\x04some-zip-content",
+            )
+            == "docx"
+        )
 
     def test_zip_based_with_xlsx_extension(self):
         """PK ZIP magic + .xlsx extension returns xlsx."""
-        assert detect_document_type(
-            "https://example.com/file.xlsx",
-            raw_bytes=b"PK\x03\x04some-zip-content",
-        ) == "xlsx"
+        assert (
+            detect_document_type(
+                "https://example.com/file.xlsx",
+                raw_bytes=b"PK\x03\x04some-zip-content",
+            )
+            == "xlsx"
+        )
 
     def test_defaults_to_html(self):
         """When nothing else matches, default is html."""
@@ -98,10 +118,13 @@ class TestDetectDocumentType:
 
     def test_content_type_overrides_when_no_extension(self):
         """Content-type takes precedence when URL has no extension."""
-        assert detect_document_type(
-            "https://example.com/api/file/12345",
-            content_type="application/pdf",
-        ) == "pdf"
+        assert (
+            detect_document_type(
+                "https://example.com/api/file/12345",
+                content_type="application/pdf",
+            )
+            == "pdf"
+        )
 
     def test_url_extension_takes_precedence_over_content_type(self):
         """URL extension is checked before content-type."""
@@ -117,7 +140,9 @@ class TestDetectDocumentType:
 # ---------------------------------------------------------------------------
 
 
-def _create_minimal_pdf(text: str = "Hello, WebHarvest!", title: str = "Test PDF") -> bytes:
+def _create_minimal_pdf(
+    text: str = "Hello, WebHarvest!", title: str = "Test PDF"
+) -> bytes:
     """Programmatically create a minimal PDF using PyMuPDF."""
     import fitz  # PyMuPDF
 
@@ -131,7 +156,6 @@ def _create_minimal_pdf(text: str = "Hello, WebHarvest!", title: str = "Test PDF
 
 
 class TestExtractPdf:
-
     @pytest.mark.asyncio
     async def test_extracts_text_from_pdf(self):
         """Text inserted into a PDF is extracted correctly."""
@@ -194,7 +218,10 @@ class TestExtractPdf:
     async def test_corrupted_pdf_returns_error_result(self):
         """Corrupted PDF data returns an error DocumentResult."""
         result = await extract_pdf(b"not-a-real-pdf-at-all")
-        assert "failed" in result.text.lower() or "error" in result.metadata.get("error", "").lower()
+        assert (
+            "failed" in result.text.lower()
+            or "error" in result.metadata.get("error", "").lower()
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +236,6 @@ def _create_minimal_docx(
 ) -> bytes:
     """Programmatically create a minimal DOCX using python-docx."""
     from docx import Document
-    from docx.shared import Pt
 
     doc = Document()
     doc.core_properties.title = title
@@ -227,7 +253,6 @@ def _create_minimal_docx(
 
 
 class TestExtractDocx:
-
     @pytest.mark.asyncio
     async def test_extracts_text_from_docx(self):
         """Text from paragraphs is extracted."""
@@ -311,7 +336,10 @@ class TestExtractDocx:
     async def test_corrupted_docx_returns_error_result(self):
         """Invalid DOCX bytes return an error DocumentResult."""
         result = await extract_docx(b"not-a-real-docx")
-        assert "failed" in result.text.lower() or "error" in result.metadata.get("error", "").lower()
+        assert (
+            "failed" in result.text.lower()
+            or "error" in result.metadata.get("error", "").lower()
+        )
 
     @pytest.mark.asyncio
     async def test_page_count_is_one(self):

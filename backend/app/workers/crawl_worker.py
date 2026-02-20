@@ -20,8 +20,13 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.workers.crawl_worker.process_crawl", bind=True, max_retries=1,
-                 soft_time_limit=3600, time_limit=3660)
+@celery_app.task(
+    name="app.workers.crawl_worker.process_crawl",
+    bind=True,
+    max_retries=1,
+    soft_time_limit=3600,
+    time_limit=3660,
+)
 def process_crawl(self, job_id: str, config: dict):
     """Process a crawl job using BFS crawler with producer-consumer pipeline."""
 
@@ -45,6 +50,7 @@ def process_crawl(self, job_id: str, config: dict):
         proxy_manager = None
         if request.use_proxy:
             from app.services.proxy import ProxyManager
+
             async with session_factory() as db:
                 job = await db.get(Job, UUID(job_id))
                 if job:
@@ -126,12 +132,14 @@ def process_crawl(self, job_id: str, config: dict):
                                 # Domain throttle
                                 from urllib.parse import urlparse as _urlparse
                                 from app.services.scraper import domain_throttle
+
                                 _domain = _urlparse(url).netloc
                                 if _domain:
                                     await domain_throttle(_domain)
 
                                 fetch_result = await asyncio.wait_for(
-                                    crawler.fetch_page_only(url), timeout=120,
+                                    crawler.fetch_page_only(url),
+                                    timeout=120,
                                 )
                                 if fetch_result:
                                     return {
@@ -141,7 +149,8 @@ def process_crawl(self, job_id: str, config: dict):
                                     }
                                 # Fallback to full scrape for documents, etc.
                                 result = await asyncio.wait_for(
-                                    crawler.scrape_page(url), timeout=120,
+                                    crawler.scrape_page(url),
+                                    timeout=120,
                                 )
                                 return {
                                     "url": url,
@@ -207,7 +216,9 @@ def process_crawl(self, job_id: str, config: dict):
                         # Build rich metadata
                         metadata = {}
                         if scrape_data.metadata:
-                            metadata = scrape_data.metadata.model_dump(exclude_none=True)
+                            metadata = scrape_data.metadata.model_dump(
+                                exclude_none=True
+                            )
                         if scrape_data.structured_data:
                             metadata["structured_data"] = scrape_data.structured_data
                         if scrape_data.headings:
@@ -263,7 +274,9 @@ def process_crawl(self, job_id: str, config: dict):
                             await crawler.add_to_frontier(discovered_links, depth + 1)
 
                     except Exception as e:
-                        logger.warning(f"Extract/save failed for {item.get('url', '?')}: {e}")
+                        logger.warning(
+                            f"Extract/save failed for {item.get('url', '?')}: {e}"
+                        )
                     finally:
                         extract_queue.task_done()
 
@@ -287,20 +300,27 @@ def process_crawl(self, job_id: str, config: dict):
             if request.webhook_url:
                 try:
                     from app.services.webhook import send_webhook
+
                     async with session_factory() as db:
                         job = await db.get(Job, UUID(job_id))
                         if job:
                             await send_webhook(
                                 url=request.webhook_url,
                                 payload={
-                                    "event": "job.completed" if job.status == "completed" else "job.cancelled",
+                                    "event": "job.completed"
+                                    if job.status == "completed"
+                                    else "job.cancelled",
                                     "job_id": job_id,
                                     "job_type": "crawl",
                                     "status": job.status,
                                     "total_pages": job.total_pages,
                                     "completed_pages": job.completed_pages,
-                                    "created_at": job.created_at.isoformat() if job.created_at else None,
-                                    "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                                    "created_at": job.created_at.isoformat()
+                                    if job.created_at
+                                    else None,
+                                    "completed_at": job.completed_at.isoformat()
+                                    if job.completed_at
+                                    else None,
                                 },
                                 secret=request.webhook_secret,
                             )
@@ -320,6 +340,7 @@ def process_crawl(self, job_id: str, config: dict):
             if request.webhook_url:
                 try:
                     from app.services.webhook import send_webhook
+
                     await send_webhook(
                         url=request.webhook_url,
                         payload={

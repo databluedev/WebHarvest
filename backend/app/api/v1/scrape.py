@@ -5,7 +5,6 @@ import io
 import json
 import logging
 import re
-import time
 import zipfile
 from datetime import datetime, timezone
 from uuid import UUID
@@ -105,6 +104,7 @@ async def scrape(
     response.headers["X-RateLimit-Reset"] = str(rl.reset)
     if not rl.allowed:
         from app.core.exceptions import RateLimitError
+
         raise RateLimitError("Scrape rate limit exceeded. Try again in a minute.")
 
     # Quota check
@@ -127,6 +127,7 @@ async def scrape(
         proxy_manager = None
         if getattr(request, "use_proxy", False):
             from app.services.proxy import ProxyManager
+
             proxy_manager = await ProxyManager.from_user(db, user.id)
 
         # Acquire concurrency slot — prevents OOM from too many parallel scrapes
@@ -138,7 +139,9 @@ async def scrape(
             job.error = "Server is at capacity. Please retry in a few seconds."
             job.completed_at = datetime.now(timezone.utc)
             scrape_requests_total.labels(status="error").inc()
-            return ScrapeResponse(success=False, error=job.error, error_code="TIMEOUT", job_id=str(job.id))
+            return ScrapeResponse(
+                success=False, error=job.error, error_code="TIMEOUT", job_id=str(job.id)
+            )
 
         try:
             # Scrape with overall timeout to prevent hanging
@@ -151,7 +154,9 @@ async def scrape(
             job.error = f"Scrape timed out after {settings.SCRAPE_API_TIMEOUT}s. The site may be too slow or heavily protected."
             job.completed_at = datetime.now(timezone.utc)
             scrape_requests_total.labels(status="error").inc()
-            return ScrapeResponse(success=False, error=job.error, error_code="TIMEOUT", job_id=str(job.id))
+            return ScrapeResponse(
+                success=False, error=job.error, error_code="TIMEOUT", job_id=str(job.id)
+            )
         finally:
             sem.release()
 
@@ -190,10 +195,15 @@ async def scrape(
         db.add(job_result)
 
         # Check if we actually got any content
-        has_content = any([
-            result.markdown, result.html, result.raw_html,
-            result.screenshot, result.links,
-        ])
+        has_content = any(
+            [
+                result.markdown,
+                result.html,
+                result.raw_html,
+                result.screenshot,
+                result.links,
+            ]
+        )
 
         if has_content:
             job.status = "completed"
@@ -224,6 +234,7 @@ async def scrape(
         if request.webhook_url:
             try:
                 from app.services.webhook import send_webhook
+
                 await send_webhook(
                     url=request.webhook_url,
                     payload={
@@ -232,7 +243,9 @@ async def scrape(
                         "job_type": "scrape",
                         "status": job.status,
                         "url": request.url,
-                        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                        "completed_at": job.completed_at.isoformat()
+                        if job.completed_at
+                        else None,
                     },
                     secret=request.webhook_secret,
                 )
@@ -257,6 +270,7 @@ async def scrape(
         if request.webhook_url:
             try:
                 from app.services.webhook import send_webhook
+
                 await send_webhook(
                     url=request.webhook_url,
                     payload={
@@ -272,7 +286,9 @@ async def scrape(
             except Exception:
                 pass
 
-        return ScrapeResponse(success=False, error=str(e), error_code=error_code, job_id=str(job.id))
+        return ScrapeResponse(
+            success=False, error=str(e), error_code=error_code, job_id=str(job.id)
+        )
 
 
 @router.get("/{job_id}")
@@ -330,20 +346,22 @@ async def get_scrape_status(
                 response_headers=meta.get("response_headers"),
             )
 
-        data.append({
-            "id": str(r.id),
-            "url": r.url,
-            "markdown": r.markdown,
-            "html": r.html,
-            "links": r.links,
-            "links_detail": links_detail,
-            "screenshot": r.screenshot_url,
-            "structured_data": structured_data,
-            "headings": headings,
-            "images": images,
-            "extract": r.extract,
-            "metadata": page_metadata.model_dump() if page_metadata else None,
-        })
+        data.append(
+            {
+                "id": str(r.id),
+                "url": r.url,
+                "markdown": r.markdown,
+                "html": r.html,
+                "links": r.links,
+                "links_detail": links_detail,
+                "screenshot": r.screenshot_url,
+                "structured_data": structured_data,
+                "headings": headings,
+                "images": images,
+                "extract": r.extract,
+                "metadata": page_metadata.model_dump() if page_metadata else None,
+            }
+        )
 
     response_data = {
         "success": True,
@@ -375,7 +393,9 @@ async def export_scrape(
         raise NotFoundError("Scrape job not found")
 
     result = await db.execute(
-        select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+        select(JobResult)
+        .where(JobResult.job_id == job.id)
+        .order_by(JobResult.created_at)
     )
     results = result.scalars().all()
 
@@ -390,36 +410,51 @@ async def export_scrape(
         return StreamingResponse(
             io.BytesIO(content.encode("utf-8")),
             media_type="application/json",
-            headers={"Content-Disposition": f'attachment; filename="scrape-{short_id}.json"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="scrape-{short_id}.json"'
+            },
         )
 
     if format == "csv":
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow([
-            "url", "title", "status_code", "word_count",
-            "reading_time_min", "description", "markdown_length", "html_length",
-            "links_count", "has_screenshot",
-        ])
+        writer.writerow(
+            [
+                "url",
+                "title",
+                "status_code",
+                "word_count",
+                "reading_time_min",
+                "description",
+                "markdown_length",
+                "html_length",
+                "links_count",
+                "has_screenshot",
+            ]
+        )
         for p in pages:
             meta = p.get("metadata", {})
             reading_secs = meta.get("reading_time_seconds", 0)
-            writer.writerow([
-                p["url"],
-                meta.get("title", ""),
-                meta.get("status_code", ""),
-                meta.get("word_count", ""),
-                round(reading_secs / 60, 1) if reading_secs else "",
-                meta.get("description", ""),
-                len(p.get("markdown", "")),
-                len(p.get("html", "")),
-                len(p.get("links", [])),
-                "yes" if p.get("screenshot_base64") else "no",
-            ])
+            writer.writerow(
+                [
+                    p["url"],
+                    meta.get("title", ""),
+                    meta.get("status_code", ""),
+                    meta.get("word_count", ""),
+                    round(reading_secs / 60, 1) if reading_secs else "",
+                    meta.get("description", ""),
+                    len(p.get("markdown", "")),
+                    len(p.get("html", "")),
+                    len(p.get("links", [])),
+                    "yes" if p.get("screenshot_base64") else "no",
+                ]
+            )
         return StreamingResponse(
             io.BytesIO(buf.getvalue().encode("utf-8")),
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="scrape-{short_id}.csv"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="scrape-{short_id}.csv"'
+            },
         )
 
     # ZIP format (default)
@@ -440,7 +475,15 @@ async def export_scrape(
                     pass
 
             page_meta = {}
-            for key in ("metadata", "structured_data", "headings", "images", "links", "links_detail", "extract"):
+            for key in (
+                "metadata",
+                "structured_data",
+                "headings",
+                "images",
+                "links",
+                "links_detail",
+                "extract",
+            ):
                 if p.get(key):
                     page_meta[key] = p[key]
             page_meta["url"] = p["url"]
@@ -455,5 +498,7 @@ async def export_scrape(
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="scrape-{short_id}.zip"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="scrape-{short_id}.zip"'
+        },
     )

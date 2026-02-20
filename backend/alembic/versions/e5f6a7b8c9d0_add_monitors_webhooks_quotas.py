@@ -5,6 +5,7 @@ Revises: d4e5f6a7b8c9
 Create Date: 2026-02-19
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -22,8 +23,20 @@ def upgrade() -> None:
     op.create_table(
         "webhook_deliveries",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
-        sa.Column("job_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True),
+        sa.Column(
+            "user_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+        sa.Column(
+            "job_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("jobs.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
         sa.Column("url", sa.Text, nullable=False),
         sa.Column("event", sa.String(50), nullable=False),
         sa.Column("payload", postgresql.JSONB, nullable=False),
@@ -37,14 +50,22 @@ def upgrade() -> None:
         sa.Column("max_attempts", sa.Integer, default=3),
         sa.Column("error", sa.Text),
         sa.Column("next_retry_at", sa.DateTime(timezone=True)),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
     )
 
     # Monitors
     op.create_table(
         "monitors",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column(
+            "user_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("url", sa.Text, nullable=False),
         sa.Column("check_interval_minutes", sa.Integer, default=60),
@@ -66,16 +87,28 @@ def upgrade() -> None:
         sa.Column("total_checks", sa.Integer, default=0),
         sa.Column("total_changes", sa.Integer, default=0),
         sa.Column("next_check_at", sa.DateTime(timezone=True), index=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
     )
 
     # Monitor checks
     op.create_table(
         "monitor_checks",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("monitor_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("monitors.id", ondelete="CASCADE"), nullable=False, index=True),
-        sa.Column("checked_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "monitor_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("monitors.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+        sa.Column(
+            "checked_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
         sa.Column("status_code", sa.Integer, default=0),
         sa.Column("content_hash", sa.String(64), default=""),
         sa.Column("has_changed", sa.Boolean, default=False),
@@ -88,7 +121,13 @@ def upgrade() -> None:
     op.create_table(
         "usage_quotas",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column(
+            "user_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("period", sa.String(7), nullable=False),
         sa.Column("scrape_limit", sa.Integer, default=10000),
         sa.Column("crawl_limit", sa.Integer, default=1000),
@@ -106,8 +145,12 @@ def upgrade() -> None:
         sa.Column("monitor_used", sa.Integer, default=0),
         sa.Column("total_pages_scraped", sa.BigInteger, default=0),
         sa.Column("total_bytes_processed", sa.BigInteger, default=0),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
         sa.UniqueConstraint("user_id", "period", name="uq_user_period"),
     )
 

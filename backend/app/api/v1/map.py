@@ -35,9 +35,7 @@ async def map_site(
 ):
     """Map all URLs on a website. Returns discovered URLs with titles and descriptions."""
     # Rate limiting
-    rl = await check_rate_limit_full(
-        f"rate:map:{user.id}", settings.RATE_LIMIT_MAP
-    )
+    rl = await check_rate_limit_full(f"rate:map:{user.id}", settings.RATE_LIMIT_MAP)
     response.headers["X-RateLimit-Limit"] = str(rl.limit)
     response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
     response.headers["X-RateLimit-Reset"] = str(rl.reset)
@@ -111,7 +109,9 @@ async def get_map_status(
             return JSONResponse(content=json.loads(cached))
 
     result = await db.execute(
-        select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+        select(JobResult)
+        .where(JobResult.job_id == job.id)
+        .order_by(JobResult.created_at)
     )
     results = result.scalars().all()
 
@@ -150,7 +150,9 @@ async def export_map(
         raise NotFoundError("Map job not found")
 
     result = await db.execute(
-        select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+        select(JobResult)
+        .where(JobResult.job_id == job.id)
+        .order_by(JobResult.created_at)
     )
     results = result.scalars().all()
 
@@ -169,7 +171,9 @@ async def export_map(
         return StreamingResponse(
             io.BytesIO(content.encode("utf-8")),
             media_type="application/json",
-            headers={"Content-Disposition": f'attachment; filename="map-{short_id}.json"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="map-{short_id}.json"'
+            },
         )
 
     # CSV format
@@ -178,13 +182,15 @@ async def export_map(
     writer.writerow(["url", "title", "description", "lastmod", "priority"])
     for link in links:
         if isinstance(link, dict):
-            writer.writerow([
-                link.get("url", ""),
-                link.get("title", ""),
-                link.get("description", ""),
-                link.get("lastmod", ""),
-                link.get("priority", ""),
-            ])
+            writer.writerow(
+                [
+                    link.get("url", ""),
+                    link.get("title", ""),
+                    link.get("description", ""),
+                    link.get("lastmod", ""),
+                    link.get("priority", ""),
+                ]
+            )
         else:
             writer.writerow([str(link), "", "", "", ""])
     return StreamingResponse(

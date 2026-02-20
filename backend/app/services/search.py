@@ -36,11 +36,13 @@ class DuckDuckGoSearch(SearchEngine):
         try:
             with DDGS() as ddgs:
                 for r in ddgs.text(query, max_results=num_results):
-                    results.append(SearchResult(
-                        url=r.get("href", r.get("url", "")),
-                        title=r.get("title", ""),
-                        snippet=r.get("body", r.get("description", "")),
-                    ))
+                    results.append(
+                        SearchResult(
+                            url=r.get("href", r.get("url", "")),
+                            title=r.get("title", ""),
+                            snippet=r.get("body", r.get("description", "")),
+                        )
+                    )
         except Exception as e:
             logger.error(f"DuckDuckGo search failed: {e}")
             raise
@@ -71,11 +73,13 @@ class GoogleCustomSearch(SearchEngine):
             data = resp.json()
 
             for item in data.get("items", []):
-                results.append(SearchResult(
-                    url=item.get("link", ""),
-                    title=item.get("title", ""),
-                    snippet=item.get("snippet", ""),
-                ))
+                results.append(
+                    SearchResult(
+                        url=item.get("link", ""),
+                        title=item.get("title", ""),
+                        snippet=item.get("snippet", ""),
+                    )
+                )
 
         return results
 
@@ -105,11 +109,13 @@ class BraveSearch(SearchEngine):
             data = resp.json()
 
             for item in data.get("web", {}).get("results", []):
-                results.append(SearchResult(
-                    url=item.get("url", ""),
-                    title=item.get("title", ""),
-                    snippet=item.get("description", ""),
-                ))
+                results.append(
+                    SearchResult(
+                        url=item.get("url", ""),
+                        title=item.get("title", ""),
+                        snippet=item.get("description", ""),
+                    )
+                )
 
         return results
 
@@ -156,7 +162,9 @@ async def web_search(
         try:
             results = await search_engine.search(query, num_results)
             if results:
-                logger.info(f"Search succeeded with {engine_name}: {len(results)} results")
+                logger.info(
+                    f"Search succeeded with {engine_name}: {len(results)} results"
+                )
                 return results
             logger.warning(f"{engine_name} returned no results, trying fallback")
         except Exception as e:

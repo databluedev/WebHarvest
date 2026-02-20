@@ -31,9 +31,15 @@ def cleanup_old_data(self):
 
         session_factory, db_engine = create_worker_session_factory()
 
-        job_cutoff = datetime.now(timezone.utc) - timedelta(days=settings.DATA_RETENTION_DAYS)
-        webhook_cutoff = datetime.now(timezone.utc) - timedelta(days=settings.DATA_RETENTION_DAYS)
-        monitor_cutoff = datetime.now(timezone.utc) - timedelta(days=settings.MONITOR_CHECK_RETENTION_DAYS)
+        job_cutoff = datetime.now(timezone.utc) - timedelta(
+            days=settings.DATA_RETENTION_DAYS
+        )
+        webhook_cutoff = datetime.now(timezone.utc) - timedelta(
+            days=settings.DATA_RETENTION_DAYS
+        )
+        monitor_cutoff = datetime.now(timezone.utc) - timedelta(
+            days=settings.MONITOR_CHECK_RETENTION_DAYS
+        )
 
         try:
             async with session_factory() as db:
@@ -47,14 +53,16 @@ def cleanup_old_data(self):
                     await db.execute(
                         delete(JobResult).where(JobResult.job_id.in_(old_job_ids))
                     )
-                    await db.execute(
-                        delete(Job).where(Job.id.in_(old_job_ids))
+                    await db.execute(delete(Job).where(Job.id.in_(old_job_ids)))
+                    logger.info(
+                        f"Cleaned up {len(old_job_ids)} old jobs and their results"
                     )
-                    logger.info(f"Cleaned up {len(old_job_ids)} old jobs and their results")
 
                 # Delete old webhook deliveries
                 result = await db.execute(
-                    delete(WebhookDelivery).where(WebhookDelivery.created_at < webhook_cutoff)
+                    delete(WebhookDelivery).where(
+                        WebhookDelivery.created_at < webhook_cutoff
+                    )
                 )
                 webhook_count = result.rowcount
                 if webhook_count:

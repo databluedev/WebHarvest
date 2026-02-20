@@ -20,7 +20,6 @@ from app.services.search import (
 
 
 class TestBraveSearch:
-
     @pytest.mark.asyncio
     async def test_brave_search_returns_results(self):
         """BraveSearch parses the Brave API response correctly."""
@@ -44,7 +43,9 @@ class TestBraveSearch:
         mock_response = httpx.Response(
             200,
             json=brave_response,
-            request=httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
+            request=httpx.Request(
+                "GET", "https://api.search.brave.com/res/v1/web/search"
+            ),
         )
 
         with patch("app.services.search.httpx.AsyncClient") as MockClient:
@@ -71,7 +72,9 @@ class TestBraveSearch:
         mock_response = httpx.Response(
             200,
             json={"web": {"results": []}},
-            request=httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
+            request=httpx.Request(
+                "GET", "https://api.search.brave.com/res/v1/web/search"
+            ),
         )
 
         with patch("app.services.search.httpx.AsyncClient") as MockClient:
@@ -98,7 +101,9 @@ class TestBraveSearch:
         mock_response = httpx.Response(
             200,
             json={"web": {"results": []}},
-            request=httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
+            request=httpx.Request(
+                "GET", "https://api.search.brave.com/res/v1/web/search"
+            ),
         )
 
         with patch("app.services.search.httpx.AsyncClient") as MockClient:
@@ -120,7 +125,9 @@ class TestBraveSearch:
         mock_response = httpx.Response(
             200,
             json={"web": {"results": []}},
-            request=httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
+            request=httpx.Request(
+                "GET", "https://api.search.brave.com/res/v1/web/search"
+            ),
         )
 
         with patch("app.services.search.httpx.AsyncClient") as MockClient:
@@ -148,7 +155,6 @@ class TestBraveSearch:
 
 
 class TestGoogleCustomSearch:
-
     @pytest.mark.asyncio
     async def test_google_search_parses_response(self):
         """GoogleCustomSearch extracts items from the API response."""
@@ -219,7 +225,6 @@ class TestGoogleCustomSearch:
 
 
 class TestDuckDuckGoSearch:
-
     @pytest.mark.asyncio
     async def test_duckduckgo_returns_results(self):
         """DuckDuckGoSearch parses DDGS library response."""
@@ -233,13 +238,25 @@ class TestDuckDuckGoSearch:
         mock_ddgs_instance.__exit__ = MagicMock(return_value=False)
         mock_ddgs_instance.text = MagicMock(return_value=mock_ddgs_results)
 
-        with patch("app.services.search.DDGS", create=True) as MockDDGS:
+        with patch("app.services.search.DDGS", create=True):
             # Patch the import inside the method
-            with patch.dict("sys.modules", {"ddgs": MagicMock(DDGS=lambda: mock_ddgs_instance)}):
-                with patch("app.services.search.DuckDuckGoSearch.search") as mock_search:
+            with patch.dict(
+                "sys.modules", {"ddgs": MagicMock(DDGS=lambda: mock_ddgs_instance)}
+            ):
+                with patch(
+                    "app.services.search.DuckDuckGoSearch.search"
+                ) as mock_search:
                     mock_search.return_value = [
-                        SearchResult(url="https://example.com/ddg1", title="DDG1", snippet="Snippet 1"),
-                        SearchResult(url="https://example.com/ddg2", title="DDG2", snippet="Snippet 2"),
+                        SearchResult(
+                            url="https://example.com/ddg1",
+                            title="DDG1",
+                            snippet="Snippet 1",
+                        ),
+                        SearchResult(
+                            url="https://example.com/ddg2",
+                            title="DDG2",
+                            snippet="Snippet 2",
+                        ),
                     ]
                     engine = DuckDuckGoSearch()
                     results = await engine.search("test", num_results=5)
@@ -255,20 +272,25 @@ class TestDuckDuckGoSearch:
 
 
 class TestFallbackChain:
-
     @pytest.mark.asyncio
     async def test_fallback_when_primary_fails(self):
         """If the primary engine raises, the fallback is tried."""
-        with patch.object(DuckDuckGoSearch, "search", new_callable=AsyncMock) as ddg_mock:
+        with patch.object(
+            DuckDuckGoSearch, "search", new_callable=AsyncMock
+        ) as ddg_mock:
             ddg_mock.side_effect = [
                 Exception("DuckDuckGo down"),  # First call (primary) fails
-                [SearchResult(url="https://ddg.com/r", title="Fallback", snippet="Works")],  # Fallback succeeds
+                [
+                    SearchResult(
+                        url="https://ddg.com/r", title="Fallback", snippet="Works"
+                    )
+                ],  # Fallback succeeds
             ]
 
             with patch("app.services.search.settings") as mock_settings:
                 mock_settings.BRAVE_SEARCH_API_KEY = ""
 
-                results = await web_search("fallback test", num_results=3, engine="duckduckgo")
+                await web_search("fallback test", num_results=3, engine="duckduckgo")
 
                 # DuckDuckGo is both primary and the only engine in the chain
                 # when Brave key is empty and no google keys
@@ -285,20 +307,29 @@ class TestFallbackChain:
         brave_response = {
             "web": {
                 "results": [
-                    {"url": "https://brave.com/result", "title": "Brave Result", "description": "From Brave"},
+                    {
+                        "url": "https://brave.com/result",
+                        "title": "Brave Result",
+                        "description": "From Brave",
+                    },
                 ]
             }
         }
         mock_response = httpx.Response(
             200,
             json=brave_response,
-            request=httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
+            request=httpx.Request(
+                "GET", "https://api.search.brave.com/res/v1/web/search"
+            ),
         )
 
-        with patch.object(DuckDuckGoSearch, "search", new_callable=AsyncMock) as ddg_mock, \
-             patch("app.services.search.httpx.AsyncClient") as MockClient, \
-             patch("app.services.search.settings") as mock_settings:
-
+        with (
+            patch.object(
+                DuckDuckGoSearch, "search", new_callable=AsyncMock
+            ) as ddg_mock,
+            patch("app.services.search.httpx.AsyncClient") as MockClient,
+            patch("app.services.search.settings") as mock_settings,
+        ):
             ddg_mock.side_effect = Exception("DDG is down")
             mock_settings.BRAVE_SEARCH_API_KEY = "test-brave-key"
 
@@ -315,9 +346,12 @@ class TestFallbackChain:
     @pytest.mark.asyncio
     async def test_all_engines_fail_raises_last_error(self):
         """When every engine in the chain fails, the last error is raised."""
-        with patch.object(DuckDuckGoSearch, "search", new_callable=AsyncMock) as ddg_mock, \
-             patch("app.services.search.settings") as mock_settings:
-
+        with (
+            patch.object(
+                DuckDuckGoSearch, "search", new_callable=AsyncMock
+            ) as ddg_mock,
+            patch("app.services.search.settings") as mock_settings,
+        ):
             ddg_mock.side_effect = RuntimeError("DDG exploded")
             mock_settings.BRAVE_SEARCH_API_KEY = ""
 
@@ -338,9 +372,10 @@ class TestFallbackChain:
             request=httpx.Request("GET", "https://www.googleapis.com/customsearch/v1"),
         )
 
-        with patch("app.services.search.httpx.AsyncClient") as MockClient, \
-             patch("app.services.search.settings") as mock_settings:
-
+        with (
+            patch("app.services.search.httpx.AsyncClient") as MockClient,
+            patch("app.services.search.settings") as mock_settings,
+        ):
             mock_settings.BRAVE_SEARCH_API_KEY = ""
 
             instance = AsyncMock()
@@ -350,8 +385,11 @@ class TestFallbackChain:
             MockClient.return_value = instance
 
             results = await web_search(
-                "test", num_results=3, engine="google",
-                google_api_key="gk", google_cx="gcx",
+                "test",
+                num_results=3,
+                engine="google",
+                google_api_key="gk",
+                google_cx="gcx",
             )
             assert len(results) == 1
             assert results[0].url == "https://google.com/r"
@@ -362,20 +400,29 @@ class TestFallbackChain:
         brave_response = {
             "web": {
                 "results": [
-                    {"url": "https://brave.com/found", "title": "Found It", "description": "Via Brave"},
+                    {
+                        "url": "https://brave.com/found",
+                        "title": "Found It",
+                        "description": "Via Brave",
+                    },
                 ]
             }
         }
         mock_brave_response = httpx.Response(
             200,
             json=brave_response,
-            request=httpx.Request("GET", "https://api.search.brave.com/res/v1/web/search"),
+            request=httpx.Request(
+                "GET", "https://api.search.brave.com/res/v1/web/search"
+            ),
         )
 
-        with patch.object(DuckDuckGoSearch, "search", new_callable=AsyncMock) as ddg_mock, \
-             patch("app.services.search.httpx.AsyncClient") as MockClient, \
-             patch("app.services.search.settings") as mock_settings:
-
+        with (
+            patch.object(
+                DuckDuckGoSearch, "search", new_callable=AsyncMock
+            ) as ddg_mock,
+            patch("app.services.search.httpx.AsyncClient") as MockClient,
+            patch("app.services.search.settings") as mock_settings,
+        ):
             ddg_mock.return_value = []  # Empty results
             mock_settings.BRAVE_SEARCH_API_KEY = "brave-key"
 

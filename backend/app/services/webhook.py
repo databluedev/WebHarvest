@@ -118,7 +118,7 @@ async def send_webhook(
                         max_attempts=max_retries,
                         error=error_msg,
                         next_retry_at=(
-                            datetime.now(timezone.utc) + timedelta(seconds=4 ** attempt)
+                            datetime.now(timezone.utc) + timedelta(seconds=4**attempt)
                             if not success and attempt < max_retries - 1
                             else None
                         ),
@@ -131,7 +131,7 @@ async def send_webhook(
 
             # Exponential backoff before next retry
             if attempt < max_retries - 1:
-                delay = 1 * (4 ** attempt)  # 1s, 4s, 16s
+                delay = 1 * (4**attempt)  # 1s, 4s, 16s
                 await asyncio.sleep(delay)
 
     logger.error(f"Webhook to {url} failed after {max_retries} attempts: {last_error}")

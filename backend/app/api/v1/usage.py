@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func, case, extract, and_, or_, text
+from sqlalchemy import select, func, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -54,16 +54,16 @@ async def get_usage_stats(
 
     # Average pages per job
     avg_pages_q = await db.execute(
-        select(func.avg(Job.completed_pages))
-        .where(Job.user_id == user.id, Job.status == "completed")
+        select(func.avg(Job.completed_pages)).where(
+            Job.user_id == user.id, Job.status == "completed"
+        )
     )
     avg_pages = round(float(avg_pages_q.scalar() or 0), 1)
 
     # Average duration (seconds) for completed jobs
     avg_duration = 0
     completed_with_times = await db.execute(
-        select(Job.started_at, Job.completed_at)
-        .where(
+        select(Job.started_at, Job.completed_at).where(
             Job.user_id == user.id,
             Job.status == "completed",
             Job.started_at.isnot(None),
@@ -82,14 +82,16 @@ async def get_usage_stats(
     failed_count = jobs_by_status.get("failed", 0)
     success_rate = 0
     if completed_count + failed_count > 0:
-        success_rate = round(completed_count / (completed_count + failed_count) * 100, 1)
+        success_rate = round(
+            completed_count / (completed_count + failed_count) * 100, 1
+        )
 
     # Jobs per day (last 30 days)
     thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
     daily_q = await db.execute(
         select(
-            func.date_trunc('day', Job.created_at).label('day'),
-            func.count(Job.id).label('count'),
+            func.date_trunc("day", Job.created_at).label("day"),
+            func.count(Job.id).label("count"),
         )
         .where(Job.user_id == user.id, Job.created_at >= thirty_days_ago)
         .group_by(text("day"))
@@ -121,7 +123,9 @@ async def get_usage_history(
     search: str | None = Query(None, description="Search in URL/query"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    sort_by: str = Query("created_at", pattern="^(created_at|completed_at|status|type)$"),
+    sort_by: str = Query(
+        "created_at", pattern="^(created_at|completed_at|status|type)$"
+    ),
     sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
 ):
     """Paginated job history with filters."""
@@ -174,7 +178,9 @@ async def get_usage_history(
                 "completed_pages": job.completed_pages,
                 "error": job.error,
                 "started_at": job.started_at.isoformat() if job.started_at else None,
-                "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                "completed_at": job.completed_at.isoformat()
+                if job.completed_at
+                else None,
                 "created_at": job.created_at.isoformat() if job.created_at else None,
                 "duration_seconds": (
                     round((job.completed_at - job.started_at).total_seconds(), 1)
@@ -215,12 +221,13 @@ async def get_top_domains(
             continue
 
     # Sort by count and return top N
-    sorted_domains = sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
+    sorted_domains = sorted(domain_counts.items(), key=lambda x: x[1], reverse=True)[
+        :limit
+    ]
 
     return {
         "domains": [
-            {"domain": domain, "count": count}
-            for domain, count in sorted_domains
+            {"domain": domain, "count": count} for domain, count in sorted_domains
         ],
         "total_unique_domains": len(domain_counts),
     }
@@ -233,6 +240,7 @@ async def get_quota(
 ):
     """Get the current user's monthly quota and usage."""
     from app.services.quota import get_quota_summary
+
     summary = await get_quota_summary(db, user.id)
     return {"success": True, **summary}
 
@@ -241,6 +249,7 @@ async def get_quota(
 async def list_devices():
     """List all available mobile device presets for viewport emulation."""
     from app.services.mobile_presets import list_device_presets
+
     return {"success": True, "devices": list_device_presets()}
 
 
@@ -252,9 +261,11 @@ async def delete_job(
 ):
     """Delete a job and its results."""
     from uuid import UUID
+
     job = await db.get(Job, UUID(job_id))
     if not job or job.user_id != user.id:
         from app.core.exceptions import NotFoundError
+
         raise NotFoundError("Job not found")
 
     await db.delete(job)

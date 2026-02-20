@@ -1,11 +1,10 @@
 """Unit tests for app.services.webhook — delivery, HMAC signing, retries."""
 
-import asyncio
 import hashlib
 import hmac
 import json
 import time
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -16,6 +15,7 @@ from app.services.webhook import send_webhook
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _compute_expected_signature(payload: dict, secret: str) -> str:
     """Compute the expected HMAC-SHA256 signature for a payload."""
@@ -30,11 +30,12 @@ def _compute_expected_signature(payload: dict, secret: str) -> str:
 
 
 class TestWebhookSuccess:
-
     @pytest.mark.asyncio
     async def test_successful_delivery_returns_true(self):
         """A 200 response on the first attempt returns True."""
-        mock_response = httpx.Response(200, request=httpx.Request("POST", "https://hook.example.com"))
+        mock_response = httpx.Response(
+            200, request=httpx.Request("POST", "https://hook.example.com")
+        )
 
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
             instance = AsyncMock()
@@ -53,7 +54,9 @@ class TestWebhookSuccess:
     @pytest.mark.asyncio
     async def test_2xx_range_succeeds(self):
         """Any status < 400 is considered success."""
-        mock_response = httpx.Response(201, request=httpx.Request("POST", "https://hook.example.com"))
+        mock_response = httpx.Response(
+            201, request=httpx.Request("POST", "https://hook.example.com")
+        )
 
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
             instance = AsyncMock()
@@ -75,11 +78,12 @@ class TestWebhookSuccess:
 
 
 class TestWebhookHMAC:
-
     @pytest.mark.asyncio
     async def test_hmac_signature_header_present(self):
         """When a secret is provided, X-WebHarvest-Signature is set."""
-        mock_response = httpx.Response(200, request=httpx.Request("POST", "https://hook.example.com"))
+        mock_response = httpx.Response(
+            200, request=httpx.Request("POST", "https://hook.example.com")
+        )
         captured_headers = {}
 
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
@@ -96,7 +100,9 @@ class TestWebhookHMAC:
 
             payload = {"event": "crawl.completed", "data": {"pages": 10}}
             secret = "my-webhook-secret"
-            await send_webhook(url="https://hook.example.com", payload=payload, secret=secret)
+            await send_webhook(
+                url="https://hook.example.com", payload=payload, secret=secret
+            )
 
             assert "X-WebHarvest-Signature" in captured_headers
             expected = _compute_expected_signature(payload, secret)
@@ -105,7 +111,9 @@ class TestWebhookHMAC:
     @pytest.mark.asyncio
     async def test_no_signature_without_secret(self):
         """When no secret is provided, the signature header is absent."""
-        mock_response = httpx.Response(200, request=httpx.Request("POST", "https://hook.example.com"))
+        mock_response = httpx.Response(
+            200, request=httpx.Request("POST", "https://hook.example.com")
+        )
         captured_headers = {}
 
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
@@ -120,13 +128,17 @@ class TestWebhookHMAC:
             instance.__aexit__ = AsyncMock(return_value=False)
             MockClient.return_value = instance
 
-            await send_webhook(url="https://hook.example.com", payload={"event": "test"})
+            await send_webhook(
+                url="https://hook.example.com", payload={"event": "test"}
+            )
             assert "X-WebHarvest-Signature" not in captured_headers
 
     @pytest.mark.asyncio
     async def test_signature_matches_body_bytes(self):
         """The signature is computed over the exact JSON body bytes sent."""
-        mock_response = httpx.Response(200, request=httpx.Request("POST", "https://hook.example.com"))
+        mock_response = httpx.Response(
+            200, request=httpx.Request("POST", "https://hook.example.com")
+        )
         captured_body = None
         captured_headers = {}
 
@@ -146,13 +158,17 @@ class TestWebhookHMAC:
 
             secret = "verify-me"
             payload = {"event": "scrape.done", "url": "https://example.com"}
-            await send_webhook(url="https://hook.example.com", payload=payload, secret=secret)
+            await send_webhook(
+                url="https://hook.example.com", payload=payload, secret=secret
+            )
 
             # Recompute from captured body bytes
             expected_sig = hmac.new(
                 secret.encode("utf-8"), captured_body, hashlib.sha256
             ).hexdigest()
-            assert captured_headers["X-WebHarvest-Signature"] == f"sha256={expected_sig}"
+            assert (
+                captured_headers["X-WebHarvest-Signature"] == f"sha256={expected_sig}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -161,15 +177,18 @@ class TestWebhookHMAC:
 
 
 class TestWebhookRetry:
-
     @pytest.mark.asyncio
     async def test_retries_on_server_error(self):
         """Retries up to max_retries on 500 errors, returns False."""
-        error_response = httpx.Response(500, request=httpx.Request("POST", "https://hook.example.com"))
+        error_response = httpx.Response(
+            500, request=httpx.Request("POST", "https://hook.example.com")
+        )
         call_count = 0
 
-        with patch("app.services.webhook.httpx.AsyncClient") as MockClient, \
-             patch("app.services.webhook.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with (
+            patch("app.services.webhook.httpx.AsyncClient") as MockClient,
+            patch("app.services.webhook.asyncio.sleep", new_callable=AsyncMock),
+        ):
             instance = AsyncMock()
 
             async def _failing_post(url, content, headers):
@@ -195,8 +214,10 @@ class TestWebhookRetry:
         """Network exceptions trigger retries."""
         call_count = 0
 
-        with patch("app.services.webhook.httpx.AsyncClient") as MockClient, \
-             patch("app.services.webhook.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch("app.services.webhook.httpx.AsyncClient") as MockClient,
+            patch("app.services.webhook.asyncio.sleep", new_callable=AsyncMock),
+        ):
             instance = AsyncMock()
 
             async def _exception_post(url, content, headers):
@@ -220,12 +241,18 @@ class TestWebhookRetry:
     @pytest.mark.asyncio
     async def test_succeeds_after_transient_failure(self):
         """If the second attempt succeeds, returns True."""
-        ok_response = httpx.Response(200, request=httpx.Request("POST", "https://hook.example.com"))
-        error_response = httpx.Response(502, request=httpx.Request("POST", "https://hook.example.com"))
+        ok_response = httpx.Response(
+            200, request=httpx.Request("POST", "https://hook.example.com")
+        )
+        error_response = httpx.Response(
+            502, request=httpx.Request("POST", "https://hook.example.com")
+        )
         call_count = 0
 
-        with patch("app.services.webhook.httpx.AsyncClient") as MockClient, \
-             patch("app.services.webhook.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch("app.services.webhook.httpx.AsyncClient") as MockClient,
+            patch("app.services.webhook.asyncio.sleep", new_callable=AsyncMock),
+        ):
             instance = AsyncMock()
 
             async def _transient_post(url, content, headers):
@@ -251,11 +278,17 @@ class TestWebhookRetry:
     @pytest.mark.asyncio
     async def test_exponential_backoff_delays(self):
         """Backoff delays follow the pattern: 1s, 4s (base * 4^attempt)."""
-        error_response = httpx.Response(500, request=httpx.Request("POST", "https://hook.example.com"))
+        error_response = httpx.Response(
+            500, request=httpx.Request("POST", "https://hook.example.com")
+        )
         sleep_calls = []
 
-        with patch("app.services.webhook.httpx.AsyncClient") as MockClient, \
-             patch("app.services.webhook.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with (
+            patch("app.services.webhook.httpx.AsyncClient") as MockClient,
+            patch(
+                "app.services.webhook.asyncio.sleep", new_callable=AsyncMock
+            ) as mock_sleep,
+        ):
 
             async def _record_sleep(delay):
                 sleep_calls.append(delay)
@@ -276,8 +309,8 @@ class TestWebhookRetry:
 
             # After attempt 0 -> sleep 1s, after attempt 1 -> sleep 4s, no sleep after last attempt
             assert len(sleep_calls) == 2
-            assert sleep_calls[0] == 1    # 1 * 4^0
-            assert sleep_calls[1] == 4    # 1 * 4^1
+            assert sleep_calls[0] == 1  # 1 * 4^0
+            assert sleep_calls[1] == 4  # 1 * 4^1
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +319,6 @@ class TestWebhookRetry:
 
 
 class TestWebhookTimeout:
-
     @pytest.mark.asyncio
     async def test_timeout_is_passed_to_client(self):
         """The timeout parameter is forwarded to httpx.AsyncClient."""
@@ -295,7 +327,9 @@ class TestWebhookTimeout:
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
             instance = AsyncMock()
             instance.post = AsyncMock(
-                return_value=httpx.Response(200, request=httpx.Request("POST", "https://hook.example.com"))
+                return_value=httpx.Response(
+                    200, request=httpx.Request("POST", "https://hook.example.com")
+                )
             )
             instance.__aenter__ = AsyncMock(return_value=instance)
             instance.__aexit__ = AsyncMock(return_value=False)
@@ -319,8 +353,10 @@ class TestWebhookTimeout:
         """httpx.TimeoutException is caught and retried."""
         call_count = 0
 
-        with patch("app.services.webhook.httpx.AsyncClient") as MockClient, \
-             patch("app.services.webhook.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch("app.services.webhook.httpx.AsyncClient") as MockClient,
+            patch("app.services.webhook.asyncio.sleep", new_callable=AsyncMock),
+        ):
             instance = AsyncMock()
 
             async def _timeout_post(url, content, headers):
@@ -349,7 +385,6 @@ class TestWebhookTimeout:
 
 
 class TestWebhookPayload:
-
     @pytest.mark.asyncio
     async def test_payload_sent_as_json_bytes(self):
         """The payload is serialized as JSON and sent as bytes."""
@@ -416,7 +451,9 @@ class TestWebhookPayload:
             instance.__aexit__ = AsyncMock(return_value=False)
             MockClient.return_value = instance
 
-            await send_webhook(url="https://hook.example.com", payload={"event": "test"})
+            await send_webhook(
+                url="https://hook.example.com", payload={"event": "test"}
+            )
             assert captured_headers["User-Agent"] == "WebHarvest-Webhook/1.0"
 
     @pytest.mark.asyncio
@@ -437,7 +474,9 @@ class TestWebhookPayload:
             MockClient.return_value = instance
 
             before = int(time.time())
-            await send_webhook(url="https://hook.example.com", payload={"event": "test"})
+            await send_webhook(
+                url="https://hook.example.com", payload={"event": "test"}
+            )
             after = int(time.time())
 
             delivery_ts = int(captured_headers["X-WebHarvest-Delivery"])
@@ -460,5 +499,7 @@ class TestWebhookPayload:
             instance.__aexit__ = AsyncMock(return_value=False)
             MockClient.return_value = instance
 
-            await send_webhook(url="https://hook.example.com", payload={"event": "test"})
+            await send_webhook(
+                url="https://hook.example.com", payload={"event": "test"}
+            )
             assert captured_headers["Content-Type"] == "application/json"

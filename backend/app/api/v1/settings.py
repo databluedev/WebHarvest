@@ -62,7 +62,7 @@ async def save_llm_key(
             select(LLMKey).where(
                 LLMKey.user_id == user.id,
                 LLMKey.provider != request.provider,
-                LLMKey.is_default == True,
+                LLMKey.is_default == True,  # noqa: E712
             )
         )
         for key in other_keys.scalars().all():

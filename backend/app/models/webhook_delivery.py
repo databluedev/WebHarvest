@@ -3,9 +3,9 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Integer, Text, DateTime, ForeignKey, Boolean, Float
+from sqlalchemy import String, Integer, Text, DateTime, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
@@ -17,13 +17,21 @@ class WebhookDelivery(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     job_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True
+        UUID(as_uuid=True),
+        ForeignKey("jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     url: Mapped[str] = mapped_column(Text, nullable=False)
-    event: Mapped[str] = mapped_column(String(50), nullable=False)  # job.completed, job.failed, monitor.change, etc.
+    event: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # job.completed, job.failed, monitor.change, etc.
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     request_headers: Mapped[dict | None] = mapped_column(JSONB)
 

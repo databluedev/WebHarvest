@@ -47,7 +47,7 @@ class ProxyManager:
         result = await db.execute(
             select(ProxyConfig).where(
                 ProxyConfig.user_id == user_id,
-                ProxyConfig.is_active == True,
+                ProxyConfig.is_active == True,  # noqa: E712
             )
         )
         configs = result.scalars().all()

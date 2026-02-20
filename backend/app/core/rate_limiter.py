@@ -5,6 +5,7 @@ from app.core.redis import redis_client
 
 class RateLimitInfo:
     """Rate limit check result with metadata for response headers."""
+
     __slots__ = ("allowed", "remaining", "limit", "reset")
 
     def __init__(self, allowed: bool, remaining: int, limit: int, reset: int):
@@ -40,7 +41,9 @@ async def check_rate_limit(key: str, limit: int, window: int = 60) -> tuple[bool
     return True, limit - request_count
 
 
-async def check_rate_limit_full(key: str, limit: int, window: int = 60) -> RateLimitInfo:
+async def check_rate_limit_full(
+    key: str, limit: int, window: int = 60
+) -> RateLimitInfo:
     """
     Sliding window rate limiter returning full info for response headers.
     """

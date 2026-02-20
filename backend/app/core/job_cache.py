@@ -42,15 +42,15 @@ async def get_cached_response(job_id: str, suffix: str = "") -> str | None:
         return None
 
 
-async def set_cached_response(job_id: str, response_data: dict, suffix: str = "") -> None:
+async def set_cached_response(
+    job_id: str, response_data: dict, suffix: str = ""
+) -> None:
     """Cache a serialized JSON response for a completed job."""
     if not settings.CACHE_ENABLED:
         return
     try:
         serialized = json.dumps(response_data, default=str)
-        await redis_client.setex(
-            _cache_key(job_id, suffix), CACHE_TTL, serialized
-        )
+        await redis_client.setex(_cache_key(job_id, suffix), CACHE_TTL, serialized)
         logger.debug(f"Job cache set: {job_id} (TTL={CACHE_TTL}s)")
     except Exception as e:
         logger.warning(f"Job cache set failed: {e}")

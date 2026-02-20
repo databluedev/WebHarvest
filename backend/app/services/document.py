@@ -13,14 +13,17 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DocumentResult:
     """Extracted document content."""
+
     text: str = ""
     markdown: str = ""
     metadata: dict = field(default_factory=dict)
     page_count: int = 0
     word_count: int = 0
-    tables: list[dict] = field(default_factory=list)    # [{headers, rows, page}]
-    images: list[dict] = field(default_factory=list)     # [{data_b64, page, width, height}]
-    pages: list[dict] = field(default_factory=list)      # [{page_num, text, markdown}]
+    tables: list[dict] = field(default_factory=list)  # [{headers, rows, page}]
+    images: list[dict] = field(
+        default_factory=list
+    )  # [{data_b64, page, width, height}]
+    pages: list[dict] = field(default_factory=list)  # [{page_num, text, markdown}]
 
 
 def detect_document_type(
@@ -112,19 +115,20 @@ def _detect_zip_format(raw_bytes: bytes) -> str:
 # PDF Extraction — Multi-Strategy
 # ---------------------------------------------------------------------------
 
+
 def _table_to_markdown(headers: list[str], rows: list[list[str]]) -> str:
     """Convert table data to a markdown pipe table."""
     if not headers and not rows:
         return ""
     if not headers and rows:
-        headers = [f"Col {i+1}" for i in range(len(rows[0]))]
+        headers = [f"Col {i + 1}" for i in range(len(rows[0]))]
     lines = []
     lines.append("| " + " | ".join(str(h) for h in headers) + " |")
     lines.append("| " + " | ".join("---" for _ in headers) + " |")
     for row in rows:
         # Pad or trim row to match header count
         padded = list(row) + [""] * (len(headers) - len(row))
-        lines.append("| " + " | ".join(str(c) for c in padded[:len(headers)]) + " |")
+        lines.append("| " + " | ".join(str(c) for c in padded[: len(headers)]) + " |")
     return "\n".join(lines)
 
 
@@ -161,18 +165,22 @@ def _extract_pdf_tables_pdfplumber(raw_bytes: bytes, page_num: int) -> list[dict
                         continue
                     headers = [str(c) if c else "" for c in tab[0]]
                     rows = [[str(c) if c else "" for c in row] for row in tab[1:]]
-                    tables.append({"headers": headers, "rows": rows, "page": page_num + 1})
+                    tables.append(
+                        {"headers": headers, "rows": rows, "page": page_num + 1}
+                    )
     except Exception:
         pass
     return tables
 
 
-def _extract_pdf_images(doc, page, max_images: int = 20, max_size: int = 2 * 1024 * 1024) -> list[dict]:
+def _extract_pdf_images(
+    doc, page, max_images: int = 20, max_size: int = 2 * 1024 * 1024
+) -> list[dict]:
     """Extract embedded images from a PyMuPDF page."""
     images = []
     try:
         image_list = page.get_images(full=True)
-        for img_info in image_list[:max_images - len(images)]:
+        for img_info in image_list[: max_images - len(images)]:
             if len(images) >= max_images:
                 break
             xref = img_info[0]
@@ -183,13 +191,15 @@ def _extract_pdf_images(doc, page, max_images: int = 20, max_size: int = 2 * 102
                 raw = img_data["image"]
                 if len(raw) > max_size:
                     continue
-                images.append({
-                    "data_b64": base64.b64encode(raw).decode("ascii"),
-                    "page": page.number + 1,
-                    "width": img_data.get("width", 0),
-                    "height": img_data.get("height", 0),
-                    "ext": img_data.get("ext", "png"),
-                })
+                images.append(
+                    {
+                        "data_b64": base64.b64encode(raw).decode("ascii"),
+                        "page": page.number + 1,
+                        "width": img_data.get("width", 0),
+                        "height": img_data.get("height", 0),
+                        "ext": img_data.get("ext", "png"),
+                    }
+                )
             except Exception:
                 continue
     except Exception:
@@ -197,7 +207,13 @@ def _extract_pdf_images(doc, page, max_images: int = 20, max_size: int = 2 * 102
     return images
 
 
-def _build_page_markdown(page, page_text: str, page_tables: list[dict], page_images: list[dict], image_offset: int) -> str:
+def _build_page_markdown(
+    page,
+    page_text: str,
+    page_tables: list[dict],
+    page_images: list[dict],
+    image_offset: int,
+) -> str:
     """Build enhanced markdown for a single PDF page using structured text analysis."""
     md_parts = []
 
@@ -256,7 +272,9 @@ def _build_page_markdown(page, page_text: str, page_tables: list[dict], page_ima
 
     # Add image placeholders
     for i, img in enumerate(page_images):
-        md_parts.append(f"![Image {image_offset + i + 1} from page {img['page']}](embedded)")
+        md_parts.append(
+            f"![Image {image_offset + i + 1} from page {img['page']}](embedded)"
+        )
 
     # Add links
     try:
@@ -348,19 +366,25 @@ async def extract_pdf(raw_bytes: bytes) -> DocumentResult:
 
             # Extract images (limit total to 20)
             if len(all_images) < 20:
-                page_images = _extract_pdf_images(doc, page, max_images=20 - len(all_images))
+                page_images = _extract_pdf_images(
+                    doc, page, max_images=20 - len(all_images)
+                )
                 all_images.extend(page_images)
             else:
                 page_images = []
 
             # Build per-page markdown
-            page_md = _build_page_markdown(page, text, page_tables, page_images, len(all_images) - len(page_images))
+            page_md = _build_page_markdown(
+                page, text, page_tables, page_images, len(all_images) - len(page_images)
+            )
 
-            all_pages.append({
-                "page_num": page_num + 1,
-                "text": text.strip(),
-                "markdown": page_md,
-            })
+            all_pages.append(
+                {
+                    "page_num": page_num + 1,
+                    "text": text.strip(),
+                    "markdown": page_md,
+                }
+            )
 
         # Strategy 3: OCR fallback for scanned PDFs
         avg_chars = total_chars / max(doc.page_count, 1)
@@ -381,7 +405,9 @@ async def extract_pdf(raw_bytes: bytes) -> DocumentResult:
                     try:
                         _pix = page.get_pixmap(dpi=150)
                         metadata["ocr_unavailable"] = True
-                        metadata["note"] = "Scanned PDF detected but OCR (Tesseract) is not available"
+                        metadata["note"] = (
+                            "Scanned PDF detected but OCR (Tesseract) is not available"
+                        )
                     except Exception:
                         pass
             if ocr_pages_text:
@@ -432,11 +458,12 @@ async def extract_pdf(raw_bytes: bytes) -> DocumentResult:
 # DOCX Extraction — Enhanced
 # ---------------------------------------------------------------------------
 
+
 async def extract_docx(raw_bytes: bytes) -> DocumentResult:
     """Extract text, images, hyperlinks, and metadata from a DOCX."""
     try:
         from docx import Document
-        from docx.opc.constants import RELATIONSHIP_TYPE as RT
+        from docx.opc.constants import RELATIONSHIP_TYPE as RT  # noqa: F401
     except ImportError:
         logger.warning("python-docx not installed, returning empty result")
         return DocumentResult(
@@ -481,7 +508,6 @@ async def extract_docx(raw_bytes: bytes) -> DocumentResult:
             pass
 
         # Extract paragraphs with enhanced formatting
-        list_level_counter = {}
         for para in doc.paragraphs:
             text = para.text.strip()
             if not text:
@@ -495,9 +521,16 @@ async def extract_docx(raw_bytes: bytes) -> DocumentResult:
             # Detect list indentation level
             indent_level = 0
             try:
-                pPr = para._element.find(".//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}ilvl")
+                pPr = para._element.find(
+                    ".//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}ilvl"
+                )
                 if pPr is not None:
-                    indent_level = int(pPr.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val", "0"))
+                    indent_level = int(
+                        pPr.get(
+                            "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val",
+                            "0",
+                        )
+                    )
             except Exception:
                 pass
 
@@ -512,7 +545,11 @@ async def extract_docx(raw_bytes: bytes) -> DocumentResult:
                 md_parts.append(f"### {formatted_text}")
             elif style_name.startswith("Heading 4"):
                 md_parts.append(f"#### {formatted_text}")
-            elif "List Bullet" in style_name or "List" in style_name and "Number" not in style_name:
+            elif (
+                "List Bullet" in style_name
+                or "List" in style_name
+                and "Number" not in style_name
+            ):
                 indent = "  " * indent_level
                 md_parts.append(f"{indent}- {formatted_text}")
             elif "List Number" in style_name:
@@ -547,14 +584,22 @@ async def extract_docx(raw_bytes: bytes) -> DocumentResult:
                     try:
                         img_data = rel.target_part.blob
                         if img_data and len(img_data) <= 2 * 1024 * 1024:
-                            ext = rel.target_ref.split(".")[-1] if "." in rel.target_ref else "png"
-                            all_images.append({
-                                "data_b64": base64.b64encode(img_data).decode("ascii"),
-                                "page": 1,
-                                "width": 0,
-                                "height": 0,
-                                "ext": ext,
-                            })
+                            ext = (
+                                rel.target_ref.split(".")[-1]
+                                if "." in rel.target_ref
+                                else "png"
+                            )
+                            all_images.append(
+                                {
+                                    "data_b64": base64.b64encode(img_data).decode(
+                                        "ascii"
+                                    ),
+                                    "page": 1,
+                                    "width": 0,
+                                    "height": 0,
+                                    "ext": ext,
+                                }
+                            )
                             md_parts.append(f"![Image {len(all_images)}](embedded)")
                     except Exception:
                         continue
@@ -597,9 +642,7 @@ async def extract_docx(raw_bytes: bytes) -> DocumentResult:
 
 def _build_formatted_runs(para, hyperlink_map: dict) -> str:
     """Build markdown-formatted text from paragraph runs with bold/italic/hyperlinks."""
-    from lxml import etree
-    nsmap = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-             "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
+    from lxml import etree  # noqa: F811
 
     parts = []
     for child in para._element:
@@ -611,15 +654,25 @@ def _build_formatted_runs(para, hyperlink_map: dict) -> str:
             is_bold = False
             is_italic = False
             for sub in child:
-                sub_tag = etree.QName(sub.tag).localname if isinstance(sub.tag, str) else ""
+                sub_tag = (
+                    etree.QName(sub.tag).localname if isinstance(sub.tag, str) else ""
+                )
                 if sub_tag == "rPr":
                     for prop in sub:
-                        prop_tag = etree.QName(prop.tag).localname if isinstance(prop.tag, str) else ""
+                        prop_tag = (
+                            etree.QName(prop.tag).localname
+                            if isinstance(prop.tag, str)
+                            else ""
+                        )
                         if prop_tag == "b":
-                            val = prop.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val")
+                            val = prop.get(
+                                "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val"
+                            )
                             is_bold = val != "0" if val else True
                         elif prop_tag == "i":
-                            val = prop.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val")
+                            val = prop.get(
+                                "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val"
+                            )
                             is_italic = val != "0" if val else True
                 elif sub_tag == "t":
                     run_text += sub.text or ""
@@ -636,10 +689,15 @@ def _build_formatted_runs(para, hyperlink_map: dict) -> str:
 
         elif tag == "hyperlink":
             # Hyperlink element
-            r_id = child.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id", "")
+            r_id = child.get(
+                "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id",
+                "",
+            )
             link_url = hyperlink_map.get(r_id, "")
             link_text = ""
-            for sub in child.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"):
+            for sub in child.iter(
+                "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"
+            ):
                 link_text += sub.text or ""
             if link_text and link_url:
                 parts.append(f"[{link_text}]({link_url})")
@@ -658,16 +716,24 @@ def _extract_docx_notes(raw_bytes: bytes) -> str:
                 if note_file not in zf.namelist():
                     continue
                 from lxml import etree
+
                 tree = etree.parse(zf.open(note_file))
-                ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+                ns = {
+                    "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                }
                 note_tag = "footnote" if "footnote" in note_file else "endnote"
                 for note in tree.findall(f".//w:{note_tag}", ns):
-                    note_id = note.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}id", "")
+                    note_id = note.get(
+                        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}id",
+                        "",
+                    )
                     # Skip separator notes (id 0 and -1)
                     if note_id in ("0", "-1"):
                         continue
                     text_parts = []
-                    for t in note.iter("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"):
+                    for t in note.iter(
+                        "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"
+                    ):
                         if t.text:
                             text_parts.append(t.text)
                     text = "".join(text_parts).strip()
@@ -682,6 +748,7 @@ def _extract_docx_notes(raw_bytes: bytes) -> str:
 # XLSX Extraction
 # ---------------------------------------------------------------------------
 
+
 async def extract_xlsx(raw_bytes: bytes) -> DocumentResult:
     """Extract data from XLSX using openpyxl."""
     try:
@@ -695,7 +762,9 @@ async def extract_xlsx(raw_bytes: bytes) -> DocumentResult:
         )
 
     try:
-        wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+        wb = openpyxl.load_workbook(
+            io.BytesIO(raw_bytes), read_only=True, data_only=True
+        )
 
         metadata = {
             "document_type": "xlsx",
@@ -735,11 +804,13 @@ async def extract_xlsx(raw_bytes: bytes) -> DocumentResult:
             headers = rows_data[0]
             data_rows = rows_data[1:]
 
-            all_tables.append({
-                "headers": headers,
-                "rows": data_rows,
-                "sheet": sheet_name,
-            })
+            all_tables.append(
+                {
+                    "headers": headers,
+                    "rows": data_rows,
+                    "sheet": sheet_name,
+                }
+            )
 
             md_parts.append(_table_to_markdown(headers, data_rows))
             md_parts.append("")
@@ -760,7 +831,9 @@ async def extract_xlsx(raw_bytes: bytes) -> DocumentResult:
             text=full_text,
             markdown=markdown,
             metadata=metadata,
-            page_count=len(wb.sheetnames) if hasattr(wb, 'sheetnames') else metadata["sheet_count"],
+            page_count=len(wb.sheetnames)
+            if hasattr(wb, "sheetnames")
+            else metadata["sheet_count"],
             word_count=word_count,
             tables=all_tables,
         )
@@ -777,6 +850,7 @@ async def extract_xlsx(raw_bytes: bytes) -> DocumentResult:
 # ---------------------------------------------------------------------------
 # PPTX Extraction
 # ---------------------------------------------------------------------------
+
 
 async def extract_pptx(raw_bytes: bytes) -> DocumentResult:
     """Extract text, tables, and notes from PPTX using python-pptx."""
@@ -810,7 +884,9 @@ async def extract_pptx(raw_bytes: bytes) -> DocumentResult:
             if slide.shapes.title:
                 slide_title = slide.shapes.title.text.strip()
 
-            md_parts.append(f"## Slide {slide_num}" + (f": {slide_title}" if slide_title else ""))
+            md_parts.append(
+                f"## Slide {slide_num}" + (f": {slide_title}" if slide_title else "")
+            )
             md_parts.append("")
 
             for shape in slide.shapes:
@@ -828,9 +904,13 @@ async def extract_pptx(raw_bytes: bytes) -> DocumentResult:
                     headers = [cell.text.strip() for cell in table.rows[0].cells]
                     rows = []
                     for row_idx in range(1, len(table.rows)):
-                        row_cells = [cell.text.strip() for cell in table.rows[row_idx].cells]
+                        row_cells = [
+                            cell.text.strip() for cell in table.rows[row_idx].cells
+                        ]
                         rows.append(row_cells)
-                    all_tables.append({"headers": headers, "rows": rows, "slide": slide_num})
+                    all_tables.append(
+                        {"headers": headers, "rows": rows, "slide": slide_num}
+                    )
                     md_parts.append("")
                     md_parts.append(_table_to_markdown(headers, rows))
                     md_parts.append("")
@@ -840,15 +920,25 @@ async def extract_pptx(raw_bytes: bytes) -> DocumentResult:
                     try:
                         img_blob = shape.image.blob
                         if img_blob and len(img_blob) <= 2 * 1024 * 1024:
-                            ext = shape.image.content_type.split("/")[-1] if shape.image.content_type else "png"
-                            all_images.append({
-                                "data_b64": base64.b64encode(img_blob).decode("ascii"),
-                                "page": slide_num,
-                                "width": shape.width,
-                                "height": shape.height,
-                                "ext": ext,
-                            })
-                            md_parts.append(f"![Image from slide {slide_num}](embedded)")
+                            ext = (
+                                shape.image.content_type.split("/")[-1]
+                                if shape.image.content_type
+                                else "png"
+                            )
+                            all_images.append(
+                                {
+                                    "data_b64": base64.b64encode(img_blob).decode(
+                                        "ascii"
+                                    ),
+                                    "page": slide_num,
+                                    "width": shape.width,
+                                    "height": shape.height,
+                                    "ext": ext,
+                                }
+                            )
+                            md_parts.append(
+                                f"![Image from slide {slide_num}](embedded)"
+                            )
                     except Exception:
                         pass
 
@@ -892,6 +982,7 @@ async def extract_pptx(raw_bytes: bytes) -> DocumentResult:
 # ---------------------------------------------------------------------------
 # CSV Extraction
 # ---------------------------------------------------------------------------
+
 
 async def extract_csv(raw_bytes: bytes) -> DocumentResult:
     """Extract data from CSV/TSV files with auto-detection of delimiter and encoding."""
@@ -949,7 +1040,9 @@ async def extract_csv(raw_bytes: bytes) -> DocumentResult:
         if total_rows > 1000:
             display_rows = data_rows[:500] + [["..."] * len(headers)] + data_rows[-100:]
             metadata["truncated"] = True
-            metadata["display_note"] = f"Showing first 500 + last 100 of {total_rows} rows"
+            metadata["display_note"] = (
+                f"Showing first 500 + last 100 of {total_rows} rows"
+            )
         else:
             display_rows = data_rows
 
@@ -985,6 +1078,7 @@ async def extract_csv(raw_bytes: bytes) -> DocumentResult:
 # ---------------------------------------------------------------------------
 # RTF Extraction
 # ---------------------------------------------------------------------------
+
 
 async def extract_rtf(raw_bytes: bytes) -> DocumentResult:
     """Extract text from RTF using striprtf."""
@@ -1042,6 +1136,7 @@ async def extract_rtf(raw_bytes: bytes) -> DocumentResult:
 # EPUB Extraction
 # ---------------------------------------------------------------------------
 
+
 async def extract_epub(raw_bytes: bytes) -> DocumentResult:
     """Extract text from EPUB using zipfile + BeautifulSoup (no extra dependency)."""
     try:
@@ -1057,13 +1152,17 @@ async def extract_epub(raw_bytes: bytes) -> DocumentResult:
             # Parse container.xml to find OPF
             container = zf.read("META-INF/container.xml")
             from lxml import etree
+
             container_tree = etree.fromstring(container)
             ns = {"c": "urn:oasis:names:tc:opendocument:xmlns:container"}
             rootfile = container_tree.find(".//c:rootfile", ns)
             if rootfile is None:
                 return DocumentResult(
                     text="[Invalid EPUB: no rootfile]",
-                    metadata={"error": "no rootfile in container.xml", "document_type": "epub"},
+                    metadata={
+                        "error": "no rootfile in container.xml",
+                        "document_type": "epub",
+                    },
                 )
             opf_path = rootfile.get("full-path", "")
 
@@ -1106,6 +1205,7 @@ async def extract_epub(raw_bytes: bytes) -> DocumentResult:
 
             # Resolve base directory for OPF-relative paths
             import posixpath
+
             opf_dir = posixpath.dirname(opf_path)
 
             md_parts = []
@@ -1123,17 +1223,25 @@ async def extract_epub(raw_bytes: bytes) -> DocumentResult:
             for item_id, item_info in manifest_items.items():
                 if "cover" in item_id.lower() and "image" in item_info["media_type"]:
                     try:
-                        cover_path = posixpath.join(opf_dir, item_info["href"]) if opf_dir else item_info["href"]
+                        cover_path = (
+                            posixpath.join(opf_dir, item_info["href"])
+                            if opf_dir
+                            else item_info["href"]
+                        )
                         cover_data = zf.read(cover_path)
                         if len(cover_data) <= 2 * 1024 * 1024:
                             ext = item_info["href"].split(".")[-1]
-                            all_images.append({
-                                "data_b64": base64.b64encode(cover_data).decode("ascii"),
-                                "page": 0,
-                                "width": 0,
-                                "height": 0,
-                                "ext": ext,
-                            })
+                            all_images.append(
+                                {
+                                    "data_b64": base64.b64encode(cover_data).decode(
+                                        "ascii"
+                                    ),
+                                    "page": 0,
+                                    "width": 0,
+                                    "height": 0,
+                                    "ext": ext,
+                                }
+                            )
                     except Exception:
                         pass
                     break
@@ -1144,7 +1252,9 @@ async def extract_epub(raw_bytes: bytes) -> DocumentResult:
                 if not item or "html" not in item["media_type"].lower():
                     continue
 
-                href = posixpath.join(opf_dir, item["href"]) if opf_dir else item["href"]
+                href = (
+                    posixpath.join(opf_dir, item["href"]) if opf_dir else item["href"]
+                )
                 try:
                     html_content = zf.read(href).decode("utf-8", errors="replace")
                 except (KeyError, Exception):
@@ -1166,7 +1276,12 @@ async def extract_epub(raw_bytes: bytes) -> DocumentResult:
                 # Convert HTML to markdown using markdownify if available
                 try:
                     from markdownify import markdownify as md
-                    chapter_md = md(str(soup.body or soup), heading_style="ATX", strip=["script", "style"])
+
+                    chapter_md = md(
+                        str(soup.body or soup),
+                        heading_style="ATX",
+                        strip=["script", "style"],
+                    )
                 except ImportError:
                     chapter_md = chapter_text
 
@@ -1202,6 +1317,7 @@ async def extract_epub(raw_bytes: bytes) -> DocumentResult:
 # ---------------------------------------------------------------------------
 # Unified dispatch
 # ---------------------------------------------------------------------------
+
 
 async def extract_document(raw_bytes: bytes, doc_type: str) -> DocumentResult:
     """Route to the correct extractor based on document type."""

@@ -3,7 +3,14 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Integer, DateTime, ForeignKey, BigInteger, UniqueConstraint
+from sqlalchemy import (
+    String,
+    Integer,
+    DateTime,
+    ForeignKey,
+    BigInteger,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,10 +26,14 @@ class UsageQuota(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     period: Mapped[str] = mapped_column(
-        String(7), nullable=False  # "2026-02" format (YYYY-MM)
+        String(7),
+        nullable=False,  # "2026-02" format (YYYY-MM)
     )
 
     # Credit limits (-1 = unlimited)
@@ -56,9 +67,7 @@ class UsageQuota(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "period", name="uq_user_period"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "period", name="uq_user_period"),)
 
     # Relationships
     user = relationship("User", backref="usage_quotas")

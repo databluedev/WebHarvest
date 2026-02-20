@@ -6,18 +6,48 @@ from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 # Tracking parameters to strip
 _TRACKING_PARAMS = {
-    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-    "utm_id", "utm_source_platform", "utm_creative_format",
-    "fbclid", "gclid", "gclsrc", "dclid", "gbraid", "wbraid",
-    "msclkid", "twclid", "li_fat_id",
-    "mc_cid", "mc_eid",
-    "ref", "_ref", "ref_src", "ref_url",
-    "si", "s", "share", "igshid",
-    "oly_enc_id", "oly_anon_id",
-    "vero_id", "wickedid",
-    "__hstc", "__hssc", "__hsfp", "hsCtaTracking",
-    "_ga", "_gl", "_hsenc", "_openstat",
-    "nb_klid", "plan", "guccounter",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "utm_id",
+    "utm_source_platform",
+    "utm_creative_format",
+    "fbclid",
+    "gclid",
+    "gclsrc",
+    "dclid",
+    "gbraid",
+    "wbraid",
+    "msclkid",
+    "twclid",
+    "li_fat_id",
+    "mc_cid",
+    "mc_eid",
+    "ref",
+    "_ref",
+    "ref_src",
+    "ref_url",
+    "si",
+    "s",
+    "share",
+    "igshid",
+    "oly_enc_id",
+    "oly_anon_id",
+    "vero_id",
+    "wickedid",
+    "__hstc",
+    "__hssc",
+    "__hsfp",
+    "hsCtaTracking",
+    "_ga",
+    "_gl",
+    "_hsenc",
+    "_openstat",
+    "nb_klid",
+    "plan",
+    "guccounter",
 }
 
 
@@ -66,7 +96,8 @@ def normalize_url(url: str) -> str:
     # Sort and filter query params
     query_params = parse_qs(parsed.query, keep_blank_values=True)
     filtered_params = {
-        k: v for k, v in sorted(query_params.items())
+        k: v
+        for k, v in sorted(query_params.items())
         if k.lower() not in _TRACKING_PARAMS
     }
     query = urlencode(filtered_params, doseq=True) if filtered_params else ""

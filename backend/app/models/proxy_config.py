@@ -18,7 +18,9 @@ class ProxyConfig(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     proxy_url: Mapped[str] = mapped_column(String(500), nullable=False)
-    proxy_type: Mapped[str] = mapped_column(String(10), nullable=False, default="http")  # http, https, socks5
+    proxy_type: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="http"
+    )  # http, https, socks5
     label: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(

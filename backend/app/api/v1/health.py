@@ -25,6 +25,7 @@ async def readiness():
     try:
         from app.core.database import engine
         from sqlalchemy import text
+
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         checks["database"] = "ok"
@@ -34,6 +35,7 @@ async def readiness():
     # Check Redis
     try:
         from app.core.redis import redis_client
+
         await redis_client.ping()
         checks["redis"] = "ok"
     except Exception as e:
@@ -42,6 +44,7 @@ async def readiness():
     # Check browser pool
     try:
         from app.services.browser import browser_pool
+
         if browser_pool._initialized:
             checks["browser_pool"] = "ok"
         else:
@@ -53,7 +56,9 @@ async def readiness():
     status_code = 200 if all_ok else 503
 
     return Response(
-        content=__import__("json").dumps({"status": "ready" if all_ok else "not ready", "checks": checks}),
+        content=__import__("json").dumps(
+            {"status": "ready" if all_ok else "not ready", "checks": checks}
+        ),
         status_code=status_code,
         media_type="application/json",
     )

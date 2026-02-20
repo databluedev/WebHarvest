@@ -1,6 +1,6 @@
 import fnmatch
 import logging
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 import httpx
 import redis.asyncio as aioredis
@@ -9,8 +9,7 @@ from robotexclusionrulesparser import RobotExclusionRulesParser
 from app.config import settings
 from app.schemas.crawl import CrawlRequest, ScrapeOptions
 from app.schemas.scrape import ScrapeRequest
-from app.services.content import extract_links
-from app.services.scraper import scrape_url, scrape_url_fetch_only, extract_content
+from app.services.scraper import scrape_url, scrape_url_fetch_only
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +49,7 @@ class WebCrawler:
 
         # Create persistent browser session for this crawl
         from app.services.browser import CrawlSession, browser_pool
+
         self._crawl_session = CrawlSession(browser_pool)
         proxy = None
         if self._proxy_manager:
@@ -85,7 +85,9 @@ class WebCrawler:
                 continue
             if not self._should_crawl(url, depth):
                 continue
-            if self.config.respect_robots_txt and not await self._is_allowed_by_robots(url):
+            if self.config.respect_robots_txt and not await self._is_allowed_by_robots(
+                url
+            ):
                 continue
 
             visited_count = await self.get_visited_count()
@@ -114,8 +116,20 @@ class WebCrawler:
 
         # Skip common non-page extensions
         skip_extensions = {
-            ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp",
-            ".mp4", ".mp3", ".zip", ".tar", ".gz", ".css", ".js",
+            ".pdf",
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".svg",
+            ".webp",
+            ".mp4",
+            ".mp3",
+            ".zip",
+            ".tar",
+            ".gz",
+            ".css",
+            ".js",
         }
         path_lower = parsed.path.lower()
         if any(path_lower.endswith(ext) for ext in skip_extensions):
@@ -125,12 +139,16 @@ class WebCrawler:
 
         # Check include paths
         if self.config.include_paths:
-            if not any(fnmatch.fnmatch(path, pattern) for pattern in self.config.include_paths):
+            if not any(
+                fnmatch.fnmatch(path, pattern) for pattern in self.config.include_paths
+            ):
                 return False
 
         # Check exclude paths
         if self.config.exclude_paths:
-            if any(fnmatch.fnmatch(path, pattern) for pattern in self.config.exclude_paths):
+            if any(
+                fnmatch.fnmatch(path, pattern) for pattern in self.config.exclude_paths
+            ):
                 return False
 
         return True
@@ -148,8 +166,11 @@ class WebCrawler:
                 text = ""
                 try:
                     from curl_cffi.requests import AsyncSession
+
                     async with AsyncSession(impersonate="chrome124") as session:
-                        resp = await session.get(robots_url, timeout=10, allow_redirects=True)
+                        resp = await session.get(
+                            robots_url, timeout=10, allow_redirects=True
+                        )
                         if resp.status_code == 200:
                             text = resp.text
                 except Exception:
@@ -186,8 +207,11 @@ class WebCrawler:
             mobile=getattr(opts, "mobile", False),
         )
 
-        result = await scrape_url(request, proxy_manager=self._proxy_manager,
-                                  crawl_session=self._crawl_session)
+        result = await scrape_url(
+            request,
+            proxy_manager=self._proxy_manager,
+            crawl_session=self._crawl_session,
+        )
 
         # Use extracted links for frontier expansion
         discovered_links = result.links or []
@@ -216,7 +240,8 @@ class WebCrawler:
         )
 
         fetch_result = await scrape_url_fetch_only(
-            request, proxy_manager=self._proxy_manager,
+            request,
+            proxy_manager=self._proxy_manager,
             crawl_session=self._crawl_session,
         )
         if fetch_result:
@@ -232,6 +257,8 @@ class WebCrawler:
                 pass
             self._crawl_session = None
         if self._redis:
-            await self._redis.delete(self._frontier_key, self._visited_key, self._depth_key)
+            await self._redis.delete(
+                self._frontier_key, self._visited_key, self._depth_key
+            )
             await self._redis.aclose()
             self._redis = None

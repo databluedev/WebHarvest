@@ -31,7 +31,9 @@ celery_app.conf.update(
         "app.workers.search_worker.*": {"queue": "search"},
         "app.workers.extract_worker.*": {"queue": "scrape"},
         "app.workers.monitor_worker.*": {"queue": "scrape"},
-        "app.workers.schedule_worker.*": {"queue": "scrape"},  # Lightweight, reuse scrape queue
+        "app.workers.schedule_worker.*": {
+            "queue": "scrape"
+        },  # Lightweight, reuse scrape queue
         "app.workers.cleanup_worker.*": {"queue": "scrape"},
     },
     # Celery Beat schedule — periodic tasks

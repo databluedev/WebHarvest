@@ -3,7 +3,6 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
-from uuid import UUID
 
 from app.workers.celery_app import celery_app
 
@@ -39,7 +38,7 @@ def check_schedules():
                 # Find all active schedules where next_run_at <= now
                 result = await db.execute(
                     select(Schedule).where(
-                        Schedule.is_active == True,
+                        Schedule.is_active == True,  # noqa: E712
                         Schedule.next_run_at <= now,
                     )
                 )
@@ -72,12 +71,15 @@ def check_schedules():
                         # Dispatch to the appropriate worker
                         if schedule.schedule_type == "crawl":
                             from app.workers.crawl_worker import process_crawl
+
                             process_crawl.delay(str(job.id), config)
                         elif schedule.schedule_type == "batch":
                             from app.workers.batch_worker import process_batch
+
                             process_batch.delay(str(job.id), config)
                         elif schedule.schedule_type == "scrape":
                             from app.workers.scrape_worker import process_scrape
+
                             process_scrape.delay(str(job.id), config)
 
                         # Update schedule
@@ -97,9 +99,7 @@ def check_schedules():
                         )
 
                     except Exception as e:
-                        logger.error(
-                            f"Failed to trigger schedule {schedule.id}: {e}"
-                        )
+                        logger.error(f"Failed to trigger schedule {schedule.id}: {e}")
 
                 await db.commit()
 

@@ -10,12 +10,16 @@ class Settings(BaseSettings):
 
     # Security
     SECRET_KEY: str = "change-this-in-production"
-    ENCRYPTION_KEY: str = "change-this-32-byte-key-in-prod!"  # Must be 32 bytes for AES-256
+    ENCRYPTION_KEY: str = (
+        "change-this-32-byte-key-in-prod!"  # Must be 32 bytes for AES-256
+    )
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     API_KEY_PREFIX: str = "wh_"
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://webharvest:webharvest@localhost:5432/webharvest"
+    DATABASE_URL: str = (
+        "postgresql+asyncpg://webharvest:webharvest@localhost:5432/webharvest"
+    )
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -43,7 +47,9 @@ class Settings(BaseSettings):
     DEFAULT_WAIT_FOR: int = 0  # ms
     MAX_CRAWL_PAGES: int = 1000
     MAX_CRAWL_DEPTH: int = 10
-    MAX_CONCURRENT_SCRAPES: int = 3  # Per-worker API concurrency (4 workers × 3 = 12 max)
+    MAX_CONCURRENT_SCRAPES: int = (
+        3  # Per-worker API concurrency (4 workers × 3 = 12 max)
+    )
     SCRAPE_API_TIMEOUT: int = 90  # Max seconds for a single scrape API call
 
     # Database Pool

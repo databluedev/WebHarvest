@@ -37,7 +37,9 @@ def _compute_diff_stats(old: str, new: str) -> dict:
     opcodes = sm.get_opcodes()
     added = sum(j2 - j1 for tag, i1, i2, j1, j2 in opcodes if tag == "insert")
     removed = sum(i2 - i1 for tag, i1, i2, j1, j2 in opcodes if tag == "delete")
-    changed = sum(max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in opcodes if tag == "replace")
+    changed = sum(
+        max(i2 - i1, j2 - j1) for tag, i1, i2, j1, j2 in opcodes if tag == "replace"
+    )
 
     return {
         "similarity_ratio": round(ratio, 4),
@@ -49,7 +51,9 @@ def _compute_diff_stats(old: str, new: str) -> dict:
     }
 
 
-def _check_keywords(old_content: str, new_content: str, keywords: list[str]) -> tuple[list[str], list[str]]:
+def _check_keywords(
+    old_content: str, new_content: str, keywords: list[str]
+) -> tuple[list[str], list[str]]:
     """Check which keywords were added or removed."""
     old_lower = old_content.lower()
     new_lower = new_content.lower()
@@ -77,10 +81,7 @@ def check_monitors():
     async def _check():
         from sqlalchemy import select
         from app.core.database import create_worker_session_factory
-        from app.models.monitor import Monitor, MonitorCheck
-        from app.schemas.scrape import ScrapeRequest
-        from app.services.scraper import scrape_url
-        from app.services.content import extract_main_content, html_to_markdown
+        from app.models.monitor import Monitor
 
         session_factory, db_engine = create_worker_session_factory()
 
@@ -89,10 +90,12 @@ def check_monitors():
 
             async with session_factory() as db:
                 result = await db.execute(
-                    select(Monitor).where(
-                        Monitor.is_active == True,
+                    select(Monitor)
+                    .where(
+                        Monitor.is_active == True,  # noqa: E712
                         Monitor.next_check_at <= now,
-                    ).limit(50)  # Process max 50 per cycle
+                    )
+                    .limit(50)  # Process max 50 per cycle
                 )
                 due_monitors = result.scalars().all()
 
@@ -140,7 +143,7 @@ async def _check_single_monitor(monitor_id: str, session_factory):
     from app.models.monitor import Monitor, MonitorCheck
     from app.schemas.scrape import ScrapeRequest
     from app.services.scraper import scrape_url
-    from app.services.content import extract_main_content, html_to_markdown
+    from app.services.content import html_to_markdown
 
     start_time = time.time()
 
@@ -171,13 +174,18 @@ async def _check_single_monitor(monitor_id: str, session_factory):
                 status_code=0,
                 content_hash="",
                 has_changed=False,
-                change_detail={"change_type": "error", "summary": "Timeout checking URL"},
+                change_detail={
+                    "change_type": "error",
+                    "summary": "Timeout checking URL",
+                },
                 response_time_ms=int((time.time() - start_time) * 1000),
             )
             db.add(check)
             monitor.total_checks += 1
             monitor.last_check_at = datetime.now(timezone.utc)
-            monitor.next_check_at = datetime.now(timezone.utc) + timedelta(minutes=monitor.check_interval_minutes)
+            monitor.next_check_at = datetime.now(timezone.utc) + timedelta(
+                minutes=monitor.check_interval_minutes
+            )
             await db.commit()
             return
 
@@ -217,11 +225,18 @@ async def _check_single_monitor(monitor_id: str, session_factory):
                 if diff_stats["added_lines"]:
                     summary_parts.append(f"+{diff_stats['added_lines']} lines added")
                 if diff_stats["removed_lines"]:
-                    summary_parts.append(f"-{diff_stats['removed_lines']} lines removed")
+                    summary_parts.append(
+                        f"-{diff_stats['removed_lines']} lines removed"
+                    )
                 if diff_stats["changed_lines"]:
-                    summary_parts.append(f"~{diff_stats['changed_lines']} lines changed")
+                    summary_parts.append(
+                        f"~{diff_stats['changed_lines']} lines changed"
+                    )
 
-                summary = ", ".join(summary_parts) or f"Content changed ({change_ratio:.1%} different)"
+                summary = (
+                    ", ".join(summary_parts)
+                    or f"Content changed ({change_ratio:.1%} different)"
+                )
 
                 change_detail = {
                     "change_type": change_type,
@@ -232,8 +247,14 @@ async def _check_single_monitor(monitor_id: str, session_factory):
                 }
 
                 # Check keywords if configured
-                if monitor.keywords and monitor.notify_on in ("keyword_added", "keyword_removed", "any_change"):
-                    found, lost = _check_keywords(old_content, new_content, monitor.keywords)
+                if monitor.keywords and monitor.notify_on in (
+                    "keyword_added",
+                    "keyword_removed",
+                    "any_change",
+                ):
+                    found, lost = _check_keywords(
+                        old_content, new_content, monitor.keywords
+                    )
                     if found:
                         change_detail["keywords_found"] = found
                     if lost:
@@ -273,7 +294,9 @@ async def _check_single_monitor(monitor_id: str, session_factory):
         monitor.last_content_hash = new_hash
         monitor.last_content = new_content[:100000]  # Store up to 100k chars
         monitor.total_checks += 1
-        monitor.next_check_at = datetime.now(timezone.utc) + timedelta(minutes=monitor.check_interval_minutes)
+        monitor.next_check_at = datetime.now(timezone.utc) + timedelta(
+            minutes=monitor.check_interval_minutes
+        )
 
         if has_changed:
             monitor.last_change_at = datetime.now(timezone.utc)
@@ -285,6 +308,7 @@ async def _check_single_monitor(monitor_id: str, session_factory):
         if has_changed and monitor.webhook_url:
             try:
                 from app.services.webhook import send_webhook
+
                 await send_webhook(
                     url=monitor.webhook_url,
                     payload={

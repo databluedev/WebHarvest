@@ -16,7 +16,11 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.exceptions import NotFoundError, RateLimitError
 from app.core.rate_limiter import check_rate_limit_full
-from app.core.job_cache import get_cached_response, set_cached_response, invalidate_cache
+from app.core.job_cache import (
+    get_cached_response,
+    set_cached_response,
+    invalidate_cache,
+)
 from app.config import settings
 from app.models.job import Job
 from app.models.job_result import JobResult
@@ -29,7 +33,7 @@ from app.schemas.crawl import (
 )
 from app.schemas.scrape import PageMetadata
 from app.workers.crawl_worker import process_crawl
-from app.services.quota import check_quota, increment_usage
+from app.services.quota import check_quota
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -87,9 +91,7 @@ async def start_crawl(
 ):
     """Start an asynchronous crawl job."""
     # Rate limiting
-    rl = await check_rate_limit_full(
-        f"rate:crawl:{user.id}", settings.RATE_LIMIT_CRAWL
-    )
+    rl = await check_rate_limit_full(f"rate:crawl:{user.id}", settings.RATE_LIMIT_CRAWL)
     response.headers["X-RateLimit-Limit"] = str(rl.limit)
     response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
     response.headers["X-RateLimit-Reset"] = str(rl.reset)
@@ -150,7 +152,9 @@ async def get_crawl_status(
     if job.status in ("pending", "running", "completed", "started"):
         # Count total results first (lightweight query)
         count_result = await db.execute(
-            select(func.count()).select_from(JobResult).where(JobResult.job_id == job.id)
+            select(func.count())
+            .select_from(JobResult)
+            .where(JobResult.job_id == job.id)
         )
         total_results = count_result.scalar() or 0
 
@@ -228,7 +232,9 @@ async def get_crawl_status(
     # Cache completed/failed jobs for instant subsequent loads
     if job.status in ("completed", "failed"):
         cache_suffix = f"p{page}_pp{per_page}"
-        await set_cached_response(job_id, response_obj.model_dump(), suffix=cache_suffix)
+        await set_cached_response(
+            job_id, response_obj.model_dump(), suffix=cache_suffix
+        )
 
     return response_obj
 
@@ -265,7 +271,9 @@ async def export_crawl(
         raise NotFoundError("Crawl job not found")
 
     result = await db.execute(
-        select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+        select(JobResult)
+        .where(JobResult.job_id == job.id)
+        .order_by(JobResult.created_at)
     )
     results = result.scalars().all()
 
@@ -280,36 +288,51 @@ async def export_crawl(
         return StreamingResponse(
             io.BytesIO(content.encode("utf-8")),
             media_type="application/json",
-            headers={"Content-Disposition": f'attachment; filename="crawl-{short_id}.json"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="crawl-{short_id}.json"'
+            },
         )
 
     if format == "csv":
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow([
-            "url", "title", "status_code", "word_count",
-            "reading_time_min", "description", "markdown_length", "html_length",
-            "links_count", "has_screenshot",
-        ])
+        writer.writerow(
+            [
+                "url",
+                "title",
+                "status_code",
+                "word_count",
+                "reading_time_min",
+                "description",
+                "markdown_length",
+                "html_length",
+                "links_count",
+                "has_screenshot",
+            ]
+        )
         for p in pages:
             meta = p.get("metadata", {})
             reading_secs = meta.get("reading_time_seconds", 0)
-            writer.writerow([
-                p["url"],
-                meta.get("title", ""),
-                meta.get("status_code", ""),
-                meta.get("word_count", ""),
-                round(reading_secs / 60, 1) if reading_secs else "",
-                meta.get("description", ""),
-                len(p.get("markdown", "")),
-                len(p.get("html", "")),
-                len(p.get("links", [])),
-                "yes" if p.get("screenshot_base64") else "no",
-            ])
+            writer.writerow(
+                [
+                    p["url"],
+                    meta.get("title", ""),
+                    meta.get("status_code", ""),
+                    meta.get("word_count", ""),
+                    round(reading_secs / 60, 1) if reading_secs else "",
+                    meta.get("description", ""),
+                    len(p.get("markdown", "")),
+                    len(p.get("html", "")),
+                    len(p.get("links", [])),
+                    "yes" if p.get("screenshot_base64") else "no",
+                ]
+            )
         return StreamingResponse(
             io.BytesIO(buf.getvalue().encode("utf-8")),
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="crawl-{short_id}.csv"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="crawl-{short_id}.csv"'
+            },
         )
 
     # ZIP format (default)
@@ -319,13 +342,15 @@ async def export_crawl(
         index = []
         for i, p in enumerate(pages):
             meta = p.get("metadata", {})
-            index.append({
-                "index": i + 1,
-                "url": p["url"],
-                "title": meta.get("title", ""),
-                "status_code": meta.get("status_code", ""),
-                "word_count": meta.get("word_count", 0),
-            })
+            index.append(
+                {
+                    "index": i + 1,
+                    "url": p["url"],
+                    "title": meta.get("title", ""),
+                    "status_code": meta.get("status_code", ""),
+                    "word_count": meta.get("word_count", 0),
+                }
+            )
         zf.writestr("index.json", json.dumps(index, indent=2, ensure_ascii=False))
 
         for i, p in enumerate(pages):
@@ -349,7 +374,14 @@ async def export_crawl(
 
             # Metadata JSON
             page_meta = {}
-            for key in ("metadata", "structured_data", "headings", "images", "links", "links_detail"):
+            for key in (
+                "metadata",
+                "structured_data",
+                "headings",
+                "images",
+                "links",
+                "links_detail",
+            ):
                 if p.get(key):
                     page_meta[key] = p[key]
             page_meta["url"] = p["url"]

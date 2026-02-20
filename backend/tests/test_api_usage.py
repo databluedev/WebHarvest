@@ -9,10 +9,8 @@ needed, and by directly testing the other aggregation logic.
 
 import uuid
 from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,7 +38,9 @@ async def _seed_jobs(db: AsyncSession, user_id: uuid.UUID, count: int = 5) -> li
             status=statuses[i % len(statuses)],
             config={"url": f"https://example{i}.com"},
             total_pages=(i + 1) * 2,
-            completed_pages=(i + 1) * 2 if statuses[i % len(statuses)] == "completed" else 0,
+            completed_pages=(i + 1) * 2
+            if statuses[i % len(statuses)] == "completed"
+            else 0,
             started_at=now - timedelta(minutes=10),
             completed_at=now if statuses[i % len(statuses)] == "completed" else None,
             created_at=now - timedelta(days=i),
@@ -72,7 +72,6 @@ async def _seed_job_results(db: AsyncSession, job_id: uuid.UUID, urls: list[str]
 
 
 class TestUsageStats:
-
     @pytest.mark.asyncio
     async def test_stats_empty_user(self, client: AsyncClient, auth_headers):
         """A user with no jobs gets zeroed-out stats."""
@@ -166,7 +165,6 @@ class TestUsageStats:
 
 
 class TestUsageHistory:
-
     @pytest.mark.asyncio
     async def test_history_pagination(
         self, client: AsyncClient, auth_headers, db_session: AsyncSession, test_user
@@ -174,7 +172,9 @@ class TestUsageHistory:
         """GET /v1/usage/history returns paginated results."""
         await _seed_jobs(db_session, test_user.id, count=5)
 
-        resp = await client.get("/v1/usage/history?page=1&per_page=2", headers=auth_headers)
+        resp = await client.get(
+            "/v1/usage/history?page=1&per_page=2", headers=auth_headers
+        )
         assert resp.status_code == 200
         data = resp.json()
 
@@ -225,7 +225,9 @@ class TestUsageHistory:
         """Filtering by status returns only matching jobs."""
         await _seed_jobs(db_session, test_user.id, count=5)
 
-        resp = await client.get("/v1/usage/history?status=completed", headers=auth_headers)
+        resp = await client.get(
+            "/v1/usage/history?status=completed", headers=auth_headers
+        )
         assert resp.status_code == 200
         data = resp.json()
         for job in data["jobs"]:
@@ -238,7 +240,9 @@ class TestUsageHistory:
         """Second page of history returns remaining items."""
         await _seed_jobs(db_session, test_user.id, count=5)
 
-        resp = await client.get("/v1/usage/history?page=2&per_page=3", headers=auth_headers)
+        resp = await client.get(
+            "/v1/usage/history?page=2&per_page=3", headers=auth_headers
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["page"] == 2
@@ -256,7 +260,6 @@ class TestUsageHistory:
 
 
 class TestTopDomains:
-
     @pytest.mark.asyncio
     async def test_top_domains_structure(
         self, client: AsyncClient, auth_headers, db_session: AsyncSession, test_user
@@ -264,11 +267,15 @@ class TestTopDomains:
         """GET /v1/usage/top-domains returns the expected structure."""
         jobs = await _seed_jobs(db_session, test_user.id, count=1)
 
-        await _seed_job_results(db_session, jobs[0].id, [
-            "https://example.com/page1",
-            "https://example.com/page2",
-            "https://other.com/page1",
-        ])
+        await _seed_job_results(
+            db_session,
+            jobs[0].id,
+            [
+                "https://example.com/page1",
+                "https://example.com/page2",
+                "https://other.com/page1",
+            ],
+        )
 
         resp = await client.get("/v1/usage/top-domains", headers=auth_headers)
         assert resp.status_code == 200
@@ -285,14 +292,18 @@ class TestTopDomains:
         """Domain counts are correct and sorted descending."""
         jobs = await _seed_jobs(db_session, test_user.id, count=1)
 
-        await _seed_job_results(db_session, jobs[0].id, [
-            "https://example.com/a",
-            "https://example.com/b",
-            "https://example.com/c",
-            "https://other.com/x",
-            "https://other.com/y",
-            "https://rare.com/z",
-        ])
+        await _seed_job_results(
+            db_session,
+            jobs[0].id,
+            [
+                "https://example.com/a",
+                "https://example.com/b",
+                "https://example.com/c",
+                "https://other.com/x",
+                "https://other.com/y",
+                "https://rare.com/z",
+            ],
+        )
 
         resp = await client.get("/v1/usage/top-domains", headers=auth_headers)
         assert resp.status_code == 200
@@ -313,10 +324,14 @@ class TestTopDomains:
         """www. prefix is stripped from domains."""
         jobs = await _seed_jobs(db_session, test_user.id, count=1)
 
-        await _seed_job_results(db_session, jobs[0].id, [
-            "https://www.example.com/a",
-            "https://example.com/b",
-        ])
+        await _seed_job_results(
+            db_session,
+            jobs[0].id,
+            [
+                "https://www.example.com/a",
+                "https://example.com/b",
+            ],
+        )
 
         resp = await client.get("/v1/usage/top-domains", headers=auth_headers)
         assert resp.status_code == 200

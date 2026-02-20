@@ -39,4 +39,6 @@ class Job(Base):
 
     # Relationships
     user = relationship("User", back_populates="jobs")
-    results = relationship("JobResult", back_populates="job", cascade="all, delete-orphan")
+    results = relationship(
+        "JobResult", back_populates="job", cascade="all, delete-orphan"
+    )

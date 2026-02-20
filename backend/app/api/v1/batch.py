@@ -30,7 +30,7 @@ from app.schemas.batch import (
 )
 from app.schemas.scrape import PageMetadata
 from app.workers.batch_worker import process_batch
-from app.services.quota import check_quota, increment_usage
+from app.services.quota import check_quota
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -86,9 +86,7 @@ async def start_batch_scrape(
 ):
     """Start a batch scrape job for multiple URLs."""
     # Rate limiting
-    rl = await check_rate_limit_full(
-        f"rate:batch:{user.id}", settings.RATE_LIMIT_BATCH
-    )
+    rl = await check_rate_limit_full(f"rate:batch:{user.id}", settings.RATE_LIMIT_BATCH)
     response.headers["X-RateLimit-Limit"] = str(rl.limit)
     response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
     response.headers["X-RateLimit-Reset"] = str(rl.reset)
@@ -182,7 +180,11 @@ async def get_batch_status(
                     content_length=meta.get("content_length", 0),
                 )
 
-            error = r.metadata_.get("error") if r.metadata_ and "error" in r.metadata_ else None
+            error = (
+                r.metadata_.get("error")
+                if r.metadata_ and "error" in r.metadata_
+                else None
+            )
             data.append(
                 BatchItemResult(
                     id=str(r.id),
@@ -191,9 +193,13 @@ async def get_batch_status(
                     markdown=r.markdown,
                     html=r.html,
                     links=r.links,
-                    links_detail=r.metadata_.get("links_detail") if r.metadata_ else None,
+                    links_detail=r.metadata_.get("links_detail")
+                    if r.metadata_
+                    else None,
                     screenshot=r.screenshot_url,
-                    structured_data=r.metadata_.get("structured_data") if r.metadata_ else None,
+                    structured_data=r.metadata_.get("structured_data")
+                    if r.metadata_
+                    else None,
                     headings=r.metadata_.get("headings") if r.metadata_ else None,
                     images=r.metadata_.get("images") if r.metadata_ else None,
                     extract=r.extract,
@@ -232,7 +238,9 @@ async def export_batch(
         raise NotFoundError("Batch job not found")
 
     result = await db.execute(
-        select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+        select(JobResult)
+        .where(JobResult.job_id == job.id)
+        .order_by(JobResult.created_at)
     )
     results = result.scalars().all()
     if not results:
@@ -246,33 +254,48 @@ async def export_batch(
         return StreamingResponse(
             io.BytesIO(content.encode("utf-8")),
             media_type="application/json",
-            headers={"Content-Disposition": f'attachment; filename="batch-{short_id}.json"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="batch-{short_id}.json"'
+            },
         )
 
     if format == "csv":
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow([
-            "url", "success", "title", "status_code", "word_count",
-            "description", "markdown_length", "html_length", "error",
-        ])
+        writer.writerow(
+            [
+                "url",
+                "success",
+                "title",
+                "status_code",
+                "word_count",
+                "description",
+                "markdown_length",
+                "html_length",
+                "error",
+            ]
+        )
         for p in pages:
             meta = p.get("metadata", {})
-            writer.writerow([
-                p["url"],
-                p.get("success", True),
-                meta.get("title", ""),
-                meta.get("status_code", ""),
-                meta.get("word_count", ""),
-                meta.get("description", ""),
-                len(p.get("markdown", "")),
-                len(p.get("html", "")),
-                p.get("error", ""),
-            ])
+            writer.writerow(
+                [
+                    p["url"],
+                    p.get("success", True),
+                    meta.get("title", ""),
+                    meta.get("status_code", ""),
+                    meta.get("word_count", ""),
+                    meta.get("description", ""),
+                    len(p.get("markdown", "")),
+                    len(p.get("html", "")),
+                    p.get("error", ""),
+                ]
+            )
         return StreamingResponse(
             io.BytesIO(buf.getvalue().encode("utf-8")),
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="batch-{short_id}.csv"'},
+            headers={
+                "Content-Disposition": f'attachment; filename="batch-{short_id}.csv"'
+            },
         )
 
     # ZIP
@@ -281,13 +304,15 @@ async def export_batch(
         index = []
         for i, p in enumerate(pages):
             meta = p.get("metadata", {})
-            index.append({
-                "index": i + 1,
-                "url": p["url"],
-                "success": p.get("success", True),
-                "title": meta.get("title", ""),
-                "word_count": meta.get("word_count", 0),
-            })
+            index.append(
+                {
+                    "index": i + 1,
+                    "url": p["url"],
+                    "success": p.get("success", True),
+                    "title": meta.get("title", ""),
+                    "word_count": meta.get("word_count", 0),
+                }
+            )
         zf.writestr("index.json", json.dumps(index, indent=2, ensure_ascii=False))
 
         for i, p in enumerate(pages):
@@ -298,14 +323,28 @@ async def export_batch(
                 zf.writestr(f"{folder}/content.html", p["html"])
             if p.get("screenshot_base64"):
                 try:
-                    zf.writestr(f"{folder}/screenshot.jpg", base64.b64decode(p["screenshot_base64"]))
+                    zf.writestr(
+                        f"{folder}/screenshot.jpg",
+                        base64.b64decode(p["screenshot_base64"]),
+                    )
                 except Exception:
                     pass
             page_meta = {"url": p["url"], "success": p.get("success", True)}
-            for key in ("metadata", "structured_data", "headings", "images", "links", "links_detail", "error"):
+            for key in (
+                "metadata",
+                "structured_data",
+                "headings",
+                "images",
+                "links",
+                "links_detail",
+                "error",
+            ):
                 if p.get(key):
                     page_meta[key] = p[key]
-            zf.writestr(f"{folder}/metadata.json", json.dumps(page_meta, indent=2, ensure_ascii=False))
+            zf.writestr(
+                f"{folder}/metadata.json",
+                json.dumps(page_meta, indent=2, ensure_ascii=False),
+            )
 
         zf.writestr("full_data.json", json.dumps(pages, indent=2, ensure_ascii=False))
 

@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
 
 class ActionStep(BaseModel):
@@ -23,12 +23,19 @@ class ExtractConfig(BaseModel):
     prompt: str | None = None
     schema_: dict[str, Any] | None = None  # JSON Schema
 
-    model_config = {"populate_by_name": True, "json_schema_extra": {"properties": {"schema": {"$ref": "#/properties/schema_"}}}}
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
+            "properties": {"schema": {"$ref": "#/properties/schema_"}}
+        },
+    }
 
 
 class ScrapeRequest(BaseModel):
     url: str
-    formats: list[str] = ["markdown"]  # markdown, html, links, screenshot, structured_data, headings, images
+    formats: list[str] = [
+        "markdown"
+    ]  # markdown, html, links, screenshot, structured_data, headings, images
     only_main_content: bool = True
     wait_for: int = 0  # ms to wait after page load
     timeout: int = 30000  # ms
@@ -40,7 +47,9 @@ class ScrapeRequest(BaseModel):
     headers: dict[str, str] | None = None  # Custom HTTP headers to send
     cookies: dict[str, str] | None = None  # Custom cookies to send (name: value)
     mobile: bool = False  # Emulate mobile viewport
-    mobile_device: str | None = None  # Device preset name (e.g., "iphone_14", "pixel_7", "ipad_pro")
+    mobile_device: str | None = (
+        None  # Device preset name (e.g., "iphone_14", "pixel_7", "ipad_pro")
+    )
     webhook_url: str | None = None  # Webhook URL for job completion notification
     webhook_secret: str | None = None  # HMAC secret for webhook signature
 
@@ -79,5 +88,7 @@ class ScrapeResponse(BaseModel):
     success: bool
     data: ScrapeData | None = None
     error: str | None = None
-    error_code: str | None = None  # BLOCKED_BY_WAF, CAPTCHA_REQUIRED, TIMEOUT, JS_REQUIRED, NETWORK_ERROR
+    error_code: str | None = (
+        None  # BLOCKED_BY_WAF, CAPTCHA_REQUIRED, TIMEOUT, JS_REQUIRED, NETWORK_ERROR
+    )
     job_id: str | None = None

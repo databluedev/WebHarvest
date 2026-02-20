@@ -39,7 +39,11 @@ async def list_deliveries(
         query = query.where(WebhookDelivery.job_id == UUID(job_id))
 
     # Get total count
-    count_query = select(func.count()).select_from(WebhookDelivery).where(WebhookDelivery.user_id == user.id)
+    count_query = (
+        select(func.count())
+        .select_from(WebhookDelivery)
+        .where(WebhookDelivery.user_id == user.id)
+    )
     if event:
         count_query = count_query.where(WebhookDelivery.event == event)
     if success is not None:
@@ -51,9 +55,7 @@ async def list_deliveries(
     total = count_result.scalar() or 0
 
     result = await db.execute(
-        query.order_by(WebhookDelivery.created_at.desc())
-        .offset(offset)
-        .limit(limit)
+        query.order_by(WebhookDelivery.created_at.desc()).offset(offset).limit(limit)
     )
     deliveries = result.scalars().all()
 
@@ -111,8 +113,12 @@ async def get_delivery(
             "attempt": delivery.attempt,
             "max_attempts": delivery.max_attempts,
             "error": delivery.error,
-            "next_retry_at": delivery.next_retry_at.isoformat() if delivery.next_retry_at else None,
-            "created_at": delivery.created_at.isoformat() if delivery.created_at else None,
+            "next_retry_at": delivery.next_retry_at.isoformat()
+            if delivery.next_retry_at
+            else None,
+            "created_at": delivery.created_at.isoformat()
+            if delivery.created_at
+            else None,
         },
     }
 
@@ -139,15 +145,19 @@ async def webhook_stats(
     """Get webhook delivery statistics for the current user."""
     # Total deliveries
     total_result = await db.execute(
-        select(func.count()).select_from(WebhookDelivery).where(WebhookDelivery.user_id == user.id)
+        select(func.count())
+        .select_from(WebhookDelivery)
+        .where(WebhookDelivery.user_id == user.id)
     )
     total = total_result.scalar() or 0
 
     # Success count
     success_result = await db.execute(
-        select(func.count()).select_from(WebhookDelivery).where(
+        select(func.count())
+        .select_from(WebhookDelivery)
+        .where(
             WebhookDelivery.user_id == user.id,
-            WebhookDelivery.success == True,
+            WebhookDelivery.success == True,  # noqa: E712
         )
     )
     success_count = success_result.scalar() or 0
@@ -159,7 +169,7 @@ async def webhook_stats(
     avg_result = await db.execute(
         select(func.avg(WebhookDelivery.response_time_ms)).where(
             WebhookDelivery.user_id == user.id,
-            WebhookDelivery.success == True,
+            WebhookDelivery.success == True,  # noqa: E712
         )
     )
     avg_response_time = avg_result.scalar()
@@ -182,7 +192,9 @@ async def webhook_stats(
             "successful": success_count,
             "failed": failed_count,
             "success_rate": round(success_count / total * 100, 1) if total else 0,
-            "avg_response_time_ms": round(avg_response_time) if avg_response_time else 0,
+            "avg_response_time_ms": round(avg_response_time)
+            if avg_response_time
+            else 0,
             "events_breakdown": events,
         },
     }

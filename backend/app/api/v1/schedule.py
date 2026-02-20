@@ -82,11 +82,15 @@ async def create_schedule(
     # Validate cron expression
     if not croniter.is_valid(request.cron_expression):
         from fastapi import HTTPException
+
         raise HTTPException(status_code=422, detail="Invalid cron expression")
 
     if request.schedule_type not in ("scrape", "crawl", "batch"):
         from fastapi import HTTPException
-        raise HTTPException(status_code=422, detail="schedule_type must be scrape, crawl, or batch")
+
+        raise HTTPException(
+            status_code=422, detail="schedule_type must be scrape, crawl, or batch"
+        )
 
     next_run = _compute_next_run(request.cron_expression, request.timezone)
 
@@ -178,7 +182,9 @@ async def get_schedule_runs(
                 "total_pages": job.total_pages,
                 "completed_pages": job.completed_pages,
                 "started_at": job.started_at.isoformat() if job.started_at else None,
-                "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                "completed_at": job.completed_at.isoformat()
+                if job.completed_at
+                else None,
                 "created_at": job.created_at.isoformat() if job.created_at else None,
                 "error": job.error,
             }
@@ -204,6 +210,7 @@ async def update_schedule(
     if request.cron_expression is not None:
         if not croniter.is_valid(request.cron_expression):
             from fastapi import HTTPException
+
             raise HTTPException(status_code=422, detail="Invalid cron expression")
         schedule.cron_expression = request.cron_expression
         schedule.next_run_at = _compute_next_run(
@@ -270,18 +277,23 @@ async def trigger_schedule(
     # Dispatch to the appropriate worker
     if schedule.schedule_type == "crawl":
         from app.workers.crawl_worker import process_crawl
+
         process_crawl.delay(str(job.id), config)
     elif schedule.schedule_type == "batch":
         from app.workers.batch_worker import process_batch
+
         process_batch.delay(str(job.id), config)
     elif schedule.schedule_type == "scrape":
         from app.workers.scrape_worker import process_scrape
+
         process_scrape.delay(str(job.id), config)
 
     # Update schedule
     schedule.last_run_at = datetime.now(timezone.utc)
     schedule.run_count += 1
-    schedule.next_run_at = _compute_next_run(schedule.cron_expression, schedule.timezone)
+    schedule.next_run_at = _compute_next_run(
+        schedule.cron_expression, schedule.timezone
+    )
 
     return {
         "success": True,

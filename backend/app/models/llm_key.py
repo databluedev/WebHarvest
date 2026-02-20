@@ -25,9 +25,7 @@ class LLMKey(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "provider", name="uq_user_provider"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_user_provider"),)
 
     # Relationships
     user = relationship("User", back_populates="llm_keys")

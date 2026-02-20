@@ -1,7 +1,6 @@
 """Unit tests for app.services.dedup — URL normalization and deduplication."""
 
 import pytest
-import pytest_asyncio
 from unittest.mock import AsyncMock
 
 from app.services.dedup import normalize_url, deduplicate_urls, check_redis_seen
@@ -248,7 +247,9 @@ class TestCheckRedisSeen:
         """The URL is normalized before being added to the Redis set."""
         redis = AsyncMock()
         redis.sadd = AsyncMock(return_value=1)
-        await check_redis_seen(redis, "job-1", "https://EXAMPLE.COM/path/?utm_source=x#frag")
+        await check_redis_seen(
+            redis, "job-1", "https://EXAMPLE.COM/path/?utm_source=x#frag"
+        )
         # The sadd call should use the normalized form
         call_args = redis.sadd.call_args
         added_url = call_args[0][1]

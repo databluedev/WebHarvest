@@ -11,7 +11,6 @@ from app.core.exceptions import NotFoundError
 from app.models.proxy_config import ProxyConfig
 from app.models.user import User
 from app.schemas.proxy import (
-    ProxyCreateRequest,
     ProxyBulkCreateRequest,
     ProxyResponse,
     ProxyListResponse,

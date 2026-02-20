@@ -8,7 +8,6 @@ from httpx import AsyncClient
 
 
 class TestMapSite:
-
     @pytest.mark.asyncio
     async def test_map_site_success(self, client: AsyncClient, auth_headers):
         """POST /v1/map with mocked mapper returns discovered links."""
@@ -43,15 +42,24 @@ class TestMapSite:
             ),
         ]
 
-        with patch("app.api.v1.map.check_rate_limit_full", new_callable=AsyncMock) as mock_rl, \
-             patch("app.api.v1.map.map_website", new_callable=AsyncMock) as mock_map:
-
-            mock_rl.return_value = MagicMock(allowed=True, limit=50, remaining=49, reset=60)
+        with (
+            patch(
+                "app.api.v1.map.check_rate_limit_full", new_callable=AsyncMock
+            ) as mock_rl,
+            patch("app.api.v1.map.map_website", new_callable=AsyncMock) as mock_map,
+        ):
+            mock_rl.return_value = MagicMock(
+                allowed=True, limit=50, remaining=49, reset=60
+            )
             mock_map.return_value = mock_links
 
-            resp = await client.post("/v1/map", json={
-                "url": "https://example.com",
-            }, headers=auth_headers)
+            resp = await client.post(
+                "/v1/map",
+                json={
+                    "url": "https://example.com",
+                },
+                headers=auth_headers,
+            )
 
             assert resp.status_code == 200
             data = resp.json()
@@ -68,24 +76,39 @@ class TestMapSite:
     @pytest.mark.asyncio
     async def test_map_site_missing_url(self, client: AsyncClient, auth_headers):
         """POST /v1/map without url field returns 422."""
-        with patch("app.api.v1.map.check_rate_limit_full", new_callable=AsyncMock) as mock_rl:
-            mock_rl.return_value = MagicMock(allowed=True, limit=50, remaining=49, reset=60)
+        with patch(
+            "app.api.v1.map.check_rate_limit_full", new_callable=AsyncMock
+        ) as mock_rl:
+            mock_rl.return_value = MagicMock(
+                allowed=True, limit=50, remaining=49, reset=60
+            )
 
             resp = await client.post("/v1/map", json={}, headers=auth_headers)
             assert resp.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_map_site_error_returns_success_false(self, client: AsyncClient, auth_headers):
+    async def test_map_site_error_returns_success_false(
+        self, client: AsyncClient, auth_headers
+    ):
         """POST /v1/map when mapper raises returns success=false."""
-        with patch("app.api.v1.map.check_rate_limit_full", new_callable=AsyncMock) as mock_rl, \
-             patch("app.api.v1.map.map_website", new_callable=AsyncMock) as mock_map:
-
-            mock_rl.return_value = MagicMock(allowed=True, limit=50, remaining=49, reset=60)
+        with (
+            patch(
+                "app.api.v1.map.check_rate_limit_full", new_callable=AsyncMock
+            ) as mock_rl,
+            patch("app.api.v1.map.map_website", new_callable=AsyncMock) as mock_map,
+        ):
+            mock_rl.return_value = MagicMock(
+                allowed=True, limit=50, remaining=49, reset=60
+            )
             mock_map.side_effect = RuntimeError("Sitemap unreachable")
 
-            resp = await client.post("/v1/map", json={
-                "url": "https://example.com",
-            }, headers=auth_headers)
+            resp = await client.post(
+                "/v1/map",
+                json={
+                    "url": "https://example.com",
+                },
+                headers=auth_headers,
+            )
 
             assert resp.status_code == 200
             data = resp.json()
@@ -94,7 +117,6 @@ class TestMapSite:
 
 
 class TestGetMapStatus:
-
     @pytest.mark.asyncio
     async def test_get_map_not_found(self, client: AsyncClient, auth_headers):
         """GET /v1/map/{id} with invalid job returns 404."""
@@ -109,11 +131,12 @@ class TestGetMapStatus:
 
 
 class TestExportMap:
-
     @pytest.mark.asyncio
     async def test_export_not_found(self, client: AsyncClient, auth_headers):
         """GET /v1/map/{id}/export with invalid job returns 404."""
-        resp = await client.get(f"/v1/map/{uuid.uuid4()}/export?format=json", headers=auth_headers)
+        resp = await client.get(
+            f"/v1/map/{uuid.uuid4()}/export?format=json", headers=auth_headers
+        )
         assert resp.status_code == 404
 
     @pytest.mark.asyncio

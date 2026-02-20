@@ -14,10 +14,12 @@ from app.services.browser import browser_pool
 
 # Structured JSON logging
 handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(JsonFormatter(
-    fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
-    rename_fields={"levelname": "level", "name": "logger", "asctime": "timestamp"},
-))
+handler.setFormatter(
+    JsonFormatter(
+        fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
+        rename_fields={"levelname": "level", "name": "logger", "asctime": "timestamp"},
+    )
+)
 logging.root.handlers = [handler]
 logging.root.setLevel(logging.INFO)
 

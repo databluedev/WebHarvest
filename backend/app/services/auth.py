@@ -24,7 +24,9 @@ from app.models.email_verification_token import EmailVerificationToken
 logger = logging.getLogger(__name__)
 
 
-async def register_user(db: AsyncSession, email: str, password: str, name: str | None = None) -> User:
+async def register_user(
+    db: AsyncSession, email: str, password: str, name: str | None = None
+) -> User:
     # Check if user exists
     result = await db.execute(select(User).where(User.email == email))
     if result.scalar_one_or_none():
@@ -75,7 +77,7 @@ async def create_api_key_for_user(
 async def get_user_by_api_key(db: AsyncSession, api_key: str) -> User | None:
     key_hash = hash_api_key(api_key)
     result = await db.execute(
-        select(ApiKey).where(ApiKey.key_hash == key_hash, ApiKey.is_active == True)
+        select(ApiKey).where(ApiKey.key_hash == key_hash, ApiKey.is_active == True)  # noqa: E712
     )
     api_key_obj = result.scalar_one_or_none()
     if not api_key_obj:
@@ -91,7 +93,9 @@ async def get_user_by_api_key(db: AsyncSession, api_key: str) -> User | None:
 
 async def get_user_api_keys(db: AsyncSession, user_id: UUID) -> list[ApiKey]:
     result = await db.execute(
-        select(ApiKey).where(ApiKey.user_id == user_id).order_by(ApiKey.created_at.desc())
+        select(ApiKey)
+        .where(ApiKey.user_id == user_id)
+        .order_by(ApiKey.created_at.desc())
     )
     return list(result.scalars().all())
 
@@ -108,6 +112,7 @@ async def revoke_api_key(db: AsyncSession, user_id: UUID, key_id: UUID) -> bool:
 
 
 # ── Password Reset ────────────────────────────────────────────
+
 
 async def create_password_reset_token(db: AsyncSession, email: str) -> str | None:
     """Create a password reset token. Returns raw token or None if user not found."""
@@ -135,7 +140,7 @@ async def reset_password(db: AsyncSession, token: str, new_password: str) -> boo
     result = await db.execute(
         select(PasswordResetToken).where(
             PasswordResetToken.token_hash == token_hash_val,
-            PasswordResetToken.used == False,
+            PasswordResetToken.used == False,  # noqa: E712
             PasswordResetToken.expires_at > datetime.now(timezone.utc),
         )
     )
@@ -157,6 +162,7 @@ async def reset_password(db: AsyncSession, token: str, new_password: str) -> boo
 
 # ── Email Verification ────────────────────────────────────────
 
+
 async def create_verification_token(db: AsyncSession, user_id: UUID) -> str:
     """Create an email verification token. Returns raw token."""
     raw_token, token_hash_val = generate_verification_token()
@@ -176,7 +182,7 @@ async def verify_email(db: AsyncSession, token: str) -> bool:
     result = await db.execute(
         select(EmailVerificationToken).where(
             EmailVerificationToken.token_hash == token_hash_val,
-            EmailVerificationToken.used == False,
+            EmailVerificationToken.used == False,  # noqa: E712
             EmailVerificationToken.expires_at > datetime.now(timezone.utc),
         )
     )
@@ -185,7 +191,9 @@ async def verify_email(db: AsyncSession, token: str) -> bool:
         raise BadRequestError("Invalid or expired verification token")
 
     # Mark user as verified
-    user_result = await db.execute(select(User).where(User.id == verification_token.user_id))
+    user_result = await db.execute(
+        select(User).where(User.id == verification_token.user_id)
+    )
     user = user_result.scalar_one_or_none()
     if not user:
         raise BadRequestError("User not found")

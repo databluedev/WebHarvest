@@ -1,7 +1,5 @@
 """Shared pytest fixtures for the WebHarvest backend test suite."""
 
-import asyncio
-import json
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -9,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event, String, Text
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -51,12 +49,8 @@ def _compile_jsonb_sqlite(type_, compiler, **kw):
 
 from app.core.database import Base, get_db  # noqa: E402
 from app.models.user import User  # noqa: E402
-from app.models.api_key import ApiKey  # noqa: E402
-from app.models.job import Job  # noqa: E402
-from app.models.job_result import JobResult  # noqa: E402
-from app.models.schedule import Schedule  # noqa: E402
-from app.models.monitor import Monitor, MonitorCheck  # noqa: E402
-from app.models.llm_key import LLMKey  # noqa: E402
+from app.models.monitor import Monitor, MonitorCheck  # noqa: E402, F401
+from app.models.llm_key import LLMKey  # noqa: E402, F401
 from app.core.security import hash_password, create_access_token  # noqa: E402
 
 
@@ -85,10 +79,10 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.close()
 
     # Register a date_trunc function so that func.date_trunc('day', col) works.
-    import sqlite3
 
     dbapi_connection.create_function(
-        "date_trunc", 2,
+        "date_trunc",
+        2,
         lambda precision, dt_str: (
             dt_str[:10] if dt_str else None  # truncate to 'YYYY-MM-DD'
         ),
@@ -107,7 +101,6 @@ async def db_session():
     Tables are created before and dropped after every test function so that
     tests are fully isolated.
     """
-    from sqlalchemy import text
 
     async with _test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -220,19 +213,21 @@ async def client(db_session: AsyncSession, mock_redis):
     - rate limiter always allows
     - browser pool is mocked
     """
+
     # Patch rate limiter to always allow — patch at every import site
     async def _always_allow(*args, **kwargs):
         return (True, 99)
 
-    with patch("app.core.rate_limiter.check_rate_limit", side_effect=_always_allow), \
-         patch("app.api.v1.scrape.check_rate_limit", side_effect=_always_allow), \
-         patch("app.api.v1.crawl.check_rate_limit", side_effect=_always_allow), \
-         patch("app.api.v1.batch.check_rate_limit", side_effect=_always_allow), \
-         patch("app.api.v1.search.check_rate_limit", side_effect=_always_allow), \
-         patch("app.api.v1.map.check_rate_limit", side_effect=_always_allow), \
-         patch("app.core.rate_limiter.redis_client", mock_redis), \
-         patch("app.services.browser.browser_pool") as bp_mock:
-
+    with (
+        patch("app.core.rate_limiter.check_rate_limit", side_effect=_always_allow),
+        patch("app.api.v1.scrape.check_rate_limit", side_effect=_always_allow),
+        patch("app.api.v1.crawl.check_rate_limit", side_effect=_always_allow),
+        patch("app.api.v1.batch.check_rate_limit", side_effect=_always_allow),
+        patch("app.api.v1.search.check_rate_limit", side_effect=_always_allow),
+        patch("app.api.v1.map.check_rate_limit", side_effect=_always_allow),
+        patch("app.core.rate_limiter.redis_client", mock_redis),
+        patch("app.services.browser.browser_pool") as bp_mock,
+    ):
         bp_mock.initialize = AsyncMock()
         bp_mock.shutdown = AsyncMock()
 

@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from typing import Any
-from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -43,7 +42,9 @@ class MonitorChangeDetail(BaseModel):
 
     change_type: str  # content_changed, status_changed, keyword_found, keyword_lost, element_changed
     summary: str
-    diff_stats: dict[str, Any] | None = None  # {added_lines, removed_lines, similarity_ratio}
+    diff_stats: dict[str, Any] | None = (
+        None  # {added_lines, removed_lines, similarity_ratio}
+    )
     old_content_preview: str | None = None
     new_content_preview: str | None = None
     old_status_code: int | None = None

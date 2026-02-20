@@ -55,7 +55,7 @@ async def register(
     if not rl.allowed:
         raise RateLimitError(
             detail="Too many registration attempts. Try again later.",
-            headers={"Retry-After": str(rl.reset - int(__import__('time').time()))},
+            headers={"Retry-After": str(rl.reset - int(__import__("time").time()))},
         )
 
     user = await register_user(db, body.email, body.password, body.name)
@@ -75,7 +75,7 @@ async def login(
     if not rl.allowed:
         raise RateLimitError(
             detail="Too many login attempts. Try again later.",
-            headers={"Retry-After": str(rl.reset - int(__import__('time').time()))},
+            headers={"Retry-After": str(rl.reset - int(__import__("time").time()))},
         )
 
     user = await authenticate_user(db, body.email, body.password)
@@ -125,6 +125,7 @@ async def delete_api_key(
     success = await revoke_api_key(db, user.id, UUID(key_id))
     if not success:
         from app.core.exceptions import NotFoundError
+
         raise NotFoundError("API key not found")
     return {"success": True, "message": "API key revoked"}
 
@@ -141,7 +142,7 @@ async def forgot_password(
     if not rl.allowed:
         raise RateLimitError(
             detail="Too many password reset requests. Try again later.",
-            headers={"Retry-After": str(rl.reset - int(__import__('time').time()))},
+            headers={"Retry-After": str(rl.reset - int(__import__("time").time()))},
         )
 
     raw_token = await create_password_reset_token(db, body.email)
@@ -166,7 +167,7 @@ async def do_reset_password(
     if not rl.allowed:
         raise RateLimitError(
             detail="Too many password reset attempts. Try again later.",
-            headers={"Retry-After": str(rl.reset - int(__import__('time').time()))},
+            headers={"Retry-After": str(rl.reset - int(__import__("time").time()))},
         )
 
     await reset_password(db, body.token, body.new_password)
