@@ -1,5 +1,6 @@
 import fnmatch
 import logging
+import re
 from urllib.parse import urlparse
 
 import httpx
@@ -14,8 +15,102 @@ from app.services.scraper import scrape_url, scrape_url_fetch_only
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# URL content-richness scorer (completely generic, no site-specific patterns)
+# ---------------------------------------------------------------------------
+
+# Regex patterns for structural analysis
+_SLUG_RE = re.compile(r"[a-z0-9]+-[a-z0-9]+-[a-z0-9]+")  # 3+ hyphenated words
+_ALNUM_ID_RE = re.compile(r"^[A-Z0-9]{6,}$")              # product/article ID
+_NUMERIC_ID_RE = re.compile(r"^\d{4,}$")                   # numeric ID
+_DATE_RE = re.compile(r"\d{4}[/-]\d{2}")                   # date in path
+
+
+def score_url(url: str) -> float:
+    """Score a URL by predicted content richness.  Higher = more likely useful.
+
+    Uses only structural URL signals — works on any website:
+    - Path depth (content lives 2-4 levels deep)
+    - Slug detection (hyphenated-word segments = articles/products)
+    - ID detection (alphanumeric codes = specific items)
+    - Date detection (blog/news articles)
+    - Query complexity penalty (tracking params = navigation junk)
+    - Path segment length (longer segments = more descriptive = more content)
+    """
+    parsed = urlparse(url)
+    path = parsed.path.strip("/")
+    segments = [s for s in path.split("/") if s]
+    score = 5.0  # base
+
+    depth = len(segments)
+    if depth == 0:
+        score += 3  # homepage — usually content-rich
+    elif depth == 1:
+        # Single segment: could be a category or a page.
+        # Short single segments are usually nav ("/b", "/s", "/gp").
+        if len(segments[0]) > 15:
+            score += 1  # long slug = likely content
+        else:
+            score -= 2  # short = likely nav/category
+    elif 2 <= depth <= 4:
+        score += 3  # sweet spot for content pages
+    elif depth > 6:
+        score -= 1  # excessively deep, often pagination/filters
+
+    # Slug detection: hyphenated multi-word segments signal content slugs
+    # e.g. "cetaphil-hydrating-sulphate-free-niacinamide"
+    has_slug = False
+    for seg in segments:
+        if _SLUG_RE.search(seg.lower()) and len(seg) > 15:
+            score += 5
+            has_slug = True
+            break
+
+    # ID detection: alphanumeric codes signal specific items
+    for seg in segments:
+        if _ALNUM_ID_RE.match(seg):
+            score += 4
+            break
+        if _NUMERIC_ID_RE.match(seg):
+            score += 3
+            break
+
+    # Date in path: articles/blog posts
+    if _DATE_RE.search(path):
+        score += 3
+
+    # Average segment length — longer descriptive paths = richer content
+    if segments:
+        avg_len = sum(len(s) for s in segments) / len(segments)
+        if avg_len > 20:
+            score += 2
+        elif avg_len < 4:
+            score -= 2  # tiny segments like "/b/", "/s/", "/gp/"
+
+    # Query parameter penalty — lots of params = tracking/filter URLs
+    query = parsed.query
+    if query:
+        param_count = query.count("&") + 1
+        if param_count > 8:
+            score -= 4
+        elif param_count > 4:
+            score -= 2
+
+    # Pages without slugs or IDs at depth > 1 are likely nav/browse pages
+    if depth >= 1 and not has_slug:
+        all_short = all(len(s) < 10 for s in segments)
+        if all_short:
+            score -= 3
+
+    return max(0.0, score)
+
+
 class WebCrawler:
-    """BFS web crawler with Redis-backed frontier and visited set."""
+    """BFS web crawler with Redis-backed priority frontier and visited set.
+
+    The frontier uses a Redis sorted set (ZSET) scored by predicted content
+    richness so the crawler fetches the most promising URLs first.
+    """
 
     def __init__(self, job_id: str, config: CrawlRequest, proxy_manager=None):
         self.job_id = job_id
@@ -41,7 +136,9 @@ class WebCrawler:
             decode_responses=True,
         )
 
-        await self._redis.sadd(self._frontier_key, self.base_url)
+        # Seed the frontier with the start URL (highest priority)
+        start_score = score_url(self.base_url) + 10  # bonus for seed URL
+        await self._redis.zadd(self._frontier_key, {self.base_url: start_score})
         await self._redis.hset(self._depth_key, self.base_url, 0)
         # Set TTL on all keys (24 hours)
         for key in [self._frontier_key, self._visited_key, self._depth_key]:
@@ -59,10 +156,12 @@ class WebCrawler:
         await self._crawl_session.start(proxy=proxy, target_url=self.base_url)
 
     async def get_next_url(self) -> tuple[str, int] | None:
-        """Pop the next URL from the frontier. Returns (url, depth) or None."""
-        url = await self._redis.spop(self._frontier_key)
-        if not url:
+        """Pop the highest-scored URL from the frontier. Returns (url, depth) or None."""
+        # ZPOPMAX returns [(member, score)] — highest score first
+        result = await self._redis.zpopmax(self._frontier_key, count=1)
+        if not result:
             return None
+        url, _score = result[0]
         depth = await self._redis.hget(self._depth_key, url)
         return url, int(depth or 0)
 
@@ -76,10 +175,10 @@ class WebCrawler:
         return await self._redis.scard(self._visited_key)
 
     async def get_frontier_size(self) -> int:
-        return await self._redis.scard(self._frontier_key)
+        return await self._redis.zcard(self._frontier_key)
 
     async def add_to_frontier(self, urls: list[str], depth: int):
-        """Add discovered URLs to the frontier after filtering."""
+        """Add discovered URLs to the priority frontier after filtering."""
         for url in urls:
             if await self.is_visited(url):
                 continue
@@ -92,10 +191,14 @@ class WebCrawler:
 
             visited_count = await self.get_visited_count()
             frontier_size = await self.get_frontier_size()
-            if visited_count + frontier_size >= self.config.max_pages:
+            if visited_count + frontier_size >= self.config.max_pages * 3:
+                # Allow 3x headroom so we can be selective
                 break
 
-            await self._redis.sadd(self._frontier_key, url)
+            url_score = score_url(url)
+            # Slight depth penalty: prefer shallower pages when scores are equal
+            url_score -= depth * 0.5
+            await self._redis.zadd(self._frontier_key, {url: max(0, url_score)})
             await self._redis.hset(self._depth_key, url, depth)
 
     def _should_crawl(self, url: str, depth: int) -> bool:

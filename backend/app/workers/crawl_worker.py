@@ -251,65 +251,58 @@ def process_crawl(self, job_id: str, config: dict):
                             )
                             discovered_links = scrape_data.links or []
 
-                        # --- Content quality gate ---
-                        # Detect login walls, empty shells, and gated pages
-                        # generically by analyzing the extracted markdown.
-                        # Skipped pages still contribute links to the frontier
-                        # but don't count toward max_pages.
+                        # --- Content quality gate (signal-based, zero hardcoded strings) ---
+                        # Uses structural extraction signals to detect pages
+                        # with no real content.  Completely site-agnostic.
+                        import re as _re
+
                         md_text = (scrape_data.markdown or "").strip()
                         _word_count = len(md_text.split())
+                        _heading_count = len(scrape_data.headings or [])
+                        _link_count = len(scrape_data.links or [])
 
-                        _skip_reason = None
-                        if _word_count < 80:
-                            _skip_reason = "empty"
-                        elif _word_count < 800:
-                            # For short pages, check if they're login/auth
-                            # walls or gated content that offers no value.
-                            md_lower = md_text.lower()
-                            # Generic login/auth wall signals
-                            _auth_signals = sum(
-                                1
-                                for p in (
-                                    "sign in",
-                                    "log in",
-                                    "sign up",
-                                    "create account",
-                                    "create an account",
-                                    "register",
-                                    "forgot password",
-                                    "reset password",
-                                )
-                                if p in md_lower
-                            )
-                            # Generic gated/empty content signals
-                            _empty_signals = sum(
-                                1
-                                for p in (
-                                    "personalized recommendations",
-                                    "recently viewed",
-                                    "browsing history",
-                                    "enable javascript",
-                                    "javascript is required",
-                                    "please enable cookies",
-                                    "cookies are required",
-                                    "access denied",
-                                    "403 forbidden",
-                                    "page not found",
-                                    "404",
-                                    "subscribe to continue",
-                                    "subscribe to read",
-                                    "this content is available to",
-                                    "members only",
-                                    "premium content",
-                                )
-                                if p in md_lower
-                            )
-                            if _auth_signals >= 2 or _empty_signals >= 1:
-                                _skip_reason = "login_wall" if _auth_signals >= 2 else "gated"
+                        # Signal 1: Content ratio — how much of the raw page
+                        # survived main-content extraction?  Login walls and
+                        # nav-only pages lose 90%+ when boilerplate is stripped.
+                        _raw_html = ""
+                        if "fetch_result" in item:
+                            _raw_html = item["fetch_result"].get("raw_html", "")
+                        elif scrape_data.html:
+                            _raw_html = scrape_data.html
+                        _raw_text_len = len(
+                            _re.sub(r"<[^>]+>", " ", _raw_html).split()
+                        ) if _raw_html else 0
+                        _content_ratio = (
+                            _word_count / _raw_text_len
+                            if _raw_text_len > 100
+                            else 1.0
+                        )
 
-                        if _skip_reason:
+                        # Signal 2: Link density — pages that are mostly links
+                        # (nav pages, footer-only pages) have very high ratio.
+                        _link_density = _link_count / max(_word_count, 1)
+
+                        # Decision: skip if the page is structurally empty.
+                        # Real content pages have multiple headings (sections,
+                        # product specs, article parts).  Shell/nav pages have
+                        # 0-1 headings even at moderate word counts because the
+                        # "content" is just boilerplate links.
+                        _skip = False
+                        if _word_count < 50:
+                            _skip = True  # almost no text at all
+                        elif _word_count < 800 and _heading_count <= 1:
+                            _skip = True  # thin page with no structure
+                        elif _word_count < 300 and _content_ratio < 0.15:
+                            _skip = True  # very little survived extraction
+                        elif _link_density > 2.0 and _heading_count <= 2:
+                            _skip = True  # page is almost entirely links
+
+                        if _skip:
                             logger.info(
-                                f"Skipping low-quality page ({_word_count}w, reason={_skip_reason}): {url}"
+                                f"Skipping low-quality page "
+                                f"({_word_count}w, {_heading_count}h, "
+                                f"ratio={_content_ratio:.2f}, "
+                                f"ld={_link_density:.2f}): {url}"
                             )
                             # Still harvest links for frontier expansion
                             if discovered_links:
