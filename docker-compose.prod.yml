@@ -200,12 +200,15 @@ services:
       target: prod
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-        - CACHE_BUST=${CACHE_BUST:-v2}
+        - CACHE_BUST=${CACHE_BUST:-v3}
     depends_on:
       - backend
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
+      - PORT=3000
+    ports:
+      - "3000:3000"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
@@ -213,6 +216,15 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.webharvest-frontend.rule=Host(`${FRONTEND_DOMAIN:-datablue.welocalhost.com}`)"
+      - "traefik.http.routers.webharvest-frontend.entrypoints=websecure"
+      - "traefik.http.routers.webharvest-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.webharvest-frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.webharvest-frontend-http.rule=Host(`${FRONTEND_DOMAIN:-datablue.welocalhost.com}`)"
+      - "traefik.http.routers.webharvest-frontend-http.entrypoints=web"
+      - "traefik.docker.network=dokploy-network"
     deploy:
       resources:
         limits:
