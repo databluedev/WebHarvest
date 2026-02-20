@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { ModeSwitcher } from "@/components/layout/mode-switcher";
 import { Footer } from "@/components/layout/footer";
-import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import {
   Globe,
@@ -23,14 +22,29 @@ import {
   Image as ImageIcon,
   ExternalLink,
   Loader2,
-  Settings2,
+  SlidersHorizontal,
   LayoutGrid,
   FileCode,
   ChevronDown,
-  Radar,
   Sparkles,
+  Download,
+  Crosshair,
+  Satellite,
+  Bug,
+  Network,
+  Boxes,
+  Terminal,
 } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
+
+const ENDPOINT_COLORS: Record<string, { text: string; border: string; dot: string }> = {
+  scrape: { text: "text-amber-400", border: "border-amber-500/20", dot: "bg-amber-400" },
+  search: { text: "text-cyan-400", border: "border-cyan-500/20", dot: "bg-cyan-400" },
+  map: { text: "text-violet-400", border: "border-violet-500/20", dot: "bg-violet-400" },
+  crawl: { text: "text-emerald-400", border: "border-emerald-500/20", dot: "bg-emerald-400" },
+  batch: { text: "text-rose-400", border: "border-rose-500/20", dot: "bg-rose-400" },
+};
 
 function getJobDetailPath(job: any): string {
   switch (job.type) {
@@ -62,50 +76,49 @@ function getDomain(url: string): string {
 }
 
 function getFavicon(url: string): string {
-  const domain = getDomain(url);
-  return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  return `https://www.google.com/s2/favicons?domain=${getDomain(url)}&sz=32`;
 }
 
 function getTypeIcon(type: string) {
   switch (type) {
-    case "scrape": return Search;
-    case "crawl": return Globe;
-    case "map": return Map;
-    case "search": return Radar;
-    case "batch": return Layers;
+    case "scrape": return Crosshair;
+    case "crawl": return Bug;
+    case "map": return Network;
+    case "search": return Satellite;
+    case "batch": return Boxes;
     default: return FileText;
-  }
-}
-
-function getTypeColor(type: string) {
-  switch (type) {
-    case "scrape": return "text-orange-400";
-    case "crawl": return "text-blue-400";
-    case "map": return "text-violet-400";
-    case "search": return "text-emerald-400";
-    case "batch": return "text-cyan-400";
-    default: return "text-muted-foreground";
   }
 }
 
 function formatDate(dateStr: string): { date: string; time: string } {
   const d = new Date(dateStr);
   return {
-    date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
   };
 }
 
-// Format badge icons
 const formatIcons: Record<string, { icon: any; label: string }> = {
-  markdown: { icon: FileText, label: "Markdown" },
+  markdown: { icon: FileText, label: "MD" },
   html: { icon: Code, label: "HTML" },
   links: { icon: Link2, label: "Links" },
-  screenshot: { icon: Camera, label: "Screenshot" },
+  screenshot: { icon: Camera, label: "SS" },
   structured_data: { icon: Braces, label: "JSON" },
-  headings: { icon: List, label: "Summary" },
-  images: { icon: ImageIcon, label: "Images" },
+  headings: { icon: List, label: "Sum" },
+  images: { icon: ImageIcon, label: "Img" },
 };
+
+async function handleDownload(job: any) {
+  try {
+    switch (job.type) {
+      case "scrape": await api.downloadScrapeExport(job.id, "json"); break;
+      case "crawl": await api.downloadCrawlExport(job.id, "json"); break;
+      case "search": await api.downloadSearchExport(job.id, "json"); break;
+      case "map": await api.downloadMapExport(job.id, "json"); break;
+      case "batch": await api.downloadBatchExport(job.id, "json"); break;
+    }
+  } catch {}
+}
 
 export default function HomePage() {
   const router = useRouter();
@@ -113,20 +126,17 @@ export default function HomePage() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [recentJobs, setRecentJobs] = useState<any[]>([]);
+  const [jobsLoaded, setJobsLoaded] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState("markdown");
   const [showFormatDropdown, setShowFormatDropdown] = useState(false);
 
   useEffect(() => {
     const token = api.getToken();
-    if (!token) {
-      router.push("/auth/login");
-      return;
-    }
+    if (!token) { router.push("/auth/login"); return; }
     api.getMe().then(setUser).catch(() => router.push("/auth/login"));
-    api
-      .getUsageHistory({ per_page: 9 })
-      .then((res) => setRecentJobs(res.jobs))
-      .catch(() => {});
+    api.getUsageHistory({ per_page: 9 })
+      .then((res) => { setRecentJobs(res.jobs || []); setJobsLoaded(true); })
+      .catch(() => setJobsLoaded(true));
   }, [router]);
 
   const handleScrape = async () => {
@@ -134,16 +144,9 @@ export default function HomePage() {
     setLoading(true);
     try {
       const fullUrl = url.startsWith("http") ? url : `https://${url}`;
-      const res = await api.scrape({
-        url: fullUrl,
-        formats: [selectedFormat],
-        only_main_content: true,
-      });
-      if (res.job_id) {
-        router.push(`/scrape/${res.job_id}`);
-      } else if (res.data) {
-        router.push("/playground?endpoint=scrape");
-      }
+      const res = await api.scrape({ url: fullUrl, formats: [selectedFormat], only_main_content: true });
+      if (res.job_id) router.push(`/scrape/${res.job_id}`);
+      else router.push("/playground?endpoint=scrape");
     } catch {
       router.push("/playground?endpoint=scrape");
     } finally {
@@ -153,14 +156,13 @@ export default function HomePage() {
 
   const handleGetCode = () => {
     const fullUrl = url.startsWith("http") ? url : `https://${url}`;
-    const code = `curl -X POST ${window.location.origin}/v1/scrape \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"url": "${fullUrl || "https://example.com"}", "formats": ["${selectedFormat}"]}'`;
+    const code = `curl -X POST ${window.location.origin}/v1/scrape \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"url": "${fullUrl || "https://example.com"}", "formats": ["${selectedFormat}"]}'`;
     navigator.clipboard.writeText(code);
   };
 
   if (!user) return null;
+
+  const hasRuns = recentJobs.length > 0;
 
   return (
     <SidebarProvider>
@@ -169,281 +171,182 @@ export default function HomePage() {
         <main className="flex-1 overflow-auto bg-background">
           <MobileMenuButton />
           <div className="min-h-screen flex flex-col">
-            <div className="flex-1 p-6 lg:p-8 max-w-6xl mx-auto w-full">
+            <div className={cn(
+              "flex-1 flex flex-col max-w-6xl mx-auto w-full px-6 lg:px-8 transition-all duration-500",
+              !hasRuns && jobsLoaded ? "justify-center" : "pt-4"
+            )}>
               {/* Mode Switcher */}
-              <div className="pt-4 pb-8 animate-float-in">
+              <div className={cn("animate-float-in", hasRuns ? "pb-6" : "pb-8")}>
                 <ModeSwitcher />
               </div>
 
-              {/* Decorative grid lines (subtle) */}
-              <div className="relative">
-                {/* URL Input Section */}
-                <section className="max-w-2xl mx-auto mb-12 animate-float-in" style={{ animationDelay: "0.05s" }}>
-                  <div className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-4 shadow-lg shadow-black/5">
-                    {/* URL Input */}
-                    <div className="flex items-center gap-0 rounded-lg bg-background border border-border/50 px-3 h-11 mb-3">
-                      <span className="text-sm text-muted-foreground/50 shrink-0 select-none">
-                        https://
-                      </span>
-                      <input
-                        type="text"
-                        value={url}
-                        onChange={(e) => setUrl(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && !loading && handleScrape()}
-                        placeholder="example.com"
-                        className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/30 ml-1"
-                      />
+              {/* URL Input Section */}
+              <section className={cn("max-w-2xl mx-auto w-full animate-float-in", hasRuns ? "mb-10" : "mb-4")} style={{ animationDelay: "0.05s" }}>
+                <div className="rounded-2xl border border-amber-500/15 bg-card/80 backdrop-blur-sm p-4 shadow-xl shadow-amber-500/5">
+                  {/* URL Input */}
+                  <div className="flex items-center gap-0 rounded-xl bg-background/80 border border-border/40 px-4 h-12 mb-3 focus-within:ring-2 focus-within:ring-amber-500/15 focus-within:border-amber-500/25 transition-all">
+                    <span className="text-sm text-muted-foreground/35 shrink-0 select-none font-mono">https://</span>
+                    <input
+                      type="text"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && !loading && handleScrape()}
+                      placeholder="example.com"
+                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/25 ml-1"
+                    />
+                    <Crosshair className="h-4 w-4 text-amber-400/30 shrink-0 ml-2" />
+                  </div>
+
+                  {/* Controls Row */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => router.push("/playground?endpoint=scrape")} className="h-8 w-8 rounded-lg bg-muted/40 grid place-items-center text-muted-foreground/40 hover:text-foreground hover:bg-muted/60 transition-all" title="Advanced settings">
+                        <SlidersHorizontal className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => router.push("/playground?endpoint=batch")} className="h-8 w-8 rounded-lg bg-muted/40 grid place-items-center text-muted-foreground/40 hover:text-foreground hover:bg-muted/60 transition-all" title="Batch mode">
+                        <Boxes className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => router.push("/docs")} className="h-8 w-8 rounded-lg bg-muted/40 grid place-items-center text-muted-foreground/40 hover:text-foreground hover:bg-muted/60 transition-all" title="API Docs">
+                        <Terminal className="h-3.5 w-3.5" />
+                      </button>
+
+                      {/* Format Dropdown */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowFormatDropdown(!showFormatDropdown)}
+                          className="flex items-center gap-1.5 h-8 rounded-lg bg-muted/40 px-2.5 text-[12px] font-medium text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          <span>{selectedFormat.charAt(0).toUpperCase() + selectedFormat.slice(1)}</span>
+                          <ChevronDown className="h-3 w-3 opacity-50" />
+                        </button>
+                        {showFormatDropdown && (
+                          <div className="absolute top-10 left-0 z-50 w-44 rounded-xl border border-border/50 bg-card shadow-xl p-1 animate-scale-in">
+                            {["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"].map((fmt) => (
+                              <button
+                                key={fmt}
+                                onClick={() => { setSelectedFormat(fmt); setShowFormatDropdown(false); }}
+                                className={cn(
+                                  "flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-[12px] transition-all",
+                                  selectedFormat === fmt ? "bg-amber-500/10 text-amber-400" : "text-muted-foreground/60 hover:bg-muted/50 hover:text-foreground"
+                                )}
+                              >
+                                {(() => { const FIcon = formatIcons[fmt]?.icon; return FIcon ? <FIcon className="h-3 w-3" /> : null; })()}
+                                {fmt.charAt(0).toUpperCase() + fmt.slice(1).replace("_", " ")}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Controls Row */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        {/* Settings icon */}
-                        <button
-                          onClick={() => router.push("/playground?endpoint=scrape")}
-                          className="h-8 w-8 rounded-md bg-muted/50 grid place-items-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
-                          title="Advanced settings"
-                        >
-                          <Settings2 className="h-3.5 w-3.5" />
-                        </button>
-                        {/* Grid icon */}
-                        <button
-                          onClick={() => router.push("/playground?endpoint=batch")}
-                          className="h-8 w-8 rounded-md bg-muted/50 grid place-items-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
-                          title="Batch scrape"
-                        >
-                          <LayoutGrid className="h-3.5 w-3.5" />
-                        </button>
-                        {/* File icon */}
-                        <button
-                          onClick={() => router.push("/docs")}
-                          className="h-8 w-8 rounded-md bg-muted/50 grid place-items-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
-                          title="API Docs"
-                        >
-                          <FileCode className="h-3.5 w-3.5" />
-                        </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={handleGetCode} className="flex items-center gap-1.5 h-8 rounded-lg px-3 text-[12px] font-medium text-muted-foreground/60 hover:text-foreground border border-border/40 hover:bg-muted/40 transition-all">
+                        <Code className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Get code</span>
+                      </button>
+                      <button onClick={handleScrape} disabled={loading || !url.trim()} className="flex items-center gap-1.5 h-8 rounded-lg px-4 text-[12px] font-bold bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-amber-500/15">
+                        {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Start scraping</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
 
-                        {/* Format Dropdown */}
-                        <div className="relative">
-                          <button
-                            onClick={() => setShowFormatDropdown(!showFormatDropdown)}
-                            className="flex items-center gap-1.5 h-8 rounded-md bg-muted/50 px-2.5 text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          >
-                            <FileText className="h-3.5 w-3.5" />
-                            <span>Format: {selectedFormat.charAt(0).toUpperCase() + selectedFormat.slice(1)}</span>
-                            <ChevronDown className="h-3 w-3" />
-                          </button>
-                          {showFormatDropdown && (
-                            <div className="absolute top-10 left-0 z-50 w-44 rounded-lg border border-border/60 bg-card shadow-xl p-1 animate-scale-in">
-                              {["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"].map(
-                                (fmt) => (
-                                  <button
-                                    key={fmt}
-                                    onClick={() => {
-                                      setSelectedFormat(fmt);
-                                      setShowFormatDropdown(false);
-                                    }}
-                                    className={`flex items-center gap-2 w-full px-2.5 py-1.5 rounded-md text-[12px] transition-colors ${
-                                      selectedFormat === fmt
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                                    }`}
-                                  >
-                                    {(() => {
-                                      const FIcon = formatIcons[fmt]?.icon;
-                                      return FIcon ? <FIcon className="h-3 w-3" /> : null;
-                                    })()}
-                                    {fmt.charAt(0).toUpperCase() + fmt.slice(1).replace("_", " ")}
-                                  </button>
-                                )
+              {/* Recent Runs */}
+              {hasRuns && (
+                <section className="animate-float-in" style={{ animationDelay: "0.1s" }}>
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg font-bold tracking-tight">Recent Runs</h2>
+                      <div className="h-px flex-1 bg-gradient-to-r from-border/40 to-transparent min-w-[40px]" />
+                    </div>
+                    <Link href="/jobs" className="text-[12px] text-muted-foreground/40 hover:text-foreground transition-colors flex items-center gap-1 font-medium">
+                      View all <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 stagger-children">
+                    {recentJobs.map((job) => {
+                      const jobUrl = getJobUrl(job);
+                      const domain = getDomain(jobUrl);
+                      const TypeIcon = getTypeIcon(job.type);
+                      const jobColors = ENDPOINT_COLORS[job.type] || ENDPOINT_COLORS.scrape;
+                      const { date, time } = job.created_at ? formatDate(job.created_at) : { date: "", time: "" };
+                      const jobFormats: string[] = job.config?.formats || [];
+                      const isCompleted = job.status === "completed";
+
+                      return (
+                        <div key={job.id} className={cn("rounded-xl border bg-card/60 hover:bg-card/80 transition-all duration-200 group overflow-hidden", jobColors.border)}>
+                          <div className={cn("h-[2px]", jobColors.dot)} />
+                          <Link href={getJobDetailPath(job)}>
+                            <div className="flex items-center justify-between px-4 pt-3 pb-2.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                {jobUrl && !jobUrl.includes("URLs") && (
+                                  <img src={getFavicon(jobUrl)} alt="" className="h-4 w-4 rounded-sm shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                )}
+                                <span className="text-sm font-semibold truncate">{domain || "No URL"}</span>
+                              </div>
+                              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/20 group-hover:text-muted-foreground/50 transition-colors shrink-0" />
+                            </div>
+                            <div className="px-4 pb-3 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <TypeIcon className={cn("h-3.5 w-3.5", jobColors.text)} />
+                                  <span className={cn("text-[11px] font-bold uppercase tracking-wider", jobColors.text)}>{job.type}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <div className={cn("h-1.5 w-1.5 rounded-full", job.status === "completed" ? "bg-emerald-400" : job.status === "failed" ? "bg-red-400" : job.status === "running" ? "bg-amber-400 animate-pulse" : "bg-muted-foreground/30")} />
+                                  <span className="text-[11px] font-medium text-muted-foreground/60 capitalize">{job.status === "completed" ? "Done" : job.status}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-muted-foreground/35">
+                                <Clock className="h-3 w-3" />
+                                <span className="text-[11px] font-medium">{date} {time}</span>
+                              </div>
+                              {jobFormats.length > 0 && (
+                                <div className="flex flex-wrap gap-1 pt-0.5">
+                                  {jobFormats.slice(0, 4).map((fmt: string) => {
+                                    const fmtInfo = formatIcons[fmt];
+                                    const FmtIcon = fmtInfo?.icon || FileText;
+                                    return (
+                                      <span key={fmt} className="inline-flex items-center gap-1 rounded-md bg-muted/40 px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground/50 uppercase tracking-wider">
+                                        <FmtIcon className="h-2.5 w-2.5" />
+                                        {fmtInfo?.label || fmt}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
                               )}
+                            </div>
+                          </Link>
+                          {isCompleted && (
+                            <div className="px-4 pb-3 pt-0">
+                              <button
+                                onClick={(e) => { e.preventDefault(); handleDownload(job); }}
+                                className={cn("flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg text-[11px] font-bold transition-all duration-200 border", jobColors.border, jobColors.text, "hover:bg-muted/30")}
+                              >
+                                <Download className="h-3 w-3" />
+                                Download JSON
+                              </button>
                             </div>
                           )}
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {/* Get Code */}
-                        <button
-                          onClick={handleGetCode}
-                          className="flex items-center gap-1.5 h-8 rounded-md px-3 text-[12px] font-medium text-muted-foreground hover:text-foreground border border-border/50 hover:bg-muted transition-colors"
-                        >
-                          <Code className="h-3.5 w-3.5" />
-                          Get code
-                        </button>
-
-                        {/* Start Scraping */}
-                        <button
-                          onClick={handleScrape}
-                          disabled={loading || !url.trim()}
-                          className="flex items-center gap-1.5 h-8 rounded-md px-4 text-[12px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm shadow-primary/20"
-                        >
-                          {loading ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <>Start scraping</>
-                          )}
-                        </button>
-                      </div>
-                    </div>
+                      );
+                    })}
                   </div>
-
-                  {/* No format warning */}
-                  {!selectedFormat && (
-                    <p className="text-[11px] text-amber-400/70 mt-2 text-center">
-                      No format selected — only metadata will be returned
-                    </p>
-                  )}
                 </section>
+              )}
 
-                {/* Recent Runs */}
-                {recentJobs.length > 0 && (
-                  <section className="animate-float-in" style={{ animationDelay: "0.1s" }}>
-                    <div className="flex items-center justify-between mb-5">
-                      <h2 className="text-lg font-semibold tracking-tight">Recent Runs</h2>
-                      <Link
-                        href="/jobs"
-                        className="text-[12px] text-muted-foreground/60 hover:text-foreground transition-colors flex items-center gap-1"
-                      >
-                        View all
-                        <ArrowRight className="h-3 w-3" />
-                      </Link>
-                    </div>
-
-                    {/* Scrollbar indicator dots */}
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="flex-1 h-[2px] rounded-full bg-primary/30" />
-                      <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/20" />
-                      <div className="flex-1 h-[2px] rounded-full bg-muted-foreground/10" />
-                    </div>
-
-                    {/* Cards Grid */}
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
-                      {recentJobs.map((job) => {
-                        const jobUrl = getJobUrl(job);
-                        const domain = getDomain(jobUrl);
-                        const TypeIcon = getTypeIcon(job.type);
-                        const typeColor = getTypeColor(job.type);
-                        const { date, time } = job.created_at
-                          ? formatDate(job.created_at)
-                          : { date: "", time: "" };
-                        const jobFormats: string[] = job.config?.formats || [];
-
-                        return (
-                          <Link key={job.id} href={getJobDetailPath(job)}>
-                            <div className="rounded-xl border border-border/40 bg-card hover:bg-card/80 hover:border-border/60 transition-all duration-200 cursor-pointer group">
-                              {/* Domain Header */}
-                              <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-border/30">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  {jobUrl && !jobUrl.includes("URLs") && (
-                                    <img
-                                      src={getFavicon(jobUrl)}
-                                      alt=""
-                                      className="h-4 w-4 rounded-sm shrink-0"
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).style.display = "none";
-                                      }}
-                                    />
-                                  )}
-                                  <span className="text-sm font-medium truncate">
-                                    {domain || "No URL"}
-                                  </span>
-                                </div>
-                                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors shrink-0" />
-                              </div>
-
-                              {/* Details */}
-                              <div className="px-4 py-3 space-y-2.5">
-                                {/* Endpoint */}
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[12px] text-muted-foreground/50">Endpoint</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <TypeIcon className={`h-3.5 w-3.5 ${typeColor}`} />
-                                    <span className="text-[12px] font-medium capitalize">{job.type}</span>
-                                  </div>
-                                </div>
-
-                                {/* Status */}
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[12px] text-muted-foreground/50">Status</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <div
-                                      className={`h-2 w-2 rounded-full ${
-                                        job.status === "completed"
-                                          ? "bg-emerald-400"
-                                          : job.status === "failed"
-                                          ? "bg-red-400"
-                                          : job.status === "running"
-                                          ? "bg-amber-400 animate-pulse"
-                                          : "bg-muted-foreground/40"
-                                      }`}
-                                    />
-                                    <span className="text-[12px] font-medium capitalize">
-                                      {job.status === "completed" ? "Success" : job.status}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* Started */}
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[12px] text-muted-foreground/50">Started</span>
-                                  <div className="text-right">
-                                    <span className="text-[12px] font-medium">{date}</span>
-                                    {time && (
-                                      <span className="text-[11px] text-muted-foreground/40 ml-1.5">
-                                        {time}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Formats */}
-                                {jobFormats.length > 0 && (
-                                  <div className="pt-1">
-                                    <span className="text-[12px] text-muted-foreground/50 block mb-1.5">
-                                      Formats
-                                    </span>
-                                    <div className="flex flex-wrap gap-1">
-                                      {jobFormats.map((fmt: string) => {
-                                        const fmtInfo = formatIcons[fmt];
-                                        const FmtIcon = fmtInfo?.icon || FileText;
-                                        const fmtLabel = fmtInfo?.label || fmt;
-                                        return (
-                                          <span
-                                            key={fmt}
-                                            className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70"
-                                          >
-                                            <FmtIcon className="h-2.5 w-2.5" />
-                                            {fmtLabel}
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </section>
-                )}
-
-                {/* Empty state when no recent jobs */}
-                {recentJobs.length === 0 && (
-                  <section className="text-center py-16 animate-float-in" style={{ animationDelay: "0.1s" }}>
-                    <Search className="h-12 w-12 text-muted-foreground/20 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-1">No recent runs</h3>
-                    <p className="text-sm text-muted-foreground/50">
-                      Enter a URL above to start scraping
-                    </p>
-                  </section>
-                )}
-              </div>
+              {/* Empty state */}
+              {!hasRuns && jobsLoaded && (
+                <div className="text-center py-4 animate-fade-in">
+                  <p className="text-[13px] text-muted-foreground/30 font-medium">
+                    Your runs will appear here
+                  </p>
+                </div>
+              )}
             </div>
-
-            {/* Footer */}
             <Footer />
           </div>
         </main>
