@@ -782,7 +782,7 @@ function PlaygroundContent() {
 
               {/* ── URL Input Section ── */}
               <section className={cn(
-                "max-w-2xl w-full mx-auto",
+                "max-w-2xl w-full mx-auto relative z-20",
                 hasRuns ? "mb-10" : "mb-6"
               )}>
                 <div className="rounded-2xl border border-primary/15 bg-card/80 backdrop-blur-sm p-5 shadow-xl shadow-primary/5">

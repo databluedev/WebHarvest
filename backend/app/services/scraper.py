@@ -849,7 +849,9 @@ async def scrape_url(
         await domain_throttle(domain)
 
     # Circuit breaker — reject requests to domains with repeated failures
-    if domain:
+    # Skip for hard sites: they have dedicated anti-detection strategies and
+    # are expected to sometimes block; the breaker would prematurely cut them off.
+    if domain and not _is_hard_site(url):
         from app.services.circuit_breaker import check_breaker, CircuitBreakerOpenError
 
         try:
@@ -1430,21 +1432,22 @@ async def scrape_url(
         except Exception:
             pass
 
-    # Circuit breaker — record success for this domain
-    if domain and fetched:
-        try:
-            from app.services.circuit_breaker import record_success
+    # Circuit breaker — record success/failure (skip hard sites)
+    if domain and not _is_hard_site(url):
+        if fetched:
+            try:
+                from app.services.circuit_breaker import record_success
 
-            await record_success(domain)
-        except Exception:
-            pass
-    elif domain and not fetched:
-        try:
-            from app.services.circuit_breaker import record_failure
+                await record_success(domain)
+            except Exception:
+                pass
+        else:
+            try:
+                from app.services.circuit_breaker import record_failure
 
-            await record_failure(domain)
-        except Exception:
-            pass
+                await record_failure(domain)
+            except Exception:
+                pass
 
     duration = time.time() - start_time
     scrape_duration_seconds.observe(duration)

@@ -93,7 +93,7 @@ export function FormatSelector({
   return (
     <div
       ref={panelRef}
-      className="absolute top-10 left-0 z-50 w-72 rounded-xl border border-border/60 bg-card shadow-2xl shadow-black/30 animate-scale-in overflow-hidden"
+      className="absolute top-10 left-0 z-50 w-72 rounded-xl border border-border/60 bg-popover shadow-2xl shadow-black/30 animate-scale-in overflow-hidden"
       style={{ transformOrigin: "top left" }}
     >
       {/* Header */}
