@@ -1,10 +1,13 @@
 import asyncio
 import logging
+import time
 from uuid import UUID
 
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+_WORKER_NAME = "scrape"
 
 
 def _run_async(coro):
@@ -19,12 +22,20 @@ def _run_async(coro):
 @celery_app.task(
     name="app.workers.scrape_worker.process_scrape",
     bind=True,
-    max_retries=2,
+    max_retries=3,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
     soft_time_limit=300,
     time_limit=360,
 )
 def process_scrape(self, job_id: str, url: str, config: dict):
     """Process a single scrape job."""
+    from app.core.metrics import worker_task_total, worker_task_duration_seconds, worker_active_tasks
+
+    _start = time.monotonic()
+    worker_active_tasks.labels(worker=_WORKER_NAME).inc()
 
     async def _do_scrape():
         from app.core.database import create_worker_session_factory
@@ -153,4 +164,14 @@ def process_scrape(self, job_id: str, url: str, config: dict):
         finally:
             await db_engine.dispose()
 
-    _run_async(_do_scrape())
+    try:
+        _run_async(_do_scrape())
+        worker_task_total.labels(worker=_WORKER_NAME, status="success").inc()
+    except Exception:
+        worker_task_total.labels(worker=_WORKER_NAME, status="failure").inc()
+        raise
+    finally:
+        worker_active_tasks.labels(worker=_WORKER_NAME).dec()
+        worker_task_duration_seconds.labels(worker=_WORKER_NAME).observe(
+            time.monotonic() - _start
+        )

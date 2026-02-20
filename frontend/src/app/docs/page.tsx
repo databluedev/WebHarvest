@@ -181,6 +181,70 @@ const API_SECTIONS: Section[] = [
           2
         ),
       },
+      {
+        method: "POST",
+        path: "/v1/auth/forgot-password",
+        description:
+          "Request a password reset token. Always returns success to prevent email enumeration. In self-hosted mode, the token is included in the response for convenience.",
+        requestBody: JSON.stringify(
+          {
+            email: "user@example.com",
+          },
+          null,
+          2
+        ),
+        responseBody: JSON.stringify(
+          {
+            message:
+              "If an account exists with that email, a password reset link has been generated.",
+            token: "reset_abc123def456...",
+          },
+          null,
+          2
+        ),
+      },
+      {
+        method: "POST",
+        path: "/v1/auth/reset-password",
+        description:
+          "Set a new password using a valid reset token obtained from the forgot-password endpoint.",
+        requestBody: JSON.stringify(
+          {
+            token: "reset_abc123def456...",
+            new_password: "newSecurePassword456",
+          },
+          null,
+          2
+        ),
+        responseBody: JSON.stringify(
+          {
+            success: true,
+            message: "Password has been reset successfully",
+          },
+          null,
+          2
+        ),
+      },
+      {
+        method: "POST",
+        path: "/v1/auth/verify-email",
+        description:
+          "Confirm email ownership using the verification token sent to the user's email address.",
+        requestBody: JSON.stringify(
+          {
+            token: "verify_xyz789...",
+          },
+          null,
+          2
+        ),
+        responseBody: JSON.stringify(
+          {
+            message: "Email verified successfully",
+          },
+          null,
+          2
+        ),
+      },
     ],
   },
   {
@@ -1310,6 +1374,257 @@ const API_SECTIONS: Section[] = [
               },
             ],
             total: 2,
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  },
+  {
+    id: "settings",
+    title: "Settings",
+    description:
+      "Manage LLM API keys for AI-powered extraction. Store provider keys securely on the server so extraction endpoints can call external models.",
+    endpoints: [
+      {
+        method: "PUT",
+        path: "/v1/settings/llm-keys",
+        description:
+          "Save or update an LLM provider API key. Supports OpenAI, Anthropic, and other providers. Set is_default to use this key when no provider is specified.",
+        requestBody: JSON.stringify(
+          {
+            provider: "openai",
+            api_key: "sk-proj-...",
+            is_default: true,
+          },
+          null,
+          2
+        ),
+        responseBody: JSON.stringify(
+          {
+            success: true,
+            provider: "openai",
+            is_default: true,
+            created_at: "2025-09-16T12:00:00Z",
+          },
+          null,
+          2
+        ),
+      },
+      {
+        method: "GET",
+        path: "/v1/settings/llm-keys",
+        description:
+          "List all stored LLM API keys. Key values are masked for security — only the provider name and metadata are returned.",
+        responseBody: JSON.stringify(
+          {
+            keys: [
+              {
+                id: "llm_a1b2c3",
+                provider: "openai",
+                key_preview: "sk-proj-...x8Kf",
+                is_default: true,
+                created_at: "2025-09-16T12:00:00Z",
+              },
+            ],
+          },
+          null,
+          2
+        ),
+      },
+      {
+        method: "DELETE",
+        path: "/v1/settings/llm-keys/:id",
+        description:
+          "Delete a stored LLM API key. Extraction endpoints using this provider will fail until a new key is added.",
+        responseBody: JSON.stringify(
+          {
+            success: true,
+            message: "LLM key deleted",
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  },
+  {
+    id: "jobs",
+    title: "Jobs",
+    description:
+      "Manage individual jobs across all types. Retry failed jobs, cancel running ones, or fetch detailed results for specific pages.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/v1/jobs/:job_id/results/:result_id",
+        description:
+          "Retrieve the full content for a single page result within a job, including markdown, HTML, links, structured data, and metadata.",
+        responseBody: JSON.stringify(
+          {
+            id: "res_a1b2c3d4",
+            url: "https://example.com/page-1",
+            markdown: "# Page 1\\n\\nFull markdown content...",
+            html: "<h1>Page 1</h1><p>Full HTML content...</p>",
+            links: [
+              "https://example.com/page-2",
+              "https://example.com/about",
+            ],
+            screenshot: null,
+            structured_data: { "@type": "WebPage", name: "Page 1" },
+            extract: null,
+            metadata: {
+              title: "Page 1 - Example",
+              status_code: 200,
+              word_count: 342,
+            },
+          },
+          null,
+          2
+        ),
+      },
+      {
+        method: "POST",
+        path: "/v1/jobs/:job_id/retry",
+        description:
+          "Retry a failed or cancelled job by creating a new job with the same configuration. The original job is preserved for reference.",
+        responseBody: JSON.stringify(
+          {
+            success: true,
+            message: "Job retried successfully",
+            original_job_id: "scrape_k8m2n4p6",
+            new_job_id: "scrape_r9s1t3u5",
+            type: "scrape",
+          },
+          null,
+          2
+        ),
+      },
+      {
+        method: "POST",
+        path: "/v1/jobs/:job_id/cancel",
+        description:
+          "Cancel a pending or running job. Already completed or cancelled jobs cannot be cancelled.",
+        responseBody: JSON.stringify(
+          {
+            success: true,
+            message: "Job cancelled",
+            job_id: "crawl_r3s5t7v9",
+          },
+          null,
+          2
+        ),
+      },
+    ],
+  },
+  {
+    id: "health",
+    title: "Health",
+    description:
+      "Health check and monitoring endpoints. Use these for load balancer probes, uptime monitoring, and Prometheus metrics collection.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/v1/health/live",
+        description:
+          "Lightweight liveness probe. Returns 200 if the API server is running. No dependency checks are performed.",
+        responseBody: JSON.stringify(
+          {
+            status: "healthy",
+            timestamp: "2025-09-16T14:30:00Z",
+          },
+          null,
+          2
+        ),
+      },
+      {
+        method: "GET",
+        path: "/v1/health/ready",
+        description:
+          "Readiness probe that checks all dependencies (database, Redis, Celery workers). Returns 503 if any dependency is unavailable.",
+        responseBody: JSON.stringify(
+          {
+            status: "healthy",
+            checks: {
+              database: { status: "healthy", latency_ms: 2 },
+              redis: { status: "healthy", latency_ms: 1 },
+              celery: { status: "healthy", active_workers: 4 },
+            },
+            timestamp: "2025-09-16T14:30:00Z",
+          },
+          null,
+          2
+        ),
+      },
+      {
+        method: "GET",
+        path: "/v1/health/metrics",
+        description:
+          "Prometheus-compatible metrics endpoint. Returns counters, histograms, and gauges for workers, HTTP requests, browser pool, and more.",
+        responseBody:
+          "# HELP worker_task_total Total worker tasks\n# TYPE worker_task_total counter\nworker_task_total{worker=\"scrape\",status=\"success\"} 1247\nworker_task_total{worker=\"crawl\",status=\"success\"} 389\n\n# HELP http_request_duration_seconds HTTP request duration\n# TYPE http_request_duration_seconds histogram\nhttp_request_duration_seconds_bucket{method=\"POST\",path=\"/v1/scrape\",le=\"0.5\"} 892",
+      },
+    ],
+  },
+  {
+    id: "admin",
+    title: "Admin",
+    description:
+      "Administrative endpoints for system diagnostics. Manage the Dead Letter Queue (DLQ) — tasks that failed after exhausting all retries.",
+    endpoints: [
+      {
+        method: "GET",
+        path: "/v1/admin/dlq",
+        description:
+          "List Dead Letter Queue entries with pagination. Each entry contains the failed task's ID, name, arguments, exception, and timestamp.",
+        responseBody: JSON.stringify(
+          {
+            total: 3,
+            entries: [
+              {
+                task_id: "abc123-def456",
+                task_name: "app.workers.scrape_worker.process_scrape",
+                args: ["job_x7y8z9", {}],
+                exception: "TimeoutError: Page load exceeded 30s",
+                timestamp: "2025-09-16T13:45:00Z",
+              },
+              {
+                task_id: "ghi789-jkl012",
+                task_name: "app.workers.crawl_worker.process_crawl",
+                args: ["job_a1b2c3", {}],
+                exception: "ConnectionError: DNS resolution failed",
+                timestamp: "2025-09-16T14:02:00Z",
+              },
+            ],
+          },
+          null,
+          2
+        ),
+      },
+      {
+        method: "POST",
+        path: "/v1/admin/dlq/:task_id/retry",
+        description:
+          "Re-dispatch a failed task from the DLQ with its original arguments. The entry is removed from the DLQ on success.",
+        responseBody: JSON.stringify(
+          {
+            success: true,
+            message: "Task abc123-def456 re-dispatched",
+            task_name: "app.workers.scrape_worker.process_scrape",
+          },
+          null,
+          2
+        ),
+      },
+      {
+        method: "DELETE",
+        path: "/v1/admin/dlq",
+        description:
+          "Purge all entries from the Dead Letter Queue. This action cannot be undone.",
+        responseBody: JSON.stringify(
+          {
+            success: true,
+            deleted: 3,
           },
           null,
           2

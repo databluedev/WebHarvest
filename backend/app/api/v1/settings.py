@@ -24,7 +24,12 @@ def _mask_key(encrypted_key: str) -> str:
         return "***"
 
 
-@router.put("/llm-keys", response_model=LLMKeyResponse)
+@router.put(
+    "/llm-keys",
+    response_model=LLMKeyResponse,
+    summary="Save LLM API key",
+    description="Save or update a bring-your-own-key (BYOK) LLM API key. The key is encrypted at rest. If a key for the specified provider already exists, it is updated. Setting is_default to true will unset the default flag on all other keys.",
+)
 async def save_llm_key(
     request: LLMKeyRequest,
     user: User = Depends(get_current_user),
@@ -80,7 +85,12 @@ async def save_llm_key(
     )
 
 
-@router.get("/llm-keys", response_model=LLMKeyListResponse)
+@router.get(
+    "/llm-keys",
+    response_model=LLMKeyListResponse,
+    summary="List LLM API keys",
+    description="List all saved LLM API keys for the authenticated user. Keys are returned with masked previews showing only the first 6 and last 4 characters of each key.",
+)
 async def list_llm_keys(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -106,7 +116,11 @@ async def list_llm_keys(
     )
 
 
-@router.delete("/llm-keys/{key_id}")
+@router.delete(
+    "/llm-keys/{key_id}",
+    summary="Delete LLM API key",
+    description="Permanently delete a saved LLM API key. This action cannot be undone.",
+)
 async def delete_llm_key(
     key_id: str,
     user: User = Depends(get_current_user),

@@ -87,7 +87,13 @@ def _build_result_dicts(results) -> list[dict]:
     return pages
 
 
-@router.post("", response_model=ScrapeResponse)
+@router.post(
+    "",
+    response_model=ScrapeResponse,
+    summary="Scrape a single URL",
+    description="Extract content from a URL using the 5-tier scraping pipeline. Returns markdown, HTML, links, screenshots, structured data, and more depending on requested formats. Supports LLM extraction, proxy routing, and browser actions.",
+    response_description="Scraped content with metadata and job ID",
+)
 async def scrape(
     request: ScrapeRequest,
     response: Response,
@@ -291,7 +297,11 @@ async def scrape(
         )
 
 
-@router.get("/{job_id}")
+@router.get(
+    "/{job_id}",
+    summary="Get scrape result",
+    description="Retrieve the status and content of a previously submitted scrape job by its ID.",
+)
 async def get_scrape_status(
     job_id: str,
     user: User = Depends(get_current_user),
@@ -380,7 +390,11 @@ async def get_scrape_status(
     return response_data
 
 
-@router.get("/{job_id}/export")
+@router.get(
+    "/{job_id}/export",
+    summary="Export scrape results",
+    description="Download scrape results as JSON, CSV, or ZIP archive with markdown, HTML, and screenshots.",
+)
 async def export_scrape(
     job_id: str,
     format: str = Query("zip", pattern="^(zip|json|csv)$"),

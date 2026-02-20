@@ -6,6 +6,9 @@
 #   ENCRYPTION_KEY=<random-32-char-string>
 #   POSTGRES_PASSWORD=<strong-password>
 #   NEXT_PUBLIC_API_URL=https://yourdomain.com  (or http://your-server-ip:8000)
+#
+# Optional monitoring stack:
+#   docker compose -f docker-compose.prod.yml --profile monitoring up --build -d
 
 services:
   backend:
@@ -24,6 +27,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - LOG_FORMAT=json
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 120"
     restart: unless-stopped
     healthcheck:
@@ -35,6 +39,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "2.0"
           memory: 2G
     networks:
       - default
@@ -58,6 +63,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
     command: celery -A app.workers.celery_app worker -l warning -c 4 -Q scrape
     restart: unless-stopped
+    stop_grace_period: 5m
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -67,6 +73,7 @@ services:
       replicas: 2
       resources:
         limits:
+          cpus: "2.0"
           memory: 2G
 
   celery-worker-crawl:
@@ -87,6 +94,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
     command: celery -A app.workers.celery_app worker -l warning -c 2 -Q crawl
     restart: unless-stopped
+    stop_grace_period: 5m
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -96,6 +104,7 @@ services:
       replicas: 2
       resources:
         limits:
+          cpus: "2.0"
           memory: 2G
 
   celery-worker-batch:
@@ -116,6 +125,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
     command: celery -A app.workers.celery_app worker -l warning -c 4 -Q batch
     restart: unless-stopped
+    stop_grace_period: 5m
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -125,6 +135,7 @@ services:
       replicas: 1
       resources:
         limits:
+          cpus: "2.0"
           memory: 2G
 
   celery-worker-search:
@@ -145,6 +156,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
     command: celery -A app.workers.celery_app worker -l warning -c 2 -Q search,map
     restart: unless-stopped
+    stop_grace_period: 5m
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -154,6 +166,7 @@ services:
       replicas: 1
       resources:
         limits:
+          cpus: "1.0"
           memory: 2G
 
   celery-beat:
@@ -174,6 +187,11 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
     command: celery -A app.workers.celery_app beat -l warning
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   frontend:
     build:
@@ -188,6 +206,17 @@ services:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     networks:
       - default
       - dokploy-network
@@ -207,6 +236,11 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
     command: >
       postgres
       -c max_connections=200
@@ -226,13 +260,53 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # --- Optional monitoring stack (enable with --profile monitoring) ---
+
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: ["monitoring"]
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles: ["monitoring"]
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
 volumes:
   pgdata:
   redisdata:
+  prometheus_data:
+  grafana_data:
 
 networks:
   dokploy-network:
     external: true
-

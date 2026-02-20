@@ -76,7 +76,12 @@ def _build_search_dicts(results) -> list[dict]:
     return pages
 
 
-@router.post("", response_model=SearchStartResponse)
+@router.post(
+    "",
+    response_model=SearchStartResponse,
+    summary="Start web search",
+    description="Execute a web search query and scrape the top results asynchronously. Returns a job ID for polling status and retrieving scraped content from each search result. Rate-limited per user and subject to quota enforcement.",
+)
 async def start_search(
     request: SearchRequest,
     response: Response,
@@ -124,7 +129,12 @@ async def start_search(
     )
 
 
-@router.get("/{job_id}", response_model=SearchStatusResponse)
+@router.get(
+    "/{job_id}",
+    response_model=SearchStatusResponse,
+    summary="Get search job status",
+    description="Retrieve the current status and results of a search job. Completed and failed jobs are served from cache for faster response times. Returns per-result data including title, snippet, scraped content, and metadata.",
+)
 async def get_search_status(
     job_id: str,
     user: User = Depends(get_current_user),
@@ -219,7 +229,11 @@ async def get_search_status(
     return response_obj
 
 
-@router.get("/{job_id}/export")
+@router.get(
+    "/{job_id}/export",
+    summary="Export search results",
+    description="Download search job results in the specified format. Supports ZIP (with per-result folders containing markdown, HTML, screenshots, and metadata), JSON, and CSV exports.",
+)
 async def export_search(
     job_id: str,
     format: str = Query("zip", pattern="^(zip|json|csv)$"),

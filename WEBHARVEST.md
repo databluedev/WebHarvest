@@ -1,6 +1,6 @@
 # WebHarvest
 
-**Open-source web scraping platform that outperforms Firecrawl on content extraction, data richness, and cost.**
+**Open-source web scraping platform with industry-leading content extraction, data richness, and zero cost.**
 
 WebHarvest is a self-hosted, full-stack web scraping platform with 5 core features: Scrape, Map, Crawl, Batch, and Search. It uses a multi-strategy anti-detection pipeline to bypass bot protection on sites like Amazon, Ticketmaster, and Cloudflare-protected pages — and it's completely free to run.
 

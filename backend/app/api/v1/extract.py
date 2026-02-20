@@ -30,7 +30,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.post("", response_model=None)
+@router.post(
+    "",
+    response_model=None,
+    summary="Extract structured data",
+    description="Extract structured data from content or URLs using an LLM. Supports three modes: (1) pass content or HTML for immediate extraction, (2) pass a single URL for synchronous scrape-and-extract, or (3) pass multiple URLs for asynchronous extraction that returns a job ID for polling.",
+)
 async def extract(
     request: ExtractRequest,
     response: Response,
@@ -207,7 +212,12 @@ async def _start_async_extract(
     )
 
 
-@router.get("/{job_id}", response_model=ExtractStatusResponse)
+@router.get(
+    "/{job_id}",
+    response_model=ExtractStatusResponse,
+    summary="Get extraction job status",
+    description="Retrieve the current status and results of an asynchronous multi-URL extraction job. Returns per-URL extraction results including the extracted data and any errors encountered.",
+)
 async def get_extract_status(
     job_id: str,
     user: User = Depends(get_current_user),

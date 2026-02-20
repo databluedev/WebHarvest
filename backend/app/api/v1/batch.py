@@ -77,7 +77,12 @@ def _build_batch_dicts(results) -> list[dict]:
     return pages
 
 
-@router.post("/scrape", response_model=BatchStartResponse)
+@router.post(
+    "/scrape",
+    response_model=BatchStartResponse,
+    summary="Start batch scrape",
+    description="Submit multiple URLs for asynchronous batch scraping. Returns a job ID that can be polled for status and results. Rate-limited per user; subject to quota enforcement and maximum batch size constraints.",
+)
 async def start_batch_scrape(
     request: BatchScrapeRequest,
     response: Response,
@@ -134,7 +139,12 @@ async def start_batch_scrape(
     )
 
 
-@router.get("/{job_id}", response_model=BatchStatusResponse)
+@router.get(
+    "/{job_id}",
+    response_model=BatchStatusResponse,
+    summary="Get batch scrape status",
+    description="Retrieve the current status and results of a batch scrape job. Completed and failed jobs are served from cache for faster response times. Returns per-URL results including markdown, HTML, metadata, and any errors.",
+)
 async def get_batch_status(
     job_id: str,
     user: User = Depends(get_current_user),
@@ -225,7 +235,11 @@ async def get_batch_status(
     return response_obj
 
 
-@router.get("/{job_id}/export")
+@router.get(
+    "/{job_id}/export",
+    summary="Export batch results",
+    description="Download batch scrape results in the specified format. Supports ZIP (with per-page folders containing markdown, HTML, screenshots, and metadata), JSON, and CSV exports.",
+)
 async def export_batch(
     job_id: str,
     format: str = Query("zip", pattern="^(zip|json|csv)$"),

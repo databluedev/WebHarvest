@@ -82,7 +82,13 @@ def _build_result_dicts(results) -> list[dict]:
     return pages
 
 
-@router.post("", response_model=CrawlStartResponse)
+@router.post(
+    "",
+    response_model=CrawlStartResponse,
+    summary="Start a crawl job",
+    description="Begin crawling from the given URL using BFS. Follows links up to max_depth and max_pages. Runs asynchronously — poll the status endpoint for results.",
+    response_description="Job ID and status confirmation",
+)
 async def start_crawl(
     request: CrawlRequest,
     response: Response,
@@ -126,7 +132,12 @@ async def start_crawl(
     )
 
 
-@router.get("/{job_id}", response_model=CrawlStatusResponse)
+@router.get(
+    "/{job_id}",
+    response_model=CrawlStatusResponse,
+    summary="Get crawl status and results",
+    description="Retrieve paginated crawl results including progress, scraped pages, and extracted content. Poll this endpoint until status is 'completed' or 'failed'.",
+)
 async def get_crawl_status(
     job_id: str,
     page: int = Query(1, ge=1),
@@ -239,7 +250,11 @@ async def get_crawl_status(
     return response_obj
 
 
-@router.delete("/{job_id}")
+@router.delete(
+    "/{job_id}",
+    summary="Cancel a crawl job",
+    description="Cancel a running or pending crawl job. Pages already scraped are preserved.",
+)
 async def cancel_crawl(
     job_id: str,
     user: User = Depends(get_current_user),
@@ -258,7 +273,11 @@ async def cancel_crawl(
     return {"success": False, "message": f"Cannot cancel job with status: {job.status}"}
 
 
-@router.get("/{job_id}/export")
+@router.get(
+    "/{job_id}/export",
+    summary="Export crawl results",
+    description="Download all crawl results as JSON, CSV, or ZIP archive.",
+)
 async def export_crawl(
     job_id: str,
     format: str = Query("zip", pattern="^(zip|json|csv)$"),

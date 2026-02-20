@@ -26,7 +26,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.post("", response_model=MapResponse)
+@router.post(
+    "",
+    response_model=MapResponse,
+    summary="Map website URLs",
+    description="Discover and map all URLs on a website by crawling sitemaps and link structures. Returns a list of discovered URLs with their titles, descriptions, and metadata. Rate-limited per user.",
+)
 async def map_site(
     request: MapRequest,
     response: Response,
@@ -91,7 +96,11 @@ async def map_site(
         )
 
 
-@router.get("/{job_id}")
+@router.get(
+    "/{job_id}",
+    summary="Get map job status",
+    description="Retrieve the current status and discovered URLs of a map job. Completed and failed jobs are served from cache for faster response times.",
+)
 async def get_map_status(
     job_id: str,
     user: User = Depends(get_current_user),
@@ -137,7 +146,11 @@ async def get_map_status(
     return response_data
 
 
-@router.get("/{job_id}/export")
+@router.get(
+    "/{job_id}/export",
+    summary="Export map results",
+    description="Download map job results in the specified format. Supports JSON and CSV exports containing discovered URLs with their titles, descriptions, last-modified dates, and priorities.",
+)
 async def export_map(
     job_id: str,
     format: str = Query("json", pattern="^(json|csv)$"),

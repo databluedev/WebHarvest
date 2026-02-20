@@ -1,6 +1,15 @@
+import json
+import logging
+import traceback
+from datetime import datetime, timezone
+
+import redis
 from celery import Celery
+from celery.signals import task_failure, worker_shutting_down
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 celery_app = Celery(
     "webharvest",
@@ -51,6 +60,9 @@ celery_app.conf.update(
             "schedule": 86400.0,  # Every 24 hours
         },
     },
+    # Graceful shutdown
+    worker_max_tasks_per_child=100,  # Prevent memory leaks
+    worker_max_memory_per_child=512000,  # 512 MB soft limit
 )
 
 # Explicitly include tasks
@@ -65,3 +77,55 @@ celery_app.conf.include = [
     "app.workers.monitor_worker",
     "app.workers.cleanup_worker",
 ]
+
+# ---------------------------------------------------------------------------
+# Dead Letter Queue — persist failed tasks after max retries
+# ---------------------------------------------------------------------------
+
+DLQ_KEY = "dlq:tasks"
+DLQ_MAX_SIZE = 1000  # Keep at most 1000 entries
+
+
+def _get_sync_redis():
+    """Create a synchronous Redis client for signal handlers."""
+    return redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+@task_failure.connect
+def on_task_failure(sender=None, task_id=None, exception=None, args=None,
+                    kwargs=None, traceback=None, einfo=None, **kw):
+    """Push failed tasks (after max retries exhausted) to the DLQ."""
+    # Only record if retries are exhausted
+    retries = getattr(sender.request, "retries", 0) if sender else 0
+    max_retries = getattr(sender, "max_retries", 0) if sender else 0
+    if retries < max_retries:
+        return  # Will be retried, not a final failure
+
+    entry = {
+        "task_id": task_id,
+        "task_name": sender.name if sender else "unknown",
+        "args": list(args) if args else [],
+        "kwargs": dict(kwargs) if kwargs else {},
+        "exception": str(exception),
+        "traceback": str(einfo) if einfo else "",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        r = _get_sync_redis()
+        r.lpush(DLQ_KEY, json.dumps(entry))
+        r.ltrim(DLQ_KEY, 0, DLQ_MAX_SIZE - 1)
+        logger.warning(f"Task {task_id} ({sender.name if sender else '?'}) added to DLQ")
+    except Exception as e:
+        logger.error(f"Failed to write to DLQ: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Graceful shutdown logging
+# ---------------------------------------------------------------------------
+
+
+@worker_shutting_down.connect
+def on_worker_shutting_down(sig=None, how=None, exitcode=None, **kw):
+    """Log when a worker is shutting down."""
+    logger.info(f"Worker shutting down (signal={sig}, how={how}, exitcode={exitcode})")

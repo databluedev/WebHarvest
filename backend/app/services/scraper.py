@@ -848,6 +848,15 @@ async def scrape_url(
     if domain:
         await domain_throttle(domain)
 
+    # Circuit breaker — reject requests to domains with repeated failures
+    if domain:
+        from app.services.circuit_breaker import check_breaker, CircuitBreakerOpenError
+
+        try:
+            await check_breaker(domain)
+        except CircuitBreakerOpenError:
+            raise
+
     use_cache = (
         not request.actions
         and "screenshot" not in request.formats
@@ -1418,6 +1427,22 @@ async def scrape_url(
     if use_cache and fetched:
         try:
             await set_cached_scrape(url, request.formats, scrape_data.model_dump())
+        except Exception:
+            pass
+
+    # Circuit breaker — record success for this domain
+    if domain and fetched:
+        try:
+            from app.services.circuit_breaker import record_success
+
+            await record_success(domain)
+        except Exception:
+            pass
+    elif domain and not fetched:
+        try:
+            from app.services.circuit_breaker import record_failure
+
+            await record_failure(domain)
         except Exception:
             pass
 

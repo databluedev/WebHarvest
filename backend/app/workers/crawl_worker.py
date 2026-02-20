@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time as _time_mod
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from uuid import UUID
@@ -7,6 +8,8 @@ from uuid import UUID
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+_WORKER_NAME = "crawl"
 
 # Shared thread pool for CPU-bound content extraction in crawl pipeline
 _extraction_executor = ThreadPoolExecutor(max_workers=4)
@@ -23,12 +26,20 @@ def _run_async(coro):
 @celery_app.task(
     name="app.workers.crawl_worker.process_crawl",
     bind=True,
-    max_retries=1,
+    max_retries=3,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
     soft_time_limit=3600,
     time_limit=3660,
 )
 def process_crawl(self, job_id: str, config: dict):
     """Process a crawl job using BFS crawler with producer-consumer pipeline."""
+    from app.core.metrics import worker_task_total, worker_task_duration_seconds, worker_active_tasks
+
+    _start = _time_mod.monotonic()
+    worker_active_tasks.labels(worker=_WORKER_NAME).inc()
 
     async def _do_crawl():
         from app.core.database import create_worker_session_factory
@@ -358,4 +369,14 @@ def process_crawl(self, job_id: str, config: dict):
             await crawler.cleanup()
             await db_engine.dispose()
 
-    _run_async(_do_crawl())
+    try:
+        _run_async(_do_crawl())
+        worker_task_total.labels(worker=_WORKER_NAME, status="success").inc()
+    except Exception:
+        worker_task_total.labels(worker=_WORKER_NAME, status="failure").inc()
+        raise
+    finally:
+        worker_active_tasks.labels(worker=_WORKER_NAME).dec()
+        worker_task_duration_seconds.labels(worker=_WORKER_NAME).observe(
+            _time_mod.monotonic() - _start
+        )

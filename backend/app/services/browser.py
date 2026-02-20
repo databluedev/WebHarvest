@@ -902,12 +902,20 @@ class BrowserPool:
         if use_firefox and (not self._firefox or not self._firefox.is_connected()):
             await self._ensure_firefox()
 
+        from app.core.exceptions import BrowserPoolExhaustedError
         from app.core.metrics import active_browser_contexts
 
         is_firefox = use_firefox and self._firefox is not None
         semaphore = self._firefox_semaphore if is_firefox else self._chromium_semaphore
 
-        async with semaphore:
+        try:
+            await asyncio.wait_for(semaphore.acquire(), timeout=30.0)
+        except asyncio.TimeoutError:
+            browser_type = "Firefox" if is_firefox else "Chromium"
+            raise BrowserPoolExhaustedError(
+                f"No {browser_type} browser slots available after 30s"
+            )
+        try:  # replaces async with semaphore:
             active_browser_contexts.inc()
             try:
                 # Resolve the browser reference, relaunching if it crashed
@@ -1040,6 +1048,8 @@ class BrowserPool:
                         pass
             finally:
                 active_browser_contexts.dec()
+        finally:
+            semaphore.release()
 
     async def _safe_cleanup_page(
         self, page: Page, context: BrowserContext, target_url: str | None
@@ -1223,6 +1233,7 @@ class CrawlSession:
         ):
             await self._pool._ensure_firefox()
 
+        from app.core.exceptions import BrowserPoolExhaustedError
         from app.core.metrics import active_browser_contexts
 
         is_firefox = self._use_firefox and self._pool._firefox is not None
@@ -1232,7 +1243,13 @@ class CrawlSession:
             else self._pool._chromium_semaphore
         )
 
-        await self._semaphore.acquire()
+        try:
+            await asyncio.wait_for(self._semaphore.acquire(), timeout=30.0)
+        except asyncio.TimeoutError:
+            browser_type = "Firefox" if is_firefox else "Chromium"
+            raise BrowserPoolExhaustedError(
+                f"No {browser_type} browser slots available after 30s"
+            )
         self._semaphore_acquired = True
         active_browser_contexts.inc()
 

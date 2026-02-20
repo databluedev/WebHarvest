@@ -1,10 +1,77 @@
 # WebHarvest
 
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![License](https://img.shields.io/badge/license-AGPL--3.0-green)
+![Docker](https://img.shields.io/badge/docker-ready-blue)
+![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)
+![Next.js](https://img.shields.io/badge/frontend-Next.js%2014-black)
+
 > **Still in active development** — features may change, APIs may break, and some functionality is incomplete.
 
-**Open-source, self-hosted web scraping platform** with a modern dashboard, REST API, Python SDK, and background job processing.
+**Open-source, self-hosted web scraping platform** with a 5-tier scraping pipeline, circuit breakers, built-in monitoring, scheduling, and LLM extraction.
 
 Built with FastAPI + Next.js + PostgreSQL + Redis + Celery + Playwright.
+
+---
+
+## Why WebHarvest?
+
+| Feature | Included |
+|---------|:--------:|
+| 5-tier scraping pipeline with strategy cache | Yes |
+| Circuit breaker per domain | Yes |
+| Dead Letter Queue for failed tasks | Yes |
+| Built-in URL change monitoring | Yes |
+| Cron-based scheduled jobs | Yes |
+| Producer-consumer crawl pipeline | Yes |
+| Anti-bot bypass (20-level stealth) | Yes |
+| Multi-format document extraction (PDF/DOCX/XLSX/PPTX/CSV/RTF/EPUB) | Yes |
+| BYOK LLM extraction (100+ models via LiteLLM) | Yes |
+| Full browser rendering (Chromium + Firefox) | Yes |
+| Proxy rotation with bulk import | Yes |
+| Self-hosted / no cloud dependency | Yes |
+| Python SDK (sync + async) | Yes |
+| Prometheus metrics | Yes |
+| Structured JSON logging + Request ID tracing | Yes |
+
+---
+
+## Architecture
+
+```
+                        +------------------+
+                        |   Dashboard      |
+                        |  (Next.js 14)    |
+                        +--------+---------+
+                                 |
+                        +--------v---------+
+    Client / SDK  ----->|   FastAPI API     |------> Prometheus /metrics
+                        |  (Auth, Rate      |
+                        |   Limit, CORS)    |
+                        +--------+---------+
+                                 |
+                    +------------+-------------+
+                    |                          |
+             +------v------+          +-------v-------+
+             |  PostgreSQL  |          |    Redis       |
+             |  (Jobs, Users)|         |  (Queue, Cache,|
+             |              |          |   Rate Limits) |
+             +--------------+          +-------+-------+
+                                               |
+                                    +----------v----------+
+                                    |   Celery Workers     |
+                                    |  (scrape, crawl,     |
+                                    |   batch, search,     |
+                                    |   extract, monitor)  |
+                                    +----------+----------+
+                                               |
+                                    +----------v----------+
+                                    |   Browser Pool       |
+                                    |  (Chromium + Firefox) |
+                                    +----------+----------+
+                                               |
+                                        Target Sites
+```
 
 ---
 
@@ -614,7 +681,19 @@ This project is **under active development**. Current known limitations:
 - Monitor scheduling depends on Celery Beat running continuously
 - No built-in HTTPS — use a reverse proxy for production
 
-Contributions, bug reports, and feature requests are welcome.
+---
+
+## Contributing
+
+Contributions are welcome! Here's how to get started:
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make your changes and add tests
+4. Run the test suite: `cd backend && python -m pytest tests/ -v`
+5. Submit a pull request
+
+Please open an issue first for large changes to discuss the approach.
 
 ---
 

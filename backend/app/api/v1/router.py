@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    admin,
     auth,
     scrape,
     crawl,
@@ -35,3 +36,4 @@ api_router.include_router(extract.router, prefix="/extract", tags=["Extract"])
 api_router.include_router(monitor.router, prefix="/monitors", tags=["Monitors"])
 api_router.include_router(webhook.router, prefix="/webhooks", tags=["Webhooks"])
 api_router.include_router(jobs.router, prefix="/jobs", tags=["Jobs"])
+api_router.include_router(admin.router, prefix="/admin", tags=["Admin"])

@@ -43,7 +43,13 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-@router.post("/register", response_model=TokenResponse)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    summary="Register a new account",
+    description="Create a new user account with email and password. "
+    "Returns a JWT access token on success. Rate-limited to 5 attempts per minute per IP.",
+)
 async def register(
     body: RegisterRequest,
     request: Request,
@@ -63,7 +69,13 @@ async def register(
     return TokenResponse(access_token=token)
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="Log in",
+    description="Authenticate with email and password. Returns a JWT access token. "
+    "Rate-limited to 10 attempts per minute per IP.",
+)
 async def login(
     body: LoginRequest,
     request: Request,
@@ -83,12 +95,23 @@ async def login(
     return TokenResponse(access_token=token)
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    summary="Get current user",
+    description="Returns the profile of the currently authenticated user.",
+)
 async def get_me(user: User = Depends(get_current_user)):
     return user
 
 
-@router.post("/api-keys", response_model=ApiKeyCreatedResponse)
+@router.post(
+    "/api-keys",
+    response_model=ApiKeyCreatedResponse,
+    summary="Create API key",
+    description="Generate a new API key for programmatic access. "
+    "The full key is only returned once — store it securely.",
+)
 async def create_api_key(
     request: ApiKeyCreateRequest = ApiKeyCreateRequest(),
     user: User = Depends(get_current_user),
@@ -106,7 +129,12 @@ async def create_api_key(
     )
 
 
-@router.get("/api-keys", response_model=list[ApiKeyResponse])
+@router.get(
+    "/api-keys",
+    response_model=list[ApiKeyResponse],
+    summary="List API keys",
+    description="List all API keys for the current user. Key values are masked.",
+)
 async def list_api_keys(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -114,7 +142,11 @@ async def list_api_keys(
     return await get_user_api_keys(db, user.id)
 
 
-@router.delete("/api-keys/{key_id}")
+@router.delete(
+    "/api-keys/{key_id}",
+    summary="Revoke API key",
+    description="Permanently revoke an API key. It can no longer be used for authentication.",
+)
 async def delete_api_key(
     key_id: str,
     user: User = Depends(get_current_user),
@@ -130,7 +162,12 @@ async def delete_api_key(
     return {"success": True, "message": "API key revoked"}
 
 
-@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+@router.post(
+    "/forgot-password",
+    response_model=ForgotPasswordResponse,
+    summary="Request password reset",
+    description="Send a password reset token. Always returns success to prevent email enumeration.",
+)
 async def forgot_password(
     body: ForgotPasswordRequest,
     request: Request,
@@ -155,7 +192,11 @@ async def forgot_password(
     )
 
 
-@router.post("/reset-password")
+@router.post(
+    "/reset-password",
+    summary="Reset password",
+    description="Set a new password using a valid reset token.",
+)
 async def do_reset_password(
     body: ResetPasswordRequest,
     request: Request,
@@ -174,7 +215,12 @@ async def do_reset_password(
     return {"success": True, "message": "Password has been reset successfully"}
 
 
-@router.post("/verify-email", response_model=VerifyEmailResponse)
+@router.post(
+    "/verify-email",
+    response_model=VerifyEmailResponse,
+    summary="Verify email address",
+    description="Confirm email ownership using the verification token.",
+)
 async def do_verify_email(
     body: VerifyEmailRequest,
     db: AsyncSession = Depends(get_db),

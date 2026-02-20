@@ -18,7 +18,11 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/stats")
+@router.get(
+    "/stats",
+    summary="Get usage statistics",
+    description="Retrieve aggregate usage statistics for the authenticated user, including total jobs, pages scraped, success rate, average duration, jobs broken down by type and status, and a daily job count for the last 30 days.",
+)
 async def get_usage_stats(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -121,7 +125,11 @@ async def get_usage_stats(
     }
 
 
-@router.get("/history")
+@router.get(
+    "/history",
+    summary="Get job history",
+    description="Retrieve paginated job history for the authenticated user with optional filters by job type, status, and URL/query search. Supports configurable sorting by creation date, completion date, status, or type.",
+)
 async def get_usage_history(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -200,7 +208,11 @@ async def get_usage_history(
     }
 
 
-@router.get("/top-domains")
+@router.get(
+    "/top-domains",
+    summary="Get top scraped domains",
+    description="Retrieve the most frequently scraped domains from the authenticated user's job results. Domains are ranked by scrape count. The 'www.' prefix is stripped for normalization.",
+)
 async def get_top_domains(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -240,7 +252,11 @@ async def get_top_domains(
     }
 
 
-@router.get("/quota")
+@router.get(
+    "/quota",
+    summary="Get usage quota",
+    description="Retrieve the authenticated user's current monthly quota limits and usage across all job types. Includes remaining allowance for each category.",
+)
 async def get_quota(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -252,7 +268,11 @@ async def get_quota(
     return {"success": True, **summary}
 
 
-@router.get("/devices")
+@router.get(
+    "/devices",
+    summary="List device presets",
+    description="List all available mobile and desktop device presets for viewport emulation during scraping. Each preset includes screen dimensions and user agent strings.",
+)
 async def list_devices():
     """List all available mobile device presets for viewport emulation."""
     from app.services.mobile_presets import list_device_presets
@@ -260,7 +280,11 @@ async def list_devices():
     return {"success": True, "devices": list_device_presets()}
 
 
-@router.delete("/jobs/{job_id}")
+@router.delete(
+    "/jobs/{job_id}",
+    summary="Delete job",
+    description="Permanently delete a job and all its associated results. This action cannot be undone.",
+)
 async def delete_job(
     job_id: str,
     user: User = Depends(get_current_user),

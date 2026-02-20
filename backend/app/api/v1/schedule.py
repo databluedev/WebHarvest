@@ -75,7 +75,12 @@ def _schedule_to_response(schedule: Schedule) -> ScheduleResponse:
     )
 
 
-@router.post("", response_model=ScheduleResponse)
+@router.post(
+    "",
+    response_model=ScheduleResponse,
+    summary="Create schedule",
+    description="Create a new recurring schedule for automated scrape, crawl, or batch jobs. Requires a valid cron expression to define the run frequency. The first run is computed immediately based on the cron expression and timezone.",
+)
 async def create_schedule(
     request: ScheduleCreateRequest,
     user: User = Depends(get_current_user),
@@ -114,7 +119,12 @@ async def create_schedule(
     return _schedule_to_response(schedule)
 
 
-@router.get("", response_model=ScheduleListResponse)
+@router.get(
+    "",
+    response_model=ScheduleListResponse,
+    summary="List schedules",
+    description="List all schedules for the authenticated user, ordered by creation date descending. Includes each schedule's cron expression, next run time, and run count.",
+)
 async def list_schedules(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -138,7 +148,12 @@ async def list_schedules(
     )
 
 
-@router.get("/{schedule_id}", response_model=ScheduleResponse)
+@router.get(
+    "/{schedule_id}",
+    response_model=ScheduleResponse,
+    summary="Get schedule details",
+    description="Retrieve the full configuration and current state of a specific schedule, including its cron expression, next run time, run count, and webhook URL.",
+)
 async def get_schedule(
     schedule_id: str,
     user: User = Depends(get_current_user),
@@ -153,7 +168,11 @@ async def get_schedule(
     return resp
 
 
-@router.get("/{schedule_id}/runs")
+@router.get(
+    "/{schedule_id}/runs",
+    summary="Get schedule run history",
+    description="Retrieve the most recent jobs triggered by this schedule, up to 20 entries. Each entry includes the job type, status, page counts, timestamps, and any error information.",
+)
 async def get_schedule_runs(
     schedule_id: str,
     user: User = Depends(get_current_user),
@@ -196,7 +215,12 @@ async def get_schedule_runs(
     }
 
 
-@router.put("/{schedule_id}", response_model=ScheduleResponse)
+@router.put(
+    "/{schedule_id}",
+    response_model=ScheduleResponse,
+    summary="Update schedule",
+    description="Update a schedule's configuration. Supports changing the name, cron expression, timezone, active state, job config, and webhook URL. Updating the cron expression recalculates the next run time.",
+)
 async def update_schedule(
     schedule_id: str,
     request: ScheduleUpdateRequest,
@@ -238,7 +262,11 @@ async def update_schedule(
     return _schedule_to_response(schedule)
 
 
-@router.delete("/{schedule_id}")
+@router.delete(
+    "/{schedule_id}",
+    summary="Delete schedule",
+    description="Permanently delete a schedule. Previously triggered jobs are not affected. This action cannot be undone.",
+)
 async def delete_schedule(
     schedule_id: str,
     user: User = Depends(get_current_user),
@@ -253,7 +281,11 @@ async def delete_schedule(
     return {"success": True, "message": "Schedule deleted"}
 
 
-@router.post("/{schedule_id}/trigger")
+@router.post(
+    "/{schedule_id}/trigger",
+    summary="Trigger schedule manually",
+    description="Manually trigger a schedule to run immediately, bypassing the cron schedule. Creates a new job using the schedule's configuration and dispatches it to the appropriate worker. Updates the schedule's last run time and run count.",
+)
 async def trigger_schedule(
     schedule_id: str,
     user: User = Depends(get_current_user),

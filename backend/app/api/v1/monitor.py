@@ -49,7 +49,11 @@ def _monitor_to_response(m: Monitor) -> MonitorResponse:
     )
 
 
-@router.post("")
+@router.post(
+    "",
+    summary="Create monitor",
+    description="Create a new URL monitor for automated change tracking. Monitors periodically check a URL for content or status changes and can notify via webhook. Supports CSS selector targeting, keyword tracking, and configurable check intervals (5 minutes to 1 week). Limited to 100 active monitors per account.",
+)
 async def create_monitor(
     request: MonitorCreateRequest,
     response: Response,
@@ -138,7 +142,11 @@ async def create_monitor(
     }
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="List monitors",
+    description="List all URL monitors for the authenticated user, ordered by creation date descending. Optionally filter to only active monitors.",
+)
 async def list_monitors(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -160,7 +168,11 @@ async def list_monitors(
     )
 
 
-@router.get("/{monitor_id}")
+@router.get(
+    "/{monitor_id}",
+    summary="Get monitor details",
+    description="Retrieve the full configuration and current state of a specific monitor, including last check time, change history counts, and webhook settings.",
+)
 async def get_monitor(
     monitor_id: str,
     user: User = Depends(get_current_user),
@@ -177,7 +189,11 @@ async def get_monitor(
     }
 
 
-@router.patch("/{monitor_id}")
+@router.patch(
+    "/{monitor_id}",
+    summary="Update monitor",
+    description="Partially update a monitor's configuration. Supports changing the name, check interval, CSS selector, notification trigger, keywords, webhook URL, active state, and change threshold. Updating the check interval recalculates the next scheduled check.",
+)
 async def update_monitor(
     monitor_id: str,
     request: MonitorUpdateRequest,
@@ -225,7 +241,11 @@ async def update_monitor(
     }
 
 
-@router.delete("/{monitor_id}")
+@router.delete(
+    "/{monitor_id}",
+    summary="Delete monitor",
+    description="Permanently delete a monitor and all associated check history. This action cannot be undone.",
+)
 async def delete_monitor(
     monitor_id: str,
     user: User = Depends(get_current_user),
@@ -242,7 +262,11 @@ async def delete_monitor(
     return {"success": True, "message": "Monitor deleted"}
 
 
-@router.post("/{monitor_id}/check")
+@router.post(
+    "/{monitor_id}/check",
+    summary="Trigger monitor check",
+    description="Trigger an immediate check for the specified monitor, bypassing the normal schedule. The check is queued as a background task and results will appear in the monitor's history.",
+)
 async def trigger_check(
     monitor_id: str,
     user: User = Depends(get_current_user),
@@ -260,7 +284,11 @@ async def trigger_check(
     return {"success": True, "message": "Check triggered"}
 
 
-@router.get("/{monitor_id}/history")
+@router.get(
+    "/{monitor_id}/history",
+    summary="Get monitor check history",
+    description="Retrieve the paginated check history for a monitor, ordered by most recent first. Each entry includes the status code, content hash, whether a change was detected, response time, and change details.",
+)
 async def get_monitor_history(
     monitor_id: str,
     user: User = Depends(get_current_user),

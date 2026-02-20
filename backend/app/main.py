@@ -1,27 +1,19 @@
 import logging
-import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from pythonjsonlogger.json import JsonFormatter
 
 from app.api.v1.router import api_router
 from app.api.v1.health import router as health_router
 from app.config import settings
+from app.core.logging_config import configure_logging
+from app.middleware.request_id import RequestIDMiddleware
 from app.services.browser import browser_pool
 
-# Structured JSON logging
-handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(
-    JsonFormatter(
-        fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
-        rename_fields={"levelname": "level", "name": "logger", "asctime": "timestamp"},
-    )
-)
-logging.root.handlers = [handler]
-logging.root.setLevel(logging.INFO)
+# Configure structured logging (must happen before any logger is created)
+configure_logging(log_format=settings.LOG_FORMAT, log_level=settings.LOG_LEVEL)
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +35,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="WebHarvest - Open source web crawling platform that outperforms Firecrawl. "
+    description="WebHarvest - Open source web crawling platform. "
     "Scrape, crawl, and map websites with AI-powered extraction. "
     "Bring Your Own Key (BYOK) for LLM processing.",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Request ID middleware (must be added before other middleware)
+app.add_middleware(RequestIDMiddleware)
 
 # Gzip compression — 50-70% bandwidth savings on JSON/HTML responses
 app.add_middleware(GZipMiddleware, minimum_size=500)

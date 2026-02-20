@@ -10,13 +10,21 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/health")
+@router.get(
+    "/health",
+    summary="Liveness check",
+    description="Basic liveness probe that returns HTTP 200 if the application process is running. Suitable for Kubernetes liveness probes or load balancer health checks.",
+)
 async def liveness():
     """Liveness probe — returns 200 if the process is running."""
     return {"status": "healthy"}
 
 
-@router.get("/health/ready")
+@router.get(
+    "/health/ready",
+    summary="Readiness check",
+    description="Readiness probe that verifies connectivity to the database, Redis, and the browser pool. Returns HTTP 200 with individual check statuses when all dependencies are healthy, or HTTP 503 if any dependency is unavailable.",
+)
 async def readiness():
     """Readiness probe — checks DB, Redis, and browser pool connectivity."""
     checks = {}
@@ -64,7 +72,11 @@ async def readiness():
     )
 
 
-@router.get("/metrics")
+@router.get(
+    "/metrics",
+    summary="Prometheus metrics",
+    description="Expose application metrics in Prometheus exposition format. Returns HTTP 404 if metrics collection is disabled in the application configuration.",
+)
 async def metrics():
     """Prometheus metrics endpoint."""
     if not settings.METRICS_ENABLED:

@@ -18,7 +18,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/deliveries")
+@router.get(
+    "/deliveries",
+    summary="List webhook deliveries",
+    description="List webhook delivery logs with optional filtering by event type, "
+    "success status, or job ID. Results are paginated.",
+)
 async def list_deliveries(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -85,7 +90,12 @@ async def list_deliveries(
     }
 
 
-@router.get("/deliveries/{delivery_id}")
+@router.get(
+    "/deliveries/{delivery_id}",
+    summary="Get webhook delivery details",
+    description="Returns full details for a specific webhook delivery including "
+    "request/response headers and body.",
+)
 async def get_delivery(
     delivery_id: str,
     user: User = Depends(get_current_user),
@@ -123,7 +133,12 @@ async def get_delivery(
     }
 
 
-@router.post("/test")
+@router.post(
+    "/test",
+    summary="Send test webhook",
+    description="Send a test payload to a webhook URL to verify connectivity and "
+    "HMAC signature validation.",
+)
 async def test_webhook(
     url: str,
     secret: str | None = None,
@@ -137,7 +152,12 @@ async def test_webhook(
     }
 
 
-@router.get("/stats")
+@router.get(
+    "/stats",
+    summary="Get webhook statistics",
+    description="Returns delivery statistics including total count, success rate, "
+    "average response time, and breakdown by event type.",
+)
 async def webhook_stats(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

@@ -17,7 +17,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/{job_id}/results/{result_id}")
+@router.get(
+    "/{job_id}/results/{result_id}",
+    summary="Get job result detail",
+    description="Retrieve the full content for a single page result within a job, "
+    "including markdown, HTML, links, structured data, and metadata.",
+)
 async def get_job_result_detail(
     job_id: str,
     result_id: str,
@@ -70,7 +75,12 @@ async def get_job_result_detail(
     }
 
 
-@router.post("/{job_id}/retry")
+@router.post(
+    "/{job_id}/retry",
+    summary="Retry a failed job",
+    description="Create a new job with the same configuration as a failed or cancelled job. "
+    "The original job is preserved.",
+)
 async def retry_job(
     job_id: str,
     user: User = Depends(get_current_user),
@@ -134,7 +144,12 @@ async def retry_job(
     }
 
 
-@router.post("/{job_id}/cancel")
+@router.post(
+    "/{job_id}/cancel",
+    summary="Cancel a job",
+    description="Cancel a pending or running job. Completed or already-cancelled jobs "
+    "cannot be cancelled.",
+)
 async def cancel_job(
     job_id: str,
     user: User = Depends(get_current_user),

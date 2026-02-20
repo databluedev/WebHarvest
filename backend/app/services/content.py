@@ -199,7 +199,7 @@ def _is_inside_main_content(el: Tag) -> bool:
 
 def extract_main_content(html: str, url: str = "") -> str:
     """
-    Multi-pass content extraction that produces clean, Firecrawl-quality output.
+    Multi-pass content extraction that produces clean, high-quality output.
 
     Strategy:
     1. Clean junk tags (script, style, video, audio, etc.)
@@ -395,7 +395,7 @@ def html_to_markdown(html: str) -> str:
     """
     Convert HTML to clean GitHub Flavored Markdown.
     Uses custom converter that preserves links, images, code blocks, and structure.
-    Includes aggressive post-processing for Firecrawl-quality output.
+    Includes aggressive post-processing for clean, production-quality output.
     """
     converter = WebHarvestConverter(
         heading_style="ATX",
@@ -502,7 +502,7 @@ def extract_links(html: str, base_url: str) -> list[str]:
 def extract_links_detailed(html: str, base_url: str) -> dict:
     """
     Extract detailed link analysis - internal vs external, with anchor text.
-    Much richer than Firecrawl's simple link list.
+    Rich link analysis with internal/external classification and anchor text.
     """
     soup = BeautifulSoup(html, "lxml")
     base_domain = urlparse(base_url).netloc
@@ -557,7 +557,7 @@ def extract_structured_data(html: str) -> dict:
     - All meta tags
     - Microdata attributes
 
-    This is a killer feature - Firecrawl doesn't do this.
+    Comprehensive structured data extraction from multiple sources.
     """
     # Parse the ORIGINAL html (before junk removal) to get script tags
     soup = BeautifulSoup(html, "lxml")

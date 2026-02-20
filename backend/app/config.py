@@ -1,5 +1,22 @@
+import logging
+import secrets
+
 from pydantic_settings import BaseSettings
 from typing import List
+
+_logger = logging.getLogger(__name__)
+
+
+def _generate_secret(name: str) -> str:
+    """Generate a random secret and warn that it should be set explicitly."""
+    value = secrets.token_urlsafe(48)
+    _logger.warning(
+        "%s not set — using auto-generated value. "
+        "Set %s in your .env or environment for production.",
+        name,
+        name,
+    )
+    return value
 
 
 class Settings(BaseSettings):
@@ -8,18 +25,14 @@ class Settings(BaseSettings):
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
 
-    # Security
-    SECRET_KEY: str = "change-this-in-production"
-    ENCRYPTION_KEY: str = (
-        "change-this-32-byte-key-in-prod!"  # Must be 32 bytes for AES-256
-    )
+    # Security — auto-generate if not provided (with startup warning)
+    SECRET_KEY: str = ""
+    ENCRYPTION_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     API_KEY_PREFIX: str = "wh_"
 
-    # Database
-    DATABASE_URL: str = (
-        "postgresql+asyncpg://webharvest:webharvest@localhost:5432/webharvest"
-    )
+    # Database — defaults to SQLite so `docker compose up` works without .env
+    DATABASE_URL: str = "sqlite+aiosqlite:///./webharvest.db"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -27,6 +40,21 @@ class Settings(BaseSettings):
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+
+    def model_post_init(self, __context) -> None:
+        if not self.SECRET_KEY or self.SECRET_KEY == "change-this-in-production":
+            object.__setattr__(self, "SECRET_KEY", _generate_secret("SECRET_KEY"))
+        if (
+            not self.ENCRYPTION_KEY
+            or self.ENCRYPTION_KEY == "change-this-32-byte-key-in-prod!"
+        ):
+            # Must be exactly 32 bytes for AES-256
+            key = secrets.token_urlsafe(24)[:32]
+            _logger.warning(
+                "ENCRYPTION_KEY not set — using auto-generated value. "
+                "Set ENCRYPTION_KEY in your .env or environment for production.",
+            )
+            object.__setattr__(self, "ENCRYPTION_KEY", key)
 
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
@@ -65,6 +93,10 @@ class Settings(BaseSettings):
     CACHE_TTL_SECONDS: int = 3600
     STRATEGY_CACHE_TTL_SECONDS: int = 86400  # 24 hours
 
+    # Logging
+    LOG_FORMAT: str = "json"  # "json" for production, "text" for development
+    LOG_LEVEL: str = "INFO"
+
     # Metrics
     METRICS_ENABLED: bool = True
 
@@ -84,7 +116,7 @@ class Settings(BaseSettings):
     DATA_RETENTION_DAYS: int = 30
     MONITOR_CHECK_RETENTION_DAYS: int = 90
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 
 settings = Settings()

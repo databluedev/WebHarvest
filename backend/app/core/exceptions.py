@@ -36,3 +36,11 @@ class ScrapeError(Exception):
         self.message = message
         self.url = url
         super().__init__(self.message)
+
+
+class BrowserPoolExhaustedError(Exception):
+    """Raised when no browser slots are available within the timeout period."""
+
+    def __init__(self, message: str = "No browser slots available"):
+        self.message = message
+        super().__init__(self.message)

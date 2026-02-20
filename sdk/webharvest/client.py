@@ -121,11 +121,13 @@ class WebHarvest:
         api_url: str = "http://localhost:8000",
         api_key: str | None = None,
         timeout: float = 60.0,
+        max_retries: int = 3,
     ) -> None:
         self._api_url = api_url.rstrip("/")
         self._api_key = api_key
         self._token: str | None = None
         self._client = httpx.Client(timeout=timeout)
+        self._max_retries = max_retries
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -142,17 +144,33 @@ class WebHarvest:
         json: dict | None = None,
         params: dict | None = None,
     ) -> dict:
-        """Execute an HTTP request and return the decoded JSON body."""
+        """Execute an HTTP request with retry logic and return the decoded JSON body."""
         url = f"{self._api_url}{path}"
-        response = self._client.request(
-            method,
-            url,
-            json=json,
-            params=params,
-            headers=self._headers(),
-        )
-        _raise_for_status(response)
-        return response.json()
+        last_exc: Exception | None = None
+        for attempt in range(self._max_retries):
+            try:
+                response = self._client.request(
+                    method,
+                    url,
+                    json=json,
+                    params=params,
+                    headers=self._headers(),
+                )
+                _raise_for_status(response)
+                return response.json()
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                last_exc = e
+                if attempt < self._max_retries - 1:
+                    time.sleep(min(2 ** attempt, 10))
+                    continue
+                raise
+            except ServerError as e:
+                last_exc = e
+                if attempt < self._max_retries - 1:
+                    time.sleep(min(2 ** attempt, 10))
+                    continue
+                raise
+        raise last_exc  # type: ignore[misc]
 
     def _get(self, path: str, *, params: dict | None = None) -> dict:
         return self._request("GET", path, params=params)
@@ -970,6 +988,127 @@ class WebHarvest:
         return ScheduleTrigger(**data)
 
     # ------------------------------------------------------------------
+    # Extract
+    # ------------------------------------------------------------------
+
+    def extract(
+        self,
+        urls: list[str],
+        prompt: str,
+        *,
+        schema: dict | None = None,
+        provider: str | None = None,
+        only_main_content: bool = True,
+        webhook_url: str | None = None,
+        webhook_secret: str | None = None,
+    ) -> dict:
+        """Submit a multi-URL LLM extraction job.
+
+        Args:
+            urls: URLs to scrape and extract from.
+            prompt: Extraction prompt for the LLM.
+            schema: Optional JSON schema for structured output.
+            provider: LLM provider override.
+            only_main_content: Strip boilerplate before extraction.
+            webhook_url: Webhook notification URL.
+            webhook_secret: Webhook signing secret.
+
+        Returns:
+            A dict with ``job_id`` and ``status``.
+        """
+        payload = _strip_none({
+            "urls": urls,
+            "prompt": prompt,
+            "schema_": schema,
+            "provider": provider,
+            "only_main_content": only_main_content,
+            "webhook_url": webhook_url,
+            "webhook_secret": webhook_secret,
+        })
+        return self._post("/v1/extract", json=payload)
+
+    # ------------------------------------------------------------------
+    # Monitors
+    # ------------------------------------------------------------------
+
+    def create_monitor(
+        self,
+        url: str,
+        *,
+        check_interval_minutes: int = 60,
+        css_selector: str | None = None,
+        webhook_url: str | None = None,
+        keywords: list[str] | None = None,
+        threshold: float | None = None,
+    ) -> dict:
+        """Create a URL change monitor.
+
+        Args:
+            url: URL to monitor for changes.
+            check_interval_minutes: How often to check (in minutes).
+            css_selector: CSS selector to monitor a specific page section.
+            webhook_url: Webhook to notify on change detection.
+            keywords: Keywords to watch for.
+            threshold: Similarity threshold for change detection (0.0-1.0).
+
+        Returns:
+            The created monitor object.
+        """
+        payload = _strip_none({
+            "url": url,
+            "check_interval_minutes": check_interval_minutes,
+            "css_selector": css_selector,
+            "webhook_url": webhook_url,
+            "keywords": keywords,
+            "threshold": threshold,
+        })
+        return self._post("/v1/monitors", json=payload)
+
+    def list_monitors(self) -> dict:
+        """List all monitors for the current user."""
+        return self._get("/v1/monitors")
+
+    def get_monitor(self, monitor_id: str) -> dict:
+        """Get a single monitor by ID."""
+        return self._get(f"/v1/monitors/{monitor_id}")
+
+    def delete_monitor(self, monitor_id: str) -> dict:
+        """Delete a monitor."""
+        return self._delete(f"/v1/monitors/{monitor_id}")
+
+    # ------------------------------------------------------------------
+    # Webhooks
+    # ------------------------------------------------------------------
+
+    def list_webhooks(self, *, page: int = 1, per_page: int = 20) -> dict:
+        """List webhook delivery history."""
+        return self._get("/v1/webhooks", params={"page": page, "per_page": per_page})
+
+    # ------------------------------------------------------------------
+    # Proxy Settings
+    # ------------------------------------------------------------------
+
+    def list_proxies(self) -> dict:
+        """List configured proxies."""
+        return self._get("/v1/settings/proxies")
+
+    def set_proxy(self, config: dict) -> dict:
+        """Add or update proxy configuration.
+
+        Args:
+            config: Proxy configuration dict with url, username, password, etc.
+        """
+        return self._post("/v1/settings/proxies", json=config)
+
+    # ------------------------------------------------------------------
+    # Quota
+    # ------------------------------------------------------------------
+
+    def get_quota(self) -> dict:
+        """Get the current user's usage quota and remaining allowance."""
+        return self._get("/v1/usage/stats")
+
+    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
@@ -1019,11 +1158,13 @@ class AsyncWebHarvest:
         api_url: str = "http://localhost:8000",
         api_key: str | None = None,
         timeout: float = 60.0,
+        max_retries: int = 3,
     ) -> None:
         self._api_url = api_url.rstrip("/")
         self._api_key = api_key
         self._token: str | None = None
         self._client = httpx.AsyncClient(timeout=timeout)
+        self._max_retries = max_retries
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -1040,16 +1181,35 @@ class AsyncWebHarvest:
         json: dict | None = None,
         params: dict | None = None,
     ) -> dict:
+        """Execute an HTTP request with retry logic."""
+        import asyncio as _asyncio
+
         url = f"{self._api_url}{path}"
-        response = await self._client.request(
-            method,
-            url,
-            json=json,
-            params=params,
-            headers=self._headers(),
-        )
-        _raise_for_status(response)
-        return response.json()
+        last_exc: Exception | None = None
+        for attempt in range(self._max_retries):
+            try:
+                response = await self._client.request(
+                    method,
+                    url,
+                    json=json,
+                    params=params,
+                    headers=self._headers(),
+                )
+                _raise_for_status(response)
+                return response.json()
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                last_exc = e
+                if attempt < self._max_retries - 1:
+                    await _asyncio.sleep(min(2 ** attempt, 10))
+                    continue
+                raise
+            except ServerError as e:
+                last_exc = e
+                if attempt < self._max_retries - 1:
+                    await _asyncio.sleep(min(2 ** attempt, 10))
+                    continue
+                raise
+        raise last_exc  # type: ignore[misc]
 
     async def _get(self, path: str, *, params: dict | None = None) -> dict:
         return await self._request("GET", path, params=params)
@@ -1583,6 +1743,98 @@ class AsyncWebHarvest:
         """Manually trigger a schedule to run immediately."""
         data = await self._post(f"/v1/schedules/{schedule_id}/trigger")
         return ScheduleTrigger(**data)
+
+    # ------------------------------------------------------------------
+    # Extract
+    # ------------------------------------------------------------------
+
+    async def extract(
+        self,
+        urls: list[str],
+        prompt: str,
+        *,
+        schema: dict | None = None,
+        provider: str | None = None,
+        only_main_content: bool = True,
+        webhook_url: str | None = None,
+        webhook_secret: str | None = None,
+    ) -> dict:
+        """Submit a multi-URL LLM extraction job."""
+        payload = _strip_none({
+            "urls": urls,
+            "prompt": prompt,
+            "schema_": schema,
+            "provider": provider,
+            "only_main_content": only_main_content,
+            "webhook_url": webhook_url,
+            "webhook_secret": webhook_secret,
+        })
+        return await self._post("/v1/extract", json=payload)
+
+    # ------------------------------------------------------------------
+    # Monitors
+    # ------------------------------------------------------------------
+
+    async def create_monitor(
+        self,
+        url: str,
+        *,
+        check_interval_minutes: int = 60,
+        css_selector: str | None = None,
+        webhook_url: str | None = None,
+        keywords: list[str] | None = None,
+        threshold: float | None = None,
+    ) -> dict:
+        """Create a URL change monitor."""
+        payload = _strip_none({
+            "url": url,
+            "check_interval_minutes": check_interval_minutes,
+            "css_selector": css_selector,
+            "webhook_url": webhook_url,
+            "keywords": keywords,
+            "threshold": threshold,
+        })
+        return await self._post("/v1/monitors", json=payload)
+
+    async def list_monitors(self) -> dict:
+        """List all monitors for the current user."""
+        return await self._get("/v1/monitors")
+
+    async def get_monitor(self, monitor_id: str) -> dict:
+        """Get a single monitor by ID."""
+        return await self._get(f"/v1/monitors/{monitor_id}")
+
+    async def delete_monitor(self, monitor_id: str) -> dict:
+        """Delete a monitor."""
+        return await self._delete(f"/v1/monitors/{monitor_id}")
+
+    # ------------------------------------------------------------------
+    # Webhooks
+    # ------------------------------------------------------------------
+
+    async def list_webhooks(self, *, page: int = 1, per_page: int = 20) -> dict:
+        """List webhook delivery history."""
+        return await self._get("/v1/webhooks", params={"page": page, "per_page": per_page})
+
+    # ------------------------------------------------------------------
+    # Proxy Settings
+    # ------------------------------------------------------------------
+
+    async def list_proxies(self) -> dict:
+        """List configured proxies."""
+        return await self._get("/v1/settings/proxies")
+
+    async def set_proxy(self, config: dict) -> dict:
+        """Add or update proxy configuration."""
+        return await self._post("/v1/settings/proxies", json=config)
+
+    # ------------------------------------------------------------------
+    # Quota
+    # ------------------------------------------------------------------
+
+    async def get_quota(self) -> dict:
+        """Get the current user's usage quota and remaining allowance."""
+        return await self._get("/v1/usage/stats")
 
     # ------------------------------------------------------------------
     # Lifecycle
