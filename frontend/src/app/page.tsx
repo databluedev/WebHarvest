@@ -157,50 +157,50 @@ export default function HomePage() {
           <div className="min-h-screen flex flex-col">
             <div className={cn(
               "flex-1 flex flex-col max-w-6xl mx-auto w-full px-6 lg:px-8 transition-all duration-500",
-              !hasRuns && jobsLoaded ? "justify-center" : "pt-4"
+              !hasRuns && jobsLoaded ? "justify-center" : "pt-6"
             )}>
               {/* Mode Switcher */}
-              <div className={cn("animate-float-in", hasRuns ? "pb-6" : "pb-8")}>
+              <div className={cn("animate-float-in", hasRuns ? "pb-8" : "pb-10")}>
                 <ModeSwitcher />
               </div>
 
               {/* URL Input */}
-              <section className={cn("max-w-2xl mx-auto w-full animate-float-in", hasRuns ? "mb-10" : "mb-4")} style={{ animationDelay: "0.05s" }}>
-                <div className="rounded-2xl border border-primary/15 bg-card/80 backdrop-blur-sm p-4 shadow-xl shadow-primary/5">
-                  <div className="flex items-center gap-0 rounded-xl bg-background border border-border/50 px-4 h-12 mb-3 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/25 transition-all">
-                    <span className="text-sm text-muted-foreground shrink-0 select-none font-mono">https://</span>
+              <section className={cn("max-w-2xl mx-auto w-full animate-float-in", hasRuns ? "mb-10" : "mb-6")} style={{ animationDelay: "0.05s" }}>
+                <div className="rounded-2xl border border-primary/15 bg-card/80 backdrop-blur-sm p-5 shadow-xl shadow-primary/5">
+                  <div className="flex items-center gap-0 rounded-xl bg-background border border-border/50 px-5 h-14 mb-4 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/25 transition-all">
+                    <span className="text-base text-muted-foreground shrink-0 select-none font-mono">https://</span>
                     <input
                       type="text" value={url} onChange={(e) => setUrl(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && !loading && handleScrape()}
                       placeholder="example.com"
-                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 ml-1"
+                      className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground/50 ml-1"
                     />
-                    <Crosshair className="h-4 w-4 text-primary/40 shrink-0 ml-2" />
+                    <Crosshair className="h-5 w-5 text-primary/40 shrink-0 ml-2" />
                   </div>
 
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => router.push("/playground?endpoint=scrape")} className="h-8 w-8 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="Advanced settings">
-                        <SlidersHorizontal className="h-3.5 w-3.5" />
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => router.push("/playground?endpoint=scrape")} className="h-10 w-10 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="Advanced settings">
+                        <SlidersHorizontal className="h-[18px] w-[18px]" />
                       </button>
-                      <button onClick={() => router.push("/playground?endpoint=batch")} className="h-8 w-8 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="Batch mode">
-                        <Boxes className="h-3.5 w-3.5" />
+                      <button onClick={() => router.push("/playground?endpoint=batch")} className="h-10 w-10 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="Batch mode">
+                        <Boxes className="h-[18px] w-[18px]" />
                       </button>
-                      <button onClick={() => router.push("/docs")} className="h-8 w-8 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="API Docs">
-                        <FileCode className="h-3.5 w-3.5" />
+                      <button onClick={() => router.push("/docs")} className="h-10 w-10 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="API Docs">
+                        <FileCode className="h-[18px] w-[18px]" />
                       </button>
 
                       <div className="relative">
-                        <button onClick={() => setShowFormatDropdown(!showFormatDropdown)} className="flex items-center gap-1.5 h-8 rounded-lg bg-muted/60 px-2.5 text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
-                          <FileText className="h-3.5 w-3.5" />
+                        <button onClick={() => setShowFormatDropdown(!showFormatDropdown)} className="flex items-center gap-2 h-10 rounded-lg bg-muted/60 px-3.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
+                          <FileText className="h-[18px] w-[18px]" />
                           <span>{selectedFormat.charAt(0).toUpperCase() + selectedFormat.slice(1)}</span>
-                          <ChevronDown className="h-3 w-3 opacity-60" />
+                          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
                         </button>
                         {showFormatDropdown && (
-                          <div className="absolute top-10 left-0 z-50 w-44 rounded-xl border border-border/60 bg-card shadow-xl p-1 animate-scale-in">
+                          <div className="absolute top-12 left-0 z-50 w-48 rounded-xl border border-border/60 bg-card shadow-xl p-1.5 animate-scale-in">
                             {["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"].map((fmt) => (
-                              <button key={fmt} onClick={() => { setSelectedFormat(fmt); setShowFormatDropdown(false); }} className={cn("flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-[12px] transition-all", selectedFormat === fmt ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground")}>
-                                {(() => { const FIcon = formatIcons[fmt]?.icon; return FIcon ? <FIcon className="h-3 w-3" /> : null; })()}
+                              <button key={fmt} onClick={() => { setSelectedFormat(fmt); setShowFormatDropdown(false); }} className={cn("flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm transition-all", selectedFormat === fmt ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground")}>
+                                {(() => { const FIcon = formatIcons[fmt]?.icon; return FIcon ? <FIcon className="h-4 w-4" /> : null; })()}
                                 {fmt.charAt(0).toUpperCase() + fmt.slice(1).replace("_", " ")}
                               </button>
                             ))}
@@ -209,13 +209,13 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <button onClick={handleGetCode} className="flex items-center gap-1.5 h-8 rounded-lg px-3 text-[12px] font-medium text-muted-foreground hover:text-foreground border border-border/50 hover:bg-muted/50 transition-all">
-                        <Code className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-3">
+                      <button onClick={handleGetCode} className="flex items-center gap-2 h-10 rounded-lg px-4 text-sm font-medium text-muted-foreground hover:text-foreground border border-border/50 hover:bg-muted/50 transition-all">
+                        <Code className="h-[18px] w-[18px]" />
                         <span className="hidden sm:inline">Get code</span>
                       </button>
-                      <button onClick={handleScrape} disabled={loading || !url.trim()} className="flex items-center gap-1.5 h-8 rounded-lg px-4 text-[12px] font-bold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-primary/15">
-                        {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Start scraping</>}
+                      <button onClick={handleScrape} disabled={loading || !url.trim()} className="flex items-center gap-2 h-11 rounded-lg px-6 text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-primary/15">
+                        {loading ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <>Start scraping</>}
                       </button>
                     </div>
                   </div>
@@ -225,17 +225,17 @@ export default function HomePage() {
               {/* Recent Runs */}
               {hasRuns && (
                 <section className="animate-float-in" style={{ animationDelay: "0.1s" }}>
-                  <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
-                      <h2 className="text-lg font-bold tracking-tight">Recent Runs</h2>
+                      <h2 className="text-xl font-bold tracking-tight">Recent Runs</h2>
                       <div className="h-px flex-1 bg-gradient-to-r from-border to-transparent min-w-[40px]" />
                     </div>
-                    <Link href="/jobs" className="text-[12px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 font-medium">
-                      View all <ArrowRight className="h-3 w-3" />
+                    <Link href="/jobs" className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 font-medium">
+                      View all <ArrowRight className="h-4 w-4" />
                     </Link>
                   </div>
 
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 stagger-children">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
                     {recentJobs.map((job) => {
                       const jobUrl = getJobUrl(job);
                       const domain = getDomain(jobUrl);
@@ -248,45 +248,45 @@ export default function HomePage() {
                         <div key={job.id} className="rounded-xl border border-border/50 bg-card/70 hover:bg-card transition-all duration-200 group overflow-hidden">
                           <div className="h-[2px] bg-primary" />
                           <Link href={getJobDetailPath(job)}>
-                            <div className="flex items-center justify-between px-4 pt-3 pb-2.5">
-                              <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex items-center justify-between px-5 pt-4 pb-3">
+                              <div className="flex items-center gap-2.5 min-w-0">
                                 {jobUrl && !jobUrl.includes("URLs") && (
-                                  <img src={getFavicon(jobUrl)} alt="" className="h-4 w-4 rounded-sm shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                                  <img src={getFavicon(jobUrl)} alt="" className="h-5 w-5 rounded-sm shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                                 )}
-                                <span className="text-sm font-semibold truncate">{domain || "No URL"}</span>
+                                <span className="text-base font-semibold truncate">{domain || "No URL"}</span>
                               </div>
-                              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors shrink-0" />
+                              <ExternalLink className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors shrink-0" />
                             </div>
-                            <div className="px-4 pb-3 space-y-2">
+                            <div className="px-5 pb-4 space-y-2.5">
                               <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5">
-                                  <TypeIcon className="h-3.5 w-3.5 text-primary" />
-                                  <span className="text-[11px] font-bold uppercase tracking-wider text-primary">{job.type}</span>
+                                <div className="flex items-center gap-2">
+                                  <TypeIcon className="h-[18px] w-[18px] text-primary" />
+                                  <span className="text-[13px] font-bold uppercase tracking-wider text-primary">{job.type}</span>
                                 </div>
-                                <div className="flex items-center gap-1.5">
-                                  <div className={cn("h-1.5 w-1.5 rounded-full", job.status === "completed" ? "bg-emerald-400" : job.status === "failed" ? "bg-red-400" : job.status === "running" ? "bg-amber-400 animate-pulse" : "bg-muted-foreground")} />
-                                  <span className="text-[11px] font-medium text-muted-foreground capitalize">{job.status === "completed" ? "Done" : job.status}</span>
+                                <div className="flex items-center gap-2">
+                                  <div className={cn("h-2 w-2 rounded-full", job.status === "completed" ? "bg-emerald-400" : job.status === "failed" ? "bg-red-400" : job.status === "running" ? "bg-amber-400 animate-pulse" : "bg-muted-foreground")} />
+                                  <span className="text-[13px] font-medium text-muted-foreground capitalize">{job.status === "completed" ? "Done" : job.status}</span>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1.5 text-muted-foreground">
-                                <Clock className="h-3 w-3" />
-                                <span className="text-[11px] font-medium">{date} {time}</span>
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Clock className="h-4 w-4" />
+                                <span className="text-[13px] font-medium">{date} {time}</span>
                               </div>
                               {jobFormats.length > 0 && (
-                                <div className="flex flex-wrap gap-1 pt-0.5">
+                                <div className="flex flex-wrap gap-1.5 pt-0.5">
                                   {jobFormats.slice(0, 4).map((fmt: string) => {
                                     const fmtInfo = formatIcons[fmt];
                                     const FmtIcon = fmtInfo?.icon || FileText;
-                                    return (<span key={fmt} className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider"><FmtIcon className="h-2.5 w-2.5" /> {fmtInfo?.label || fmt}</span>);
+                                    return (<span key={fmt} className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider"><FmtIcon className="h-3 w-3" /> {fmtInfo?.label || fmt}</span>);
                                   })}
                                 </div>
                               )}
                             </div>
                           </Link>
                           {isCompleted && (
-                            <div className="px-4 pb-3 pt-0">
-                              <button onClick={(e) => { e.preventDefault(); handleDownload(job); }} className="flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg text-[11px] font-bold transition-all border border-primary/20 text-primary hover:bg-primary/10">
-                                <Download className="h-3 w-3" /> Download JSON
+                            <div className="px-5 pb-4 pt-0">
+                              <button onClick={(e) => { e.preventDefault(); handleDownload(job); }} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-bold transition-all border border-primary/20 text-primary hover:bg-primary/10">
+                                <Download className="h-[18px] w-[18px]" /> Download JSON
                               </button>
                             </div>
                           )}
@@ -299,7 +299,7 @@ export default function HomePage() {
 
               {!hasRuns && jobsLoaded && (
                 <div className="text-center py-4 animate-fade-in">
-                  <p className="text-[13px] text-muted-foreground font-medium">Your runs will appear here</p>
+                  <p className="text-base text-muted-foreground font-medium">Your runs will appear here</p>
                 </div>
               )}
             </div>
