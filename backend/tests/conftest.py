@@ -55,6 +55,8 @@ from app.models.api_key import ApiKey  # noqa: E402
 from app.models.job import Job  # noqa: E402
 from app.models.job_result import JobResult  # noqa: E402
 from app.models.schedule import Schedule  # noqa: E402
+from app.models.monitor import Monitor, MonitorCheck  # noqa: E402
+from app.models.llm_key import LLMKey  # noqa: E402
 from app.core.security import hash_password, create_access_token  # noqa: E402
 
 

@@ -23,6 +23,9 @@ import {
   Save,
   CheckCircle2,
   Globe,
+  Search,
+  CalendarClock,
+  Activity,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -42,11 +45,29 @@ const TIMEZONES = [
   "Asia/Shanghai", "Asia/Kolkata", "Australia/Sydney", "America/Sao_Paulo",
 ];
 
+function cronToHuman(cron: string): string {
+  const presetMap: Record<string, string> = {
+    "0 * * * *": "Every hour",
+    "0 */6 * * *": "Every 6 hours",
+    "0 */12 * * *": "Every 12 hours",
+    "0 0 * * *": "Daily at midnight",
+    "0 9 * * *": "Daily at 9:00 AM",
+    "0 0 * * 1": "Weekly on Monday",
+    "0 0 * * 0": "Weekly on Sunday",
+    "*/5 * * * *": "Every 5 minutes",
+    "*/15 * * * *": "Every 15 minutes",
+    "*/30 * * * *": "Every 30 minutes",
+  };
+  return presetMap[cron] || cron;
+}
+
 export default function SchedulesPage() {
   const router = useRouter();
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("all");
 
   // Create form state
   const [name, setName] = useState("");
@@ -185,7 +206,12 @@ export default function SchedulesPage() {
         <div className="p-8 max-w-5xl mx-auto">
           <div className="flex items-center justify-between mb-8 animate-float-in">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Schedules</h1>
+              <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-primary/10 grid place-items-center">
+                  <Clock className="h-4.5 w-4.5 text-primary" />
+                </div>
+                Schedules
+              </h1>
               <p className="text-muted-foreground mt-1">
                 Set up recurring scrapes, crawls, and batch jobs
               </p>
@@ -195,6 +221,60 @@ export default function SchedulesPage() {
               New Schedule
             </Button>
           </div>
+
+          {/* Summary Stats */}
+          {schedules.length > 0 && (
+            <div className="mb-6 grid grid-cols-4 gap-4">
+              <div className="rounded-2xl border border-border/40 bg-card p-4 text-center">
+                <p className="text-2xl font-bold tabular-nums">{schedules.length}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Total</p>
+              </div>
+              <div className="rounded-2xl border border-border/40 bg-card p-4 text-center">
+                <p className="text-2xl font-bold tabular-nums">{schedules.filter((s: any) => s.is_active).length}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Active</p>
+              </div>
+              <div className="rounded-2xl border border-border/40 bg-card p-4 text-center">
+                <p className="text-2xl font-bold tabular-nums">{schedules.reduce((sum: number, s: any) => sum + (s.run_count || 0), 0)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Total Runs</p>
+              </div>
+              <div className="rounded-2xl border border-border/40 bg-card p-4 text-center">
+                <p className="text-sm font-medium text-primary truncate">
+                  {schedules.find((s: any) => s.is_active && s.next_run_human)?.next_run_human || "—"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Next Run</p>
+              </div>
+            </div>
+          )}
+
+          {/* Search & Filter Bar */}
+          {schedules.length > 0 && (
+            <div className="mb-4 flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search schedules..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <div className="flex items-center rounded-lg border border-border/40 p-0.5">
+                {(["all", "active", "paused"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setStatusFilter(filter)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      statusFilter === filter
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {filter === "all" ? "All" : filter === "active" ? "Active" : "Paused"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Create Form */}
           {showCreate && (
@@ -329,154 +409,176 @@ export default function SchedulesPage() {
           )}
 
           {/* Schedule List */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Your Schedules</CardTitle>
-              <CardDescription>{schedules.length} schedule(s)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          {(() => {
+            const filteredSchedules = schedules.filter((s: any) => {
+              const matchesSearch = !searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase());
+              const matchesStatus = statusFilter === "all" || (statusFilter === "active" && s.is_active) || (statusFilter === "paused" && !s.is_active);
+              return matchesSearch && matchesStatus;
+            });
+
+            if (loading) {
+              return (
+                <div className="rounded-2xl border border-border/40 bg-card">
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
                 </div>
-              ) : schedules.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <Clock className="h-12 w-12 text-muted-foreground/40 mb-4" />
-                  <p className="text-sm text-muted-foreground">
-                    No schedules yet. Create one to automate your scraping.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {schedules.map((s) => (
-                    <div key={s.id} className="rounded-md border p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{s.name}</span>
-                            <Badge variant={s.is_active ? "success" : "outline"} className="text-xs">
-                              {s.is_active ? "Active" : "Paused"}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {s.schedule_type}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                            <code>{s.cron_expression}</code>
-                            <span>{s.run_count} runs</span>
-                            {s.next_run_human && s.is_active && (
-                              <span>Next: {s.next_run_human}</span>
-                            )}
-                            {s.last_run_at && (
-                              <span>Last: {new Date(s.last_run_at).toLocaleString()}</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 ml-4">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => startEditing(s)}
-                            title="Edit"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleTrigger(s.id)}
-                            title="Run now"
-                          >
-                            <Zap className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleToggle(s.id, s.is_active)}
-                            title={s.is_active ? "Pause" : "Resume"}
-                          >
-                            {s.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                          </Button>
-                          <Link href={`/schedules/${s.id}`}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(s.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      {editingSchedule === s.id && (
-                        <div className="mt-4 pt-4 border-t border-border space-y-3">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <label className="text-xs font-medium">Name</label>
-                              <Input
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-xs font-medium">Cron Expression</label>
-                              <Input
-                                value={editCron}
-                                onChange={(e) => setEditCron(e.target.value)}
-                                className="font-mono"
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                              <label className="text-xs font-medium">Timezone</label>
-                              <select
-                                value={editTimezone}
-                                onChange={(e) => setEditTimezone(e.target.value)}
-                                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                              >
-                                {TIMEZONES.map((tz) => (
-                                  <option key={tz} value={tz}>{tz}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-xs font-medium">Webhook URL</label>
-                              <Input
-                                value={editWebhookUrl}
-                                onChange={(e) => setEditWebhookUrl(e.target.value)}
-                              />
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => handleSaveEdit(s.id)}
-                              disabled={editSaving}
-                              className="gap-1"
-                            >
-                              {editSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                              Save
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => setEditingSchedule(null)}>
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      )}
+              );
+            }
+
+            if (schedules.length === 0) {
+              return (
+                <div className="rounded-2xl border border-border/40 bg-card">
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="h-14 w-14 rounded-2xl bg-primary/10 grid place-items-center mb-4">
+                      <Clock className="h-7 w-7 text-primary/60" />
                     </div>
-                  ))}
+                    <p className="text-sm font-medium mb-1">No schedules yet</p>
+                    <p className="text-xs text-muted-foreground max-w-sm">
+                      Create a schedule to automate your scraping, crawling, and batch jobs.
+                    </p>
+                    <Button onClick={() => setShowCreate(true)} className="mt-6 gap-2" size="sm">
+                      <Plus className="h-4 w-4" />
+                      Create your first schedule
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              );
+            }
+
+            if (filteredSchedules.length === 0) {
+              return (
+                <div className="rounded-2xl border border-border/40 bg-card">
+                  <div className="p-12 flex flex-col items-center justify-center text-center">
+                    <Search className="h-8 w-8 text-muted-foreground/30 mb-3" />
+                    <p className="text-sm font-medium mb-1">No schedules match your filter</p>
+                    <p className="text-xs text-muted-foreground">Try adjusting your search or filter criteria</p>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div className="space-y-3 stagger-children">
+                {filteredSchedules.map((s: any) => {
+                  const configUrl = s.config?.url || s.config?.urls?.[0] || "";
+                  let faviconHost = "";
+                  try { faviconHost = new URL(configUrl).hostname; } catch {}
+
+                  return (
+                    <div key={s.id} className="rounded-2xl border border-border/40 bg-card hover:border-border/60 transition-all duration-200">
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`h-2 w-2 rounded-full shrink-0 ${s.is_active ? "bg-emerald-400" : "bg-muted-foreground/40"}`} />
+                              <span className="text-sm font-semibold tracking-tight">{s.name}</span>
+                              <Badge variant={s.is_active ? "success" : "outline"} className="text-[10px]">
+                                {s.is_active ? "Active" : "Paused"}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px]">
+                                {s.schedule_type}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              {faviconHost && (
+                                <img
+                                  src={`https://www.google.com/s2/favicons?domain=${faviconHost}&sz=16`}
+                                  alt=""
+                                  className="h-3.5 w-3.5 rounded-sm shrink-0"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              )}
+                              {configUrl && (
+                                <span className="text-xs font-mono text-foreground/60 truncate max-w-[300px]">{configUrl}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
+                              <span className="flex items-center gap-1">
+                                <CalendarClock className="h-3 w-3" />
+                                {cronToHuman(s.cron_expression)}
+                              </span>
+                              <code className="text-[10px] bg-muted px-1.5 py-0.5 rounded">{s.cron_expression}</code>
+                              <span className="flex items-center gap-1">
+                                <Activity className="h-3 w-3" />
+                                {s.run_count} runs
+                              </span>
+                              {s.next_run_human && s.is_active && (
+                                <span className="text-primary">Next: {s.next_run_human}</span>
+                              )}
+                              {s.last_run_at && (
+                                <span>Last: {new Date(s.last_run_at).toLocaleString()}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEditing(s)} title="Edit">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTrigger(s.id)} title="Run now">
+                              <Zap className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleToggle(s.id, s.is_active)} title={s.is_active ? "Pause" : "Resume"}>
+                              {s.is_active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                            </Button>
+                            <Link href={`/schedules/${s.id}`}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(s.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        {editingSchedule === s.id && (
+                          <div className="mt-4 pt-4 border-t border-border/50 space-y-3 animate-fade-in">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-xs font-medium">Name</label>
+                                <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-medium">Cron Expression</label>
+                                <Input value={editCron} onChange={(e) => setEditCron(e.target.value)} className="font-mono" />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-xs font-medium">Timezone</label>
+                                <select
+                                  value={editTimezone}
+                                  onChange={(e) => setEditTimezone(e.target.value)}
+                                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                                >
+                                  {TIMEZONES.map((tz) => (
+                                    <option key={tz} value={tz}>{tz}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-medium">Webhook URL</label>
+                                <Input value={editWebhookUrl} onChange={(e) => setEditWebhookUrl(e.target.value)} />
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={() => handleSaveEdit(s.id)} disabled={editSaving} className="gap-1">
+                                {editSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                                Save
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setEditingSchedule(null)}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       </main>
     </div>

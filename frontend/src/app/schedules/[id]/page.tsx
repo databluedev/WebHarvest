@@ -177,12 +177,15 @@ export default function ScheduleDetailPage() {
             </Link>
             <div className="flex-1">
               <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-xl bg-primary/10 grid place-items-center">
+                  <Clock className="h-4.5 w-4.5 text-primary" />
+                </div>
                 <h1 className="text-3xl font-bold tracking-tight">{schedule.name}</h1>
                 <Badge variant={schedule.is_active ? "success" : "outline"}>
                   {schedule.is_active ? "Active" : "Paused"}
                 </Badge>
               </div>
-              <p className="text-muted-foreground mt-1">
+              <p className="text-muted-foreground mt-1 ml-12">
                 {schedule.schedule_type} schedule
               </p>
             </div>
@@ -329,9 +332,28 @@ export default function ScheduleDetailPage() {
               <CardTitle className="text-lg">Configuration</CardTitle>
             </CardHeader>
             <CardContent>
-              <pre className="bg-muted rounded-md p-4 text-sm font-mono overflow-x-auto">
-                {JSON.stringify(schedule.config, null, 2)}
-              </pre>
+              {schedule.config && typeof schedule.config === "object" ? (
+                <div className="space-y-2">
+                  {Object.entries(schedule.config).map(([key, value]) => (
+                    <div key={key} className="flex items-start gap-3 rounded-lg bg-muted/50 px-4 py-2.5">
+                      <span className="text-xs font-medium text-muted-foreground min-w-[120px] pt-0.5">
+                        {key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                      </span>
+                      <span className="text-sm font-mono break-all">
+                        {Array.isArray(value)
+                          ? (value as string[]).join(", ")
+                          : typeof value === "object" && value !== null
+                            ? JSON.stringify(value, null, 2)
+                            : String(value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <pre className="bg-muted rounded-md p-4 text-sm font-mono overflow-x-auto">
+                  {JSON.stringify(schedule.config, null, 2)}
+                </pre>
+              )}
             </CardContent>
           </Card>
 

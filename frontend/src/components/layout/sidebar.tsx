@@ -23,6 +23,8 @@ import {
   Sun,
   Monitor,
   Activity,
+  Eye,
+  Clock,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -47,6 +49,8 @@ const navSections = [
     label: "Management",
     items: [
       { href: "/jobs", label: "Jobs", icon: History },
+      { href: "/monitors", label: "Monitors", icon: Eye },
+      { href: "/schedules", label: "Schedules", icon: Clock },
       { href: "/dashboard", label: "Activity Logs", icon: Activity },
     ],
   },

@@ -54,3 +54,12 @@ coverage/
 # Celery
 celerybeat-schedule
 celerybeat.pid
+
+# AI tools
+.agent/
+.agents/
+.claude/
+.windsurf/
+
+# TypeScript build artifacts
+*.tsbuildinfo

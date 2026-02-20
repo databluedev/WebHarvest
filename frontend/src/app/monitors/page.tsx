@@ -25,6 +25,7 @@ import {
   History,
   Activity,
   Pencil,
+  Search,
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot } from "recharts";
 
@@ -172,6 +173,10 @@ export default function MonitorsPage() {
   // History pagination
   const [historyTotal, setHistoryTotal] = useState<Record<string, number>>({});
   const [historyOffset, setHistoryOffset] = useState<Record<string, number>>({});
+
+  // Search & filter
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("all");
 
   // ── Auth check & initial load ────────────────────────────
 
@@ -374,6 +379,12 @@ export default function MonitorsPage() {
   const showKeywordsField =
     formNotifyOn === "keyword_added" || formNotifyOn === "keyword_removed";
 
+  const filteredMonitors = monitors.filter((m) => {
+    const matchesSearch = !searchQuery || m.name.toLowerCase().includes(searchQuery.toLowerCase()) || m.url.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === "all" || (statusFilter === "active" && m.is_active) || (statusFilter === "paused" && !m.is_active);
+    return matchesSearch && matchesStatus;
+  });
+
   return (
     <SidebarProvider>
     <div className="flex h-screen">
@@ -419,24 +430,48 @@ export default function MonitorsPage() {
           {/* Summary Stats */}
           {monitors.length > 0 && (
             <div className="mb-6 grid grid-cols-3 gap-4">
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <p className="text-2xl font-bold">{monitors.filter((m) => m.is_active).length}</p>
-                  <p className="text-xs text-muted-foreground">Active Monitors</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <p className="text-2xl font-bold">{monitors.reduce((sum, m) => sum + (m.total_checks ?? 0), 0)}</p>
-                  <p className="text-xs text-muted-foreground">Total Checks</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <p className="text-2xl font-bold">{monitors.reduce((sum, m) => sum + (m.total_changes ?? 0), 0)}</p>
-                  <p className="text-xs text-muted-foreground">Total Changes</p>
-                </CardContent>
-              </Card>
+              <div className="rounded-2xl border border-border/40 bg-card p-4 text-center">
+                <p className="text-2xl font-bold tabular-nums">{monitors.filter((m) => m.is_active).length}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Active Monitors</p>
+              </div>
+              <div className="rounded-2xl border border-border/40 bg-card p-4 text-center">
+                <p className="text-2xl font-bold tabular-nums">{monitors.reduce((sum, m) => sum + (m.total_checks ?? 0), 0)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Total Checks</p>
+              </div>
+              <div className="rounded-2xl border border-border/40 bg-card p-4 text-center">
+                <p className="text-2xl font-bold tabular-nums">{monitors.reduce((sum, m) => sum + (m.total_changes ?? 0), 0)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Total Changes</p>
+              </div>
+            </div>
+          )}
+
+          {/* Search & Filter Bar */}
+          {monitors.length > 0 && (
+            <div className="mb-4 flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search monitors by name or URL..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <div className="flex items-center rounded-lg border border-border/40 p-0.5">
+                {(["all", "active", "paused"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setStatusFilter(filter)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      statusFilter === filter
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {filter === "all" ? "All" : filter === "active" ? "Active" : "Paused"}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -622,7 +657,7 @@ export default function MonitorsPage() {
                 <p className="text-sm text-muted-foreground">Loading monitors...</p>
               </div>
             </div>
-          ) : monitors.length === 0 ? (
+          ) : filteredMonitors.length === 0 && monitors.length === 0 ? (
             <div className="rounded-2xl">
               <div className="p-16 flex flex-col items-center justify-center text-center">
                 <div className="h-14 w-14 rounded-2xl bg-primary/10 grid place-items-center mb-4">
@@ -642,22 +677,31 @@ export default function MonitorsPage() {
                 </Button>
               </div>
             </div>
+          ) : filteredMonitors.length === 0 ? (
+            <div className="rounded-2xl border border-border/40 bg-card">
+              <div className="p-12 flex flex-col items-center justify-center text-center">
+                <Search className="h-8 w-8 text-muted-foreground/30 mb-3" />
+                <p className="text-sm font-medium mb-1">No monitors match your filter</p>
+                <p className="text-xs text-muted-foreground">Try adjusting your search or filter criteria</p>
+              </div>
+            </div>
           ) : (
             <div className="space-y-3 stagger-children">
-              {monitors.map((monitor) => {
+              {filteredMonitors.map((monitor) => {
                 const isExpanded = expandedHistory[monitor.id];
                 const checks = historyData[monitor.id] || [];
                 const isHistoryLoading = historyLoading[monitor.id];
                 const currentAction = actionLoading[monitor.id];
 
                 return (
-                  <div key={monitor.id} className="rounded-2xl">
+                  <div key={monitor.id} className="rounded-2xl border border-border/40 bg-card hover:border-border/60 transition-all duration-200">
                     <div className="p-5">
                       {/* Main row */}
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
                           {/* Name & badges */}
                           <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`h-2 w-2 rounded-full shrink-0 ${monitor.is_active ? "bg-emerald-400" : "bg-muted-foreground/40"}`} />
                             <span className="text-sm font-semibold tracking-tight">
                               {monitor.name}
                             </span>
@@ -680,14 +724,20 @@ export default function MonitorsPage() {
                             )}
                           </div>
 
-                          {/* URL */}
+                          {/* URL with favicon */}
                           <a
                             href={monitor.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-mono text-foreground/60 hover:text-primary transition-colors mt-1.5 group"
+                            className="inline-flex items-center gap-1.5 text-xs font-mono text-foreground/60 hover:text-primary transition-colors mt-1.5 group"
                             title={monitor.url}
                           >
+                            <img
+                              src={`https://www.google.com/s2/favicons?domain=${new URL(monitor.url).hostname}&sz=16`}
+                              alt=""
+                              className="h-3.5 w-3.5 rounded-sm shrink-0"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
                             {truncateUrl(monitor.url)}
                             <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </a>
