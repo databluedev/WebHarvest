@@ -1,19 +1,26 @@
 import logging
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from pythonjsonlogger.json import JsonFormatter
 
 from app.api.v1.router import api_router
 from app.api.v1.health import router as health_router
 from app.config import settings
 from app.services.browser import browser_pool
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+# Structured JSON logging
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(JsonFormatter(
+    fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
+    rename_fields={"levelname": "level", "name": "logger", "asctime": "timestamp"},
+))
+logging.root.handlers = [handler]
+logging.root.setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 

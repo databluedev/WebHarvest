@@ -4,7 +4,8 @@ import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronDown, ChevronRight, Search, FileText, Copy, Check } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, FileText, Copy, Check, ExternalLink } from "lucide-react";
+import Link from "next/link";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1374,6 +1375,21 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Playground link helper
+// ---------------------------------------------------------------------------
+
+function getPlaygroundLink(path: string): string | null {
+  const map: Record<string, string> = {
+    "/v1/scrape": "/playground?mode=scrape",
+    "/v1/crawl": "/playground?mode=crawl",
+    "/v1/search": "/playground?mode=search",
+    "/v1/map": "/playground?mode=map",
+    "/v1/batch/scrape": "/playground?mode=batch",
+  };
+  return map[path] || null;
+}
+
+// ---------------------------------------------------------------------------
 // EndpointCard component
 // ---------------------------------------------------------------------------
 
@@ -1411,6 +1427,16 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
           <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
             {endpoint.description}
           </p>
+
+          {getPlaygroundLink(endpoint.path) && (
+            <Link
+              href={getPlaygroundLink(endpoint.path)!}
+              className="inline-flex items-center gap-1.5 mt-3 text-xs font-medium text-primary hover:underline"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Try in Playground
+            </Link>
+          )}
 
           {endpoint.requestBody && (
             <CodeBlock code={endpoint.requestBody} label="Request Body" />

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
-import { Settings as SettingsIcon, Plus, Trash2, Star, Check, Shield, Globe } from "lucide-react";
+import { Settings as SettingsIcon, Plus, Trash2, Star, Check, Shield, Globe, Webhook } from "lucide-react";
 
 const PROVIDERS = [
   { id: "openai", name: "OpenAI", placeholder: "sk-...", defaultModel: "gpt-4o-mini" },
@@ -34,6 +34,11 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
+  // Default webhook state
+  const [defaultWebhookUrl, setDefaultWebhookUrl] = useState("");
+  const [defaultWebhookSecret, setDefaultWebhookSecret] = useState("");
+  const [webhookSaved, setWebhookSaved] = useState(false);
+
   // Proxy state
   const [proxies, setProxies] = useState<any[]>([]);
   const [proxyText, setProxyText] = useState("");
@@ -49,6 +54,11 @@ export default function SettingsPage() {
     }
     loadKeys();
     loadProxies();
+    // Load default webhook from localStorage
+    if (typeof window !== "undefined") {
+      setDefaultWebhookUrl(localStorage.getItem("wh_default_webhook_url") || "");
+      setDefaultWebhookSecret(localStorage.getItem("wh_default_webhook_secret") || "");
+    }
   }, [router]);
 
   const loadKeys = async () => {
@@ -334,6 +344,82 @@ export default function SettingsPage() {
                 <Plus className="h-4 w-4" />
                 {proxyLoading ? "Adding..." : "Add Proxies"}
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Default Webhook */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Webhook className="h-5 w-5 text-primary" />
+                Default Webhook
+              </CardTitle>
+              <CardDescription>
+                Set a default webhook URL and secret that will be auto-applied to new jobs from the playground.
+                Stored locally in your browser.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Webhook URL</label>
+                <Input
+                  placeholder="https://your-server.com/webhook"
+                  value={defaultWebhookUrl}
+                  onChange={(e) => setDefaultWebhookUrl(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Webhook Secret (optional)</label>
+                <Input
+                  type="password"
+                  placeholder="Optional HMAC signing secret"
+                  value={defaultWebhookSecret}
+                  onChange={(e) => setDefaultWebhookSecret(e.target.value)}
+                />
+              </div>
+
+              {webhookSaved && (
+                <div className="rounded-md bg-green-500/10 p-3 text-sm text-green-400 flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Default webhook saved
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      localStorage.setItem("wh_default_webhook_url", defaultWebhookUrl);
+                      localStorage.setItem("wh_default_webhook_secret", defaultWebhookSecret);
+                    }
+                    setWebhookSaved(true);
+                    setTimeout(() => setWebhookSaved(false), 3000);
+                  }}
+                  className="gap-1"
+                >
+                  <Check className="h-4 w-4" />
+                  Save Webhook
+                </Button>
+                {defaultWebhookUrl && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setDefaultWebhookUrl("");
+                      setDefaultWebhookSecret("");
+                      if (typeof window !== "undefined") {
+                        localStorage.removeItem("wh_default_webhook_url");
+                        localStorage.removeItem("wh_default_webhook_secret");
+                      }
+                      setWebhookSaved(true);
+                      setTimeout(() => setWebhookSaved(false), 3000);
+                    }}
+                    className="gap-1"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Clear
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 

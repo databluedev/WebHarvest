@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     MAX_SEARCH_RESULTS: int = 10
     BRAVE_SEARCH_API_KEY: str = ""
 
+    # Data Retention
+    DATA_RETENTION_DAYS: int = 30
+    MONITOR_CHECK_RETENTION_DAYS: int = 90
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

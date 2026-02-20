@@ -51,7 +51,12 @@ class ApiClient {
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({ detail: "Request failed" }));
-      throw new Error(error.detail || `HTTP ${res.status}`);
+      const err: any = new Error(error.detail || `HTTP ${res.status}`);
+      err.status = res.status;
+      if (res.status === 429) {
+        err.retryAfter = parseInt(res.headers.get("Retry-After") || "60", 10);
+      }
+      throw err;
     }
 
     return res.json();
@@ -91,7 +96,28 @@ class ApiClient {
   }
 
   async getMe() {
-    return this.request<{ id: string; email: string; name: string }>("/v1/auth/me");
+    return this.request<{ id: string; email: string; name: string; is_verified: boolean }>("/v1/auth/me");
+  }
+
+  async forgotPassword(email: string) {
+    return this.request<{ message: string; token: string | null }>("/v1/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async resetPassword(token: string, new_password: string) {
+    return this.request<{ success: boolean; message: string }>("/v1/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password }),
+    });
+  }
+
+  async verifyEmail(token: string) {
+    return this.request<{ message: string; verified: boolean }>("/v1/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    });
   }
 
   // ── API Keys ──────────────────────────────────────────────
@@ -597,6 +623,21 @@ class ApiClient {
     return this.request<{ success: boolean; job_id: string }>(`/v1/schedules/${scheduleId}/trigger`, {
       method: "POST",
     });
+  }
+
+  // ── Job Management ──────────────────────────────────────────
+  async retryJob(jobId: string) {
+    return this.request<{
+      success: boolean; message: string;
+      original_job_id: string; new_job_id: string; type: string;
+    }>(`/v1/jobs/${jobId}/retry`, { method: "POST" });
+  }
+
+  async cancelJob(jobId: string) {
+    return this.request<{ success: boolean; message: string; job_id: string }>(
+      `/v1/jobs/${jobId}/cancel`,
+      { method: "POST" },
+    );
   }
 
   // ── SSE ───────────────────────────────────────────────────

@@ -9,7 +9,7 @@ from app.config import settings
 from app.core.database import Base
 
 # Import all models so they're registered with Base.metadata
-from app.models import User, ApiKey, Job, JobResult, LLMKey, ProxyConfig  # noqa
+from app.models import User, ApiKey, Job, JobResult, LLMKey, ProxyConfig, PasswordResetToken, EmailVerificationToken  # noqa
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

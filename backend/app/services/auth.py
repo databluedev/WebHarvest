@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+import logging
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -11,9 +12,16 @@ from app.core.security import (
     create_access_token,
     generate_api_key,
     hash_api_key,
+    generate_reset_token,
+    generate_verification_token,
+    hash_token,
 )
 from app.models.user import User
 from app.models.api_key import ApiKey
+from app.models.password_reset_token import PasswordResetToken
+from app.models.email_verification_token import EmailVerificationToken
+
+logger = logging.getLogger(__name__)
 
 
 async def register_user(db: AsyncSession, email: str, password: str, name: str | None = None) -> User:
@@ -29,6 +37,11 @@ async def register_user(db: AsyncSession, email: str, password: str, name: str |
     )
     db.add(user)
     await db.flush()
+
+    # Create email verification token
+    raw_token = await create_verification_token(db, user.id)
+    logger.info(f"[EMAIL VERIFY] User {email} — verification token: {raw_token}")
+
     return user
 
 
@@ -91,4 +104,93 @@ async def revoke_api_key(db: AsyncSession, user_id: UUID, key_id: UUID) -> bool:
     if not api_key:
         return False
     api_key.is_active = False
+    return True
+
+
+# ── Password Reset ────────────────────────────────────────────
+
+async def create_password_reset_token(db: AsyncSession, email: str) -> str | None:
+    """Create a password reset token. Returns raw token or None if user not found."""
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if not user:
+        return None
+
+    raw_token, token_hash_val = generate_reset_token()
+    reset_token = PasswordResetToken(
+        user_id=user.id,
+        token_hash=token_hash_val,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+    db.add(reset_token)
+    await db.flush()
+
+    logger.info(f"[PASSWORD RESET] User {email} — reset token: {raw_token}")
+    return raw_token
+
+
+async def reset_password(db: AsyncSession, token: str, new_password: str) -> bool:
+    """Validate reset token and update password. Returns True on success."""
+    token_hash_val = hash_token(token)
+    result = await db.execute(
+        select(PasswordResetToken).where(
+            PasswordResetToken.token_hash == token_hash_val,
+            PasswordResetToken.used == False,
+            PasswordResetToken.expires_at > datetime.now(timezone.utc),
+        )
+    )
+    reset_token = result.scalar_one_or_none()
+    if not reset_token:
+        raise BadRequestError("Invalid or expired reset token")
+
+    # Update password
+    user_result = await db.execute(select(User).where(User.id == reset_token.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise BadRequestError("User not found")
+
+    user.password_hash = hash_password(new_password)
+    reset_token.used = True
+    await db.flush()
+    return True
+
+
+# ── Email Verification ────────────────────────────────────────
+
+async def create_verification_token(db: AsyncSession, user_id: UUID) -> str:
+    """Create an email verification token. Returns raw token."""
+    raw_token, token_hash_val = generate_verification_token()
+    verification_token = EmailVerificationToken(
+        user_id=user_id,
+        token_hash=token_hash_val,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+    )
+    db.add(verification_token)
+    await db.flush()
+    return raw_token
+
+
+async def verify_email(db: AsyncSession, token: str) -> bool:
+    """Validate verification token and mark user as verified. Returns True on success."""
+    token_hash_val = hash_token(token)
+    result = await db.execute(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.token_hash == token_hash_val,
+            EmailVerificationToken.used == False,
+            EmailVerificationToken.expires_at > datetime.now(timezone.utc),
+        )
+    )
+    verification_token = result.scalar_one_or_none()
+    if not verification_token:
+        raise BadRequestError("Invalid or expired verification token")
+
+    # Mark user as verified
+    user_result = await db.execute(select(User).where(User.id == verification_token.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise BadRequestError("User not found")
+
+    user.is_verified = True
+    verification_token.used = True
+    await db.flush()
     return True

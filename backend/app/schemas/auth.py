@@ -24,6 +24,7 @@ class UserResponse(BaseModel):
     id: UUID
     email: str
     name: str | None
+    is_verified: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -46,3 +47,26 @@ class ApiKeyResponse(BaseModel):
 
 class ApiKeyCreatedResponse(ApiKeyResponse):
     full_key: str  # Only returned on creation
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+    token: str | None = None  # Included in dev/self-hosted mode for convenience
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class VerifyEmailResponse(BaseModel):
+    message: str
+    verified: bool = True

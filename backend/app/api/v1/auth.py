@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.exceptions import RateLimitError
+from app.core.rate_limiter import check_rate_limit_full
 from app.models.user import User
 from app.schemas.auth import (
     RegisterRequest,
@@ -12,6 +14,11 @@ from app.schemas.auth import (
     ApiKeyCreateRequest,
     ApiKeyResponse,
     ApiKeyCreatedResponse,
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
+    ResetPasswordRequest,
+    VerifyEmailRequest,
+    VerifyEmailResponse,
 )
 from app.services.auth import (
     register_user,
@@ -20,21 +27,58 @@ from app.services.auth import (
     create_api_key_for_user,
     get_user_api_keys,
     revoke_api_key,
+    create_password_reset_token,
+    reset_password,
+    verify_email,
 )
 
 router = APIRouter()
 
 
+def _get_client_ip(request: Request) -> str:
+    """Extract client IP from request, respecting X-Forwarded-For."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 @router.post("/register", response_model=TokenResponse)
-async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    user = await register_user(db, request.email, request.password, request.name)
+async def register(
+    body: RegisterRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    # Rate limit: 5 registrations per minute per IP
+    ip = _get_client_ip(request)
+    rl = await check_rate_limit_full(f"rl:register:{ip}", limit=5, window=60)
+    if not rl.allowed:
+        raise RateLimitError(
+            detail="Too many registration attempts. Try again later.",
+            headers={"Retry-After": str(rl.reset - int(__import__('time').time()))},
+        )
+
+    user = await register_user(db, body.email, body.password, body.name)
     token = await create_user_token(user)
     return TokenResponse(access_token=token)
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
-    user = await authenticate_user(db, request.email, request.password)
+async def login(
+    body: LoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    # Rate limit: 10 login attempts per minute per IP
+    ip = _get_client_ip(request)
+    rl = await check_rate_limit_full(f"rl:login:{ip}", limit=10, window=60)
+    if not rl.allowed:
+        raise RateLimitError(
+            detail="Too many login attempts. Try again later.",
+            headers={"Retry-After": str(rl.reset - int(__import__('time').time()))},
+        )
+
+    user = await authenticate_user(db, body.email, body.password)
     token = await create_user_token(user)
     return TokenResponse(access_token=token)
 
@@ -83,3 +127,56 @@ async def delete_api_key(
         from app.core.exceptions import NotFoundError
         raise NotFoundError("API key not found")
     return {"success": True, "message": "API key revoked"}
+
+
+@router.post("/forgot-password", response_model=ForgotPasswordResponse)
+async def forgot_password(
+    body: ForgotPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    # Rate limit: 5 per minute per IP
+    ip = _get_client_ip(request)
+    rl = await check_rate_limit_full(f"rl:forgot-password:{ip}", limit=5, window=60)
+    if not rl.allowed:
+        raise RateLimitError(
+            detail="Too many password reset requests. Try again later.",
+            headers={"Retry-After": str(rl.reset - int(__import__('time').time()))},
+        )
+
+    raw_token = await create_password_reset_token(db, body.email)
+
+    # Always return success to prevent email enumeration
+    # In self-hosted mode, include token for dev convenience
+    return ForgotPasswordResponse(
+        message="If an account exists with that email, a password reset link has been generated. Check server logs.",
+        token=raw_token,
+    )
+
+
+@router.post("/reset-password")
+async def do_reset_password(
+    body: ResetPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    # Rate limit: 5 per minute per IP
+    ip = _get_client_ip(request)
+    rl = await check_rate_limit_full(f"rl:reset-password:{ip}", limit=5, window=60)
+    if not rl.allowed:
+        raise RateLimitError(
+            detail="Too many password reset attempts. Try again later.",
+            headers={"Retry-After": str(rl.reset - int(__import__('time').time()))},
+        )
+
+    await reset_password(db, body.token, body.new_password)
+    return {"success": True, "message": "Password has been reset successfully"}
+
+
+@router.post("/verify-email", response_model=VerifyEmailResponse)
+async def do_verify_email(
+    body: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    await verify_email(db, body.token)
+    return VerifyEmailResponse(message="Email verified successfully")

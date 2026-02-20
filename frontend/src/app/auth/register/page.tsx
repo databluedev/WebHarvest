@@ -26,7 +26,11 @@ export default function RegisterPage() {
       api.setToken(res.access_token);
       router.push("/");
     } catch (err: any) {
-      setError(err.message || "Registration failed");
+      if (err.status === 429) {
+        setError(`Too many attempts. Try again in ${err.retryAfter || 60} seconds.`);
+      } else {
+        setError(err.message || "Registration failed");
+      }
     } finally {
       setLoading(false);
     }

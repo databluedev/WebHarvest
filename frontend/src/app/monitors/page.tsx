@@ -26,6 +26,7 @@ import {
   Activity,
   Pencil,
 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot } from "recharts";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -886,6 +887,38 @@ export default function MonitorsPage() {
                               Recent Checks
                             </span>
                           </div>
+
+                          {/* Response Time Chart */}
+                          {checks.length >= 2 && (
+                            <div className="mb-4 rounded-xl bg-foreground/[0.02] border border-border/30 p-3">
+                              <div className="text-[11px] text-muted-foreground mb-2 font-medium">Response Time Trend</div>
+                              <ResponsiveContainer width="100%" height={120}>
+                                <LineChart data={[...checks].reverse().map((c) => ({
+                                  time: new Date(c.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                                  ms: c.response_time_ms,
+                                  changed: c.has_changed,
+                                }))}>
+                                  <XAxis dataKey="time" tick={{ fontSize: 10 }} stroke="#666" />
+                                  <YAxis tick={{ fontSize: 10 }} stroke="#666" width={40} />
+                                  <Tooltip
+                                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
+                                    formatter={(val: number) => [`${val}ms`, "Response time"]}
+                                  />
+                                  <Line type="monotone" dataKey="ms" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                                  {[...checks].reverse().map((c, i) => c.has_changed ? (
+                                    <ReferenceDot
+                                      key={c.id}
+                                      x={new Date(c.checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                      y={c.response_time_ms}
+                                      r={4}
+                                      fill="#f59e0b"
+                                      stroke="#f59e0b"
+                                    />
+                                  ) : null)}
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
 
                           {isHistoryLoading ? (
                             <div className="flex items-center justify-center py-6">

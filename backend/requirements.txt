@@ -49,6 +49,9 @@ ddgs>=9.0.0
 # Metrics
 prometheus-client>=0.21.0
 
+# Structured Logging
+python-json-logger>=3.0.0
+
 # Utilities
 python-dotenv>=1.0.0
 uuid6>=2024.7.10

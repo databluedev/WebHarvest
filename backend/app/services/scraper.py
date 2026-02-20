@@ -29,7 +29,24 @@ from app.services.strategy_cache import (
     get_starting_tier,
 )
 
+from app.core.redis import redis_client as _redis
+
 logger = logging.getLogger(__name__)
+
+
+async def domain_throttle(domain: str, delay: float = 1.0) -> None:
+    """Redis-backed per-domain rate limiter. Ensures at least `delay` seconds between requests to the same domain."""
+    key = f"throttle:{domain}"
+    while True:
+        last = await _redis.get(key)
+        if last is None:
+            break
+        wait = float(last) + delay - time.time()
+        if wait <= 0:
+            break
+        await asyncio.sleep(wait)
+    await _redis.set(key, str(time.time()), ex=int(delay * 2) + 1)
+
 
 # Thread pool for CPU-bound content extraction
 _extraction_executor = ThreadPoolExecutor(max_workers=4)
@@ -744,6 +761,11 @@ async def scrape_url(
     url = request.url
     start_time = time.time()
 
+    # Domain throttle — ensure polite delay between requests to same domain
+    domain = urlparse(url).netloc
+    if domain:
+        await domain_throttle(domain)
+
     use_cache = not request.actions and "screenshot" not in request.formats and not request.extract
     if use_cache:
         cached = await get_cached_scrape(url, request.formats)
@@ -1218,6 +1240,46 @@ def classify_error(error: str | None, html: str | None = None, status_code: int 
         return "BLOCKED_BY_WAF"
 
     return None
+
+
+def get_block_reason(html: str | None, status_code: int = 0) -> str:
+    """Return a human-readable block reason based on HTML content and status code."""
+    html_lower = (html or "").lower()
+
+    if status_code == 429:
+        return "Rate limited (429) — the target site is throttling requests. Try again later or use a proxy."
+
+    if any(kw in html_lower for kw in ("cloudflare", "performance & security by", "ray id", "checking your browser")):
+        return "Blocked by Cloudflare WAF — the site is using Cloudflare bot protection."
+
+    if any(kw in html_lower for kw in ("captcha", "recaptcha", "hcaptcha", "verify you are human", "verify you're human")):
+        return "CAPTCHA detected — the site requires human verification. Try using a browser-based strategy or proxy."
+
+    if "datadome" in html_lower:
+        return "Blocked by DataDome — the site uses DataDome bot detection."
+
+    if "perimeterx" in html_lower:
+        return "Blocked by PerimeterX — the site uses PerimeterX bot detection."
+
+    if "sucuri" in html_lower:
+        return "Blocked by Sucuri WAF — the site uses Sucuri firewall protection."
+
+    if "incapsula" in html_lower:
+        return "Blocked by Imperva/Incapsula — the site uses Imperva bot management."
+
+    if any(kw in html_lower for kw in ("akamai", "your connection needs to be verified", "connection is being verified")):
+        return "Blocked by Akamai Bot Manager — the site uses Akamai bot protection."
+
+    if status_code == 403 or "access denied" in html_lower or "403 forbidden" in html_lower:
+        return "Access denied (403) — the site explicitly blocked the request."
+
+    if status_code == 451:
+        return "Unavailable for legal reasons (451) — content restricted in your region."
+
+    if any(kw in html_lower for kw in ("javascript is disabled", "enable javascript", "requires javascript")):
+        return "JavaScript required — the site needs JavaScript execution. A browser-based strategy may work."
+
+    return "All scraping strategies failed — the site may be using advanced bot protection. Try enabling proxy rotation."
 
 
 # ---------------------------------------------------------------------------

@@ -123,6 +123,13 @@ def process_crawl(self, job_id: str, config: dict):
                     async def fetch_one(url: str, depth: int) -> dict | None:
                         async with semaphore:
                             try:
+                                # Domain throttle
+                                from urllib.parse import urlparse as _urlparse
+                                from app.services.scraper import domain_throttle
+                                _domain = _urlparse(url).netloc
+                                if _domain:
+                                    await domain_throttle(_domain)
+
                                 fetch_result = await asyncio.wait_for(
                                     crawler.fetch_page_only(url), timeout=120,
                                 )

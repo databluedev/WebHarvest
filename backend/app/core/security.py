@@ -54,6 +54,25 @@ def hash_api_key(api_key: str) -> str:
     return hashlib.sha256(api_key.encode()).hexdigest()
 
 
+def hash_token(token: str) -> str:
+    """SHA256 hash a raw token for storage."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def generate_reset_token() -> tuple[str, str]:
+    """Generate a password reset token. Returns (raw_token, token_hash)."""
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hash_token(raw_token)
+    return raw_token, token_hash
+
+
+def generate_verification_token() -> tuple[str, str]:
+    """Generate an email verification token. Returns (raw_token, token_hash)."""
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hash_token(raw_token)
+    return raw_token, token_hash
+
+
 def encrypt_value(value: str) -> str:
     return _fernet.encrypt(value.encode()).decode()
 

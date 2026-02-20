@@ -32,6 +32,7 @@ celery_app.conf.update(
         "app.workers.extract_worker.*": {"queue": "scrape"},
         "app.workers.monitor_worker.*": {"queue": "scrape"},
         "app.workers.schedule_worker.*": {"queue": "scrape"},  # Lightweight, reuse scrape queue
+        "app.workers.cleanup_worker.*": {"queue": "scrape"},
     },
     # Celery Beat schedule — periodic tasks
     beat_schedule={
@@ -42,6 +43,10 @@ celery_app.conf.update(
         "check-monitors-every-60s": {
             "task": "app.workers.monitor_worker.check_monitors",
             "schedule": 60.0,  # Every 60 seconds
+        },
+        "cleanup-old-data-daily": {
+            "task": "app.workers.cleanup_worker.cleanup_old_data",
+            "schedule": 86400.0,  # Every 24 hours
         },
     },
 )
@@ -56,4 +61,5 @@ celery_app.conf.include = [
     "app.workers.schedule_worker",
     "app.workers.extract_worker",
     "app.workers.monitor_worker",
+    "app.workers.cleanup_worker",
 ]

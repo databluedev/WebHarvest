@@ -1,5 +1,6 @@
 import logging
-from uuid import UUID
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.models.job import Job
 from app.models.job_result import JobResult
 from app.models.user import User
@@ -66,4 +67,88 @@ async def get_job_result_detail(
         "images": images,
         "extract": r.extract,
         "metadata": page_metadata,
+    }
+
+
+@router.post("/{job_id}/retry")
+async def retry_job(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retry a failed or cancelled job by creating a new job with the same config."""
+    original_job = await db.get(Job, UUID(job_id))
+    if not original_job or original_job.user_id != user.id:
+        raise NotFoundError("Job not found")
+
+    if original_job.status not in ("failed", "cancelled"):
+        raise BadRequestError("Only failed or cancelled jobs can be retried")
+
+    # Create a new job with the same config
+    new_job = Job(
+        id=uuid4(),
+        user_id=user.id,
+        type=original_job.type,
+        status="pending",
+        config=original_job.config,
+        total_pages=original_job.total_pages or 0,
+        completed_pages=0,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(new_job)
+    await db.flush()
+
+    # Dispatch to the correct Celery queue
+    new_job_id = str(new_job.id)
+    config = original_job.config or {}
+
+    if original_job.type == "crawl":
+        from app.workers.crawl_worker import process_crawl
+        process_crawl.delay(new_job_id, config)
+    elif original_job.type == "scrape":
+        from app.workers.scrape_worker import process_scrape
+        process_scrape.delay(new_job_id, config)
+    elif original_job.type == "map":
+        from app.workers.map_worker import process_map
+        process_map.delay(new_job_id, config)
+    elif original_job.type == "batch":
+        from app.workers.batch_worker import process_batch
+        process_batch.delay(new_job_id, config)
+    elif original_job.type == "search":
+        from app.workers.search_worker import process_search
+        process_search.delay(new_job_id, config)
+    else:
+        raise BadRequestError(f"Cannot retry jobs of type '{original_job.type}'")
+
+    return {
+        "success": True,
+        "message": "Job retried successfully",
+        "original_job_id": job_id,
+        "new_job_id": new_job_id,
+        "type": original_job.type,
+    }
+
+
+@router.post("/{job_id}/cancel")
+async def cancel_job(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel a running or pending job."""
+    job = await db.get(Job, UUID(job_id))
+    if not job or job.user_id != user.id:
+        raise NotFoundError("Job not found")
+
+    if job.status not in ("pending", "running"):
+        raise BadRequestError(f"Cannot cancel a job with status '{job.status}'")
+
+    job.status = "cancelled"
+    job.completed_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    return {
+        "success": True,
+        "message": "Job cancelled",
+        "job_id": job_id,
     }

@@ -43,6 +43,8 @@ import {
   Network,
   Bug,
   Boxes,
+  RefreshCw,
+  Square,
 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────
@@ -1116,13 +1118,30 @@ function PlaygroundContent() {
                           <p className="text-[13px] text-muted-foreground truncate mt-0.5">{activeJob.target}</p>
                         </div>
                       </div>
-                      <button
-                        onClick={dismissJob}
-                        className="h-8 w-8 rounded-lg grid place-items-center text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all shrink-0"
-                        title="Dismiss"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {activeJob.status === "running" && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                await api.cancelJob(activeJob.id);
+                                setActiveJob((prev: any) => prev ? { ...prev, status: "cancelled" } : null);
+                              } catch {}
+                            }}
+                            className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
+                            title="Stop job"
+                          >
+                            <Square className="h-3.5 w-3.5" />
+                            Stop
+                          </button>
+                        )}
+                        <button
+                          onClick={dismissJob}
+                          className="h-8 w-8 rounded-lg grid place-items-center text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all"
+                          title="Dismiss"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Progress */}
@@ -1195,6 +1214,27 @@ function PlaygroundContent() {
 
                       {(activeJob.status === "failed" || activeJob.status === "cancelled") && (
                         <div className="flex items-center gap-3 pt-1">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await api.retryJob(activeJob.id);
+                                setActiveJob({
+                                  id: res.new_job_id,
+                                  type: activeJob.type,
+                                  status: "running",
+                                  target: activeJob.target,
+                                  completed: 0,
+                                  total: activeJob.total || 0,
+                                  data: [],
+                                  error: undefined,
+                                });
+                              } catch {}
+                            }}
+                            className="flex items-center gap-2 h-10 rounded-lg px-5 text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-md shadow-primary/15"
+                          >
+                            <RefreshCw className="h-[18px] w-[18px]" />
+                            Retry
+                          </button>
                           <Link
                             href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })}
                             className="flex items-center gap-2 h-10 rounded-lg px-5 text-sm font-medium border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"

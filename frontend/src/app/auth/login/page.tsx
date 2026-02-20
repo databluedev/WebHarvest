@@ -25,7 +25,11 @@ export default function LoginPage() {
       api.setToken(res.access_token);
       router.push("/");
     } catch (err: any) {
-      setError(err.message || "Login failed");
+      if (err.status === 429) {
+        setError(`Too many attempts. Try again in ${err.retryAfter || 60} seconds.`);
+      } else {
+        setError(err.message || "Login failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -71,7 +75,12 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs text-muted-foreground/60 font-medium">Password</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-muted-foreground/60 font-medium">Password</label>
+                <Link href="/auth/forgot-password" className="text-xs text-primary hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <Input
                 type="password"
                 placeholder="Enter your password"

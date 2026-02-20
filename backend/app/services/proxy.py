@@ -7,6 +7,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redis import redis_client as _redis
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,6 +70,38 @@ class ProxyManager:
         if not self._proxies:
             return None
         return random.choice(self._proxies)
+
+    async def mark_failed(self, proxy: Proxy) -> None:
+        """Increment failure count for a proxy (10-min TTL)."""
+        key = f"proxy:fail:{proxy.host}:{proxy.port}"
+        await _redis.incr(key)
+        await _redis.expire(key, 600)
+
+    async def get_random_weighted(self) -> Proxy | None:
+        """Get a random proxy weighted by fewer failures."""
+        if not self._proxies:
+            return None
+
+        weights = []
+        for p in self._proxies:
+            key = f"proxy:fail:{p.host}:{p.port}"
+            fails = await _redis.get(key)
+            fail_count = int(fails) if fails else 0
+            # Weight = 1 / (1 + fail_count) — fewer failures = higher weight
+            weights.append(1.0 / (1.0 + fail_count))
+
+        total = sum(weights)
+        if total == 0:
+            return random.choice(self._proxies)
+
+        r = random.uniform(0, total)
+        cumulative = 0.0
+        for proxy, weight in zip(self._proxies, weights):
+            cumulative += weight
+            if r <= cumulative:
+                return proxy
+
+        return self._proxies[-1]
 
     @staticmethod
     def to_playwright(proxy: Proxy) -> dict:
