@@ -35,18 +35,33 @@ import Link from "next/link";
 
 type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "json";
 
-const PageResultCard = memo(function PageResultCard({ page, index }: { page: any; index: number }) {
+const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { page: any; index: number; jobId: string }) {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("markdown");
+  const [screenshotData, setScreenshotData] = useState<string | null>(null);
+  const [screenshotLoading, setScreenshotLoading] = useState(false);
 
   const hasMarkdown = !!page.markdown;
   const hasHtml = !!page.html;
-  const hasScreenshot = !!page.screenshot;
+  const hasScreenshot = !!page.id;
   const hasLinks = page.links?.length > 0 || page.links_detail;
   const hasStructured = page.structured_data && Object.keys(page.structured_data).length > 0;
   const hasHeadings = page.headings?.length > 0;
   const hasImages = page.images?.length > 0;
   const hasExtract = !!page.extract;
+
+  const loadScreenshot = useCallback(async () => {
+    if (screenshotData || screenshotLoading || !page.id) return;
+    setScreenshotLoading(true);
+    try {
+      const detail = await api.getJobResultDetail(jobId, page.id);
+      setScreenshotData(detail.screenshot || null);
+    } catch {
+      setScreenshotData(null);
+    } finally {
+      setScreenshotLoading(false);
+    }
+  }, [jobId, page.id, screenshotData, screenshotLoading]);
 
   const tabs: { id: TabType; label: string; icon: any; available: boolean }[] = [
     { id: "markdown", label: "Markdown", icon: FileText, available: hasMarkdown },
@@ -181,12 +196,24 @@ const PageResultCard = memo(function PageResultCard({ page, index }: { page: any
 
             {activeTab === "screenshot" && hasScreenshot && (
               <div className="flex justify-center">
-                <img
-                  src={`data:image/jpeg;base64,${page.screenshot}`}
-                  alt={`Screenshot of ${page.url}`}
-                  className="max-w-full rounded-md border border-border shadow-lg"
-                  style={{ maxHeight: "600px" }}
-                />
+                {screenshotData ? (
+                  <img
+                    src={`data:image/jpeg;base64,${screenshotData}`}
+                    alt={`Screenshot of ${page.url}`}
+                    className="max-w-full rounded-md border border-border shadow-lg"
+                    style={{ maxHeight: "600px" }}
+                  />
+                ) : screenshotLoading ? (
+                  <div className="flex items-center gap-2 py-8 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm">Loading screenshot...</span>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={loadScreenshot} className="gap-2">
+                    <Camera className="h-4 w-4" />
+                    Load Screenshot
+                  </Button>
+                )}
               </div>
             )}
 
@@ -735,7 +762,7 @@ export default function CrawlStatusPage() {
                     Crawled Pages
                   </h2>
                   {filteredData.map((page: any) => (
-                    <PageResultCard key={page._index} page={page} index={page._index} />
+                    <PageResultCard key={page._index} page={page} index={page._index} jobId={jobId} />
                   ))}
                   {hasMore && (
                     <div className="flex justify-center pt-4">

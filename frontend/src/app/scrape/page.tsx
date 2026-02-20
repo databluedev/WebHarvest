@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,9 @@ export default function ScrapePage() {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("markdown");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [scrapeJobId, setScrapeJobId] = useState<string | null>(null);
+  const [screenshotData, setScreenshotData] = useState<string | null>(null);
+  const [screenshotLoading, setScreenshotLoading] = useState(false);
   const [useProxy, setUseProxy] = useState(false);
   const [mobile, setMobile] = useState(false);
   const [mobileDevice, setMobileDevice] = useState("");
@@ -77,6 +80,9 @@ export default function ScrapePage() {
     setLoading(true);
     setError("");
     setResult(null);
+    setScrapeJobId(null);
+    setScreenshotData(null);
+    setScreenshotLoading(false);
 
     try {
       const params: any = {
@@ -100,12 +106,16 @@ export default function ScrapePage() {
       const res = await api.scrape(params);
       if (!res.success) {
         setError(res.error || "Scrape failed — the site may be blocking requests.");
-        if (res.data) setResult(res.data);
-      } else if (res.job_id) {
+        if (res.data) {
+          setResult(res.data);
+          if (res.job_id) setScrapeJobId(res.job_id);
+        }
+      } else if (res.job_id && !res.data) {
         router.push(`/scrape/${res.job_id}`);
         return;
       } else if (res.data) {
         setResult(res.data);
+        if (res.job_id) setScrapeJobId(res.job_id);
         // Auto-select first available tab
         if (res.data.markdown) setActiveTab("markdown");
         else if (res.data.screenshot) setActiveTab("screenshot");
@@ -124,6 +134,21 @@ export default function ScrapePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const loadScreenshot = useCallback(async () => {
+    if (screenshotData || screenshotLoading || !scrapeJobId || !result?.id) return;
+    setScreenshotLoading(true);
+    try {
+      const detail = await api.getJobResultDetail(scrapeJobId, result.id);
+      if (detail.screenshot) {
+        setScreenshotData(detail.screenshot);
+      }
+    } catch (err: any) {
+      setError(`Failed to load screenshot: ${err.message}`);
+    } finally {
+      setScreenshotLoading(false);
+    }
+  }, [scrapeJobId, result?.id, screenshotData, screenshotLoading]);
+
   const formatToggles = [
     { id: "markdown", label: "Markdown", icon: FileText },
     { id: "html", label: "HTML", icon: Code },
@@ -139,7 +164,7 @@ export default function ScrapePage() {
     ? [
         { id: "markdown", label: "Markdown", icon: FileText, available: !!result.markdown },
         { id: "html", label: "HTML", icon: Code, available: !!result.html },
-        { id: "screenshot", label: "Screenshot", icon: Camera, available: !!result.screenshot },
+        { id: "screenshot", label: "Screenshot", icon: Camera, available: true },
         { id: "links", label: `Links${result.links ? ` (${result.links.length})` : ""}`, icon: Link2, available: !!(result.links?.length || result.links_detail) },
         { id: "structured", label: "Structured Data", icon: Braces, available: !!(result.structured_data && Object.keys(result.structured_data).length > 0) },
         { id: "headings", label: `Headings${result.headings ? ` (${result.headings.length})` : ""}`, icon: List, available: !!result.headings?.length },
@@ -502,14 +527,38 @@ export default function ScrapePage() {
                         </pre>
                       )}
 
-                      {activeTab === "screenshot" && result.screenshot && (
+                      {activeTab === "screenshot" && (
                         <div className="flex justify-center rounded-md bg-muted p-4">
-                          <img
-                            src={`data:image/jpeg;base64,${result.screenshot}`}
-                            alt={`Screenshot of ${url}`}
-                            className="max-w-full rounded-md border border-border shadow-lg"
-                            style={{ maxHeight: "600px" }}
-                          />
+                          {screenshotData ? (
+                            <img
+                              src={`data:image/jpeg;base64,${screenshotData}`}
+                              alt={`Screenshot of ${url}`}
+                              className="max-w-full rounded-md border border-border shadow-lg"
+                              style={{ maxHeight: "600px" }}
+                            />
+                          ) : screenshotLoading ? (
+                            <div className="flex flex-col items-center justify-center py-12">
+                              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mb-2" />
+                              <p className="text-sm text-muted-foreground">Loading screenshot...</p>
+                            </div>
+                          ) : scrapeJobId && result?.id ? (
+                            <div className="flex flex-col items-center justify-center py-12">
+                              <Camera className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                              <button
+                                onClick={loadScreenshot}
+                                className="flex items-center gap-2 px-4 py-2 rounded-md border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                              >
+                                <Camera className="h-4 w-4" />
+                                Load Screenshot
+                              </button>
+                              <p className="text-xs text-muted-foreground mt-2">Screenshots are loaded on demand</p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-12">
+                              <Camera className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                              <p className="text-sm text-muted-foreground">Screenshot available in job detail page</p>
+                            </div>
+                          )}
                         </div>
                       )}
 

@@ -43,6 +43,7 @@ class CrawlStartResponse(BaseModel):
 
 
 class CrawlPageData(BaseModel):
+    id: str | None = None
     url: str
     markdown: str | None = None
     html: str | None = None

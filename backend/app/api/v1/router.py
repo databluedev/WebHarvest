@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, scrape, crawl, map, settings, proxy, batch, search, usage, schedule, events, extract, monitor, webhook
+from app.api.v1 import auth, scrape, crawl, map, settings, proxy, batch, search, usage, schedule, events, extract, monitor, webhook, jobs
 
 api_router = APIRouter(prefix="/v1")
 
@@ -18,3 +18,4 @@ api_router.include_router(events.router, tags=["Events"])
 api_router.include_router(extract.router, prefix="/extract", tags=["Extract"])
 api_router.include_router(monitor.router, prefix="/monitors", tags=["Monitors"])
 api_router.include_router(webhook.router, prefix="/webhooks", tags=["Webhooks"])
+api_router.include_router(jobs.router, prefix="/jobs", tags=["Jobs"])

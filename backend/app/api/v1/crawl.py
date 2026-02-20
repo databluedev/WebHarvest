@@ -8,7 +8,7 @@ import zipfile
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.exceptions import NotFoundError, RateLimitError
 from app.core.rate_limiter import check_rate_limit_full
+from app.core.job_cache import get_cached_response, set_cached_response, invalidate_cache
 from app.config import settings
 from app.models.job import Job
 from app.models.job_result import JobResult
@@ -136,6 +137,13 @@ async def get_crawl_status(
     if not job or job.user_id != user.id:
         raise NotFoundError("Crawl job not found")
 
+    # Return cached response instantly for completed/failed jobs
+    if job.status in ("completed", "failed"):
+        cache_suffix = f"p{page}_pp{per_page}"
+        cached = await get_cached_response(job_id, suffix=cache_suffix)
+        if cached:
+            return JSONResponse(content=json.loads(cached))
+
     # Get paginated results (return partial results while still running)
     data = None
     total_results = 0
@@ -146,7 +154,6 @@ async def get_crawl_status(
         )
         total_results = count_result.scalar() or 0
 
-        # Fetch only the requested page
         offset = (page - 1) * per_page
         result = await db.execute(
             select(JobResult)
@@ -159,7 +166,6 @@ async def get_crawl_status(
 
         data = []
         for r in results:
-            # Extract base metadata fields
             page_metadata = None
             structured_data = None
             headings = None
@@ -168,13 +174,11 @@ async def get_crawl_status(
 
             if r.metadata_:
                 meta = dict(r.metadata_)
-                # Pop extended fields that we stored inside metadata_
                 structured_data = meta.pop("structured_data", None)
                 headings = meta.pop("headings", None)
                 images = meta.pop("images", None)
                 links_detail = meta.pop("links_detail", None)
 
-                # Build PageMetadata from remaining fields
                 page_metadata = PageMetadata(
                     title=meta.get("title"),
                     description=meta.get("description"),
@@ -193,12 +197,13 @@ async def get_crawl_status(
 
             data.append(
                 CrawlPageData(
+                    id=str(r.id),
                     url=r.url,
                     markdown=r.markdown,
                     html=r.html,
                     links=r.links,
                     links_detail=links_detail,
-                    screenshot=r.screenshot_url,  # base64 data stored here
+                    screenshot=r.screenshot_url,
                     structured_data=structured_data,
                     headings=headings,
                     images=images,
@@ -207,7 +212,7 @@ async def get_crawl_status(
                 )
             )
 
-    return CrawlStatusResponse(
+    response_obj = CrawlStatusResponse(
         success=True,
         job_id=job.id,
         status=job.status,
@@ -219,6 +224,13 @@ async def get_crawl_status(
         per_page=per_page,
         error=job.error,
     )
+
+    # Cache completed/failed jobs for instant subsequent loads
+    if job.status in ("completed", "failed"):
+        cache_suffix = f"p{page}_pp{per_page}"
+        await set_cached_response(job_id, response_obj.model_dump(), suffix=cache_suffix)
+
+    return response_obj
 
 
 @router.delete("/{job_id}")
@@ -234,6 +246,7 @@ async def cancel_crawl(
 
     if job.status in ("pending", "running"):
         job.status = "cancelled"
+        await invalidate_cache(job_id)
         return {"success": True, "message": "Crawl job cancelled"}
 
     return {"success": False, "message": f"Cannot cancel job with status: {job.status}"}

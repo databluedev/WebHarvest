@@ -33,6 +33,7 @@ class SearchStartResponse(BaseModel):
 
 
 class SearchResultItem(BaseModel):
+    id: str | None = None
     url: str
     title: str | None = None
     snippet: str | None = None

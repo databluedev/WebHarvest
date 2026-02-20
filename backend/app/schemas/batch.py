@@ -40,6 +40,7 @@ class BatchStartResponse(BaseModel):
 
 
 class BatchItemResult(BaseModel):
+    id: str | None = None
     url: str
     success: bool
     markdown: str | None = None

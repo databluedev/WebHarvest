@@ -8,7 +8,7 @@ import zipfile
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +17,7 @@ from app.core.database import get_db
 from app.core.exceptions import NotFoundError, RateLimitError
 from app.core.rate_limiter import check_rate_limit_full
 from app.core.metrics import search_jobs_total
+from app.core.job_cache import get_cached_response, set_cached_response
 from app.config import settings
 from app.models.job import Job
 from app.models.job_result import JobResult
@@ -134,12 +135,20 @@ async def get_search_status(
     if not job or job.user_id != user.id or job.type != "search":
         raise NotFoundError("Search job not found")
 
+    # Return cached response instantly for completed/failed jobs
+    if job.status in ("completed", "failed"):
+        cached = await get_cached_response(job_id)
+        if cached:
+            return JSONResponse(content=json.loads(cached))
+
     query = job.config.get("query", "") if job.config else ""
 
     data = None
     if job.status in ("pending", "running", "completed"):
         result = await db.execute(
-            select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+            select(JobResult)
+            .where(JobResult.job_id == job.id)
+            .order_by(JobResult.created_at)
         )
         results = result.scalars().all()
 
@@ -160,6 +169,7 @@ async def get_search_status(
 
             data.append(
                 SearchResultItem(
+                    id=str(r.id),
                     url=r.url,
                     title=meta.get("title"),
                     snippet=meta.get("snippet"),
@@ -178,7 +188,7 @@ async def get_search_status(
                 )
             )
 
-    return SearchStatusResponse(
+    response_obj = SearchStatusResponse(
         success=True,
         job_id=job.id,
         status=job.status,
@@ -188,6 +198,12 @@ async def get_search_status(
         data=data,
         error=job.error,
     )
+
+    # Cache completed/failed jobs for instant subsequent loads
+    if job.status in ("completed", "failed"):
+        await set_cached_response(job_id, response_obj.model_dump())
+
+    return response_obj
 
 
 @router.get("/{job_id}/export")

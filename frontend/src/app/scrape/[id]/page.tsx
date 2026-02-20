@@ -40,6 +40,8 @@ export default function ScrapeDetailPage() {
   const [activeTab, setActiveTab] = useState<TabId>("markdown");
   const [copied, setCopied] = useState(false);
   const [polling, setPolling] = useState(true);
+  const [screenshotData, setScreenshotData] = useState<Record<string, string>>({});
+  const [screenshotLoading, setScreenshotLoading] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -123,11 +125,26 @@ export default function ScrapeDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const loadScreenshot = useCallback(async (resultId: string) => {
+    if (screenshotData[resultId] || screenshotLoading[resultId]) return;
+    setScreenshotLoading((prev) => ({ ...prev, [resultId]: true }));
+    try {
+      const detail = await api.getJobResultDetail(jobId, resultId);
+      if (detail.screenshot) {
+        setScreenshotData((prev) => ({ ...prev, [resultId]: detail.screenshot as string }));
+      }
+    } catch (err: any) {
+      setError(`Failed to load screenshot: ${err.message}`);
+    } finally {
+      setScreenshotLoading((prev) => ({ ...prev, [resultId]: false }));
+    }
+  }, [jobId, screenshotData, screenshotLoading]);
+
   const resultTabs: { id: TabId; label: string; icon: any; available: boolean }[] = result
     ? [
         { id: "markdown", label: "Markdown", icon: FileText, available: !!result.markdown },
         { id: "html", label: "HTML", icon: Code, available: !!result.html },
-        { id: "screenshot", label: "Screenshot", icon: Camera, available: !!result.screenshot },
+        { id: "screenshot", label: "Screenshot", icon: Camera, available: true },
         { id: "links", label: `Links${result.links ? ` (${result.links.length})` : ""}`, icon: Link2, available: !!(result.links?.length || result.links_detail) },
         { id: "structured", label: "Structured Data", icon: Braces, available: !!(result.structured_data && Object.keys(result.structured_data).length > 0) },
         { id: "headings", label: `Headings${result.headings ? ` (${result.headings.length})` : ""}`, icon: List, available: !!result.headings?.length },
@@ -332,14 +349,34 @@ export default function ScrapeDetailPage() {
                         </pre>
                       )}
 
-                      {activeTab === "screenshot" && result.screenshot && (
+                      {activeTab === "screenshot" && (
                         <div className="flex justify-center rounded-md bg-muted p-4">
-                          <img
-                            src={`data:image/jpeg;base64,${result.screenshot}`}
-                            alt={`Screenshot of ${result.url}`}
-                            className="max-w-full rounded-md border border-border shadow-lg"
-                            style={{ maxHeight: "600px" }}
-                          />
+                          {screenshotData[result.id] ? (
+                            <img
+                              src={`data:image/jpeg;base64,${screenshotData[result.id]}`}
+                              alt={`Screenshot of ${result.url}`}
+                              className="max-w-full rounded-md border border-border shadow-lg"
+                              style={{ maxHeight: "600px" }}
+                            />
+                          ) : screenshotLoading[result.id] ? (
+                            <div className="flex flex-col items-center justify-center py-12">
+                              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mb-2" />
+                              <p className="text-sm text-muted-foreground">Loading screenshot...</p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-12">
+                              <Camera className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                              <Button
+                                variant="outline"
+                                onClick={() => loadScreenshot(result.id)}
+                                className="gap-2"
+                              >
+                                <Camera className="h-4 w-4" />
+                                Load Screenshot
+                              </Button>
+                              <p className="text-xs text-muted-foreground mt-2">Screenshots are loaded on demand</p>
+                            </div>
+                          )}
                         </div>
                       )}
 

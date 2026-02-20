@@ -20,6 +20,7 @@ from app.core.database import get_db
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.rate_limiter import check_rate_limit_full
 from app.core.metrics import scrape_requests_total
+from app.core.job_cache import get_cached_response, set_cached_response
 from app.config import settings
 from app.models.job import Job
 from app.models.job_result import JobResult
@@ -285,8 +286,16 @@ async def get_scrape_status(
     if not job or job.user_id != user.id or job.type != "scrape":
         raise NotFoundError("Scrape job not found")
 
+    # Return cached response instantly for completed/failed jobs
+    if job.status in ("completed", "failed"):
+        cached = await get_cached_response(job_id)
+        if cached:
+            return JSONResponse(content=json.loads(cached))
+
     result = await db.execute(
-        select(JobResult).where(JobResult.job_id == job.id).order_by(JobResult.created_at)
+        select(JobResult)
+        .where(JobResult.job_id == job.id)
+        .order_by(JobResult.created_at)
     )
     results = result.scalars().all()
 
@@ -322,6 +331,7 @@ async def get_scrape_status(
             )
 
         data.append({
+            "id": str(r.id),
             "url": r.url,
             "markdown": r.markdown,
             "html": r.html,
@@ -335,7 +345,7 @@ async def get_scrape_status(
             "metadata": page_metadata.model_dump() if page_metadata else None,
         })
 
-    return {
+    response_data = {
         "success": True,
         "job_id": str(job.id),
         "status": job.status,
@@ -344,6 +354,12 @@ async def get_scrape_status(
         "data": data,
         "error": job.error,
     }
+
+    # Cache completed/failed jobs for instant subsequent loads
+    if job.status in ("completed", "failed"):
+        await set_cached_response(job_id, response_data)
+
+    return response_data
 
 
 @router.get("/{job_id}/export")

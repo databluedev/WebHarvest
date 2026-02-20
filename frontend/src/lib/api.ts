@@ -321,6 +321,16 @@ class ApiClient {
     });
   }
 
+  // ── Job Result Detail (on-demand screenshot loading) ─────
+  async getJobResultDetail(jobId: string, resultId: string) {
+    return this.request<{
+      id: string; url: string; markdown?: string; html?: string;
+      links?: string[]; links_detail?: any; screenshot?: string;
+      structured_data?: any; headings?: any[]; images?: any[];
+      extract?: any; metadata?: any;
+    }>(`/v1/jobs/${jobId}/results/${resultId}`);
+  }
+
   async getExtractStatus(jobId: string) {
     return this.request<{
       success: boolean; job_id: string; status: string;

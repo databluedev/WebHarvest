@@ -36,9 +36,11 @@ import Link from "next/link";
 
 type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "json";
 
-function SearchResultCard({ item, index }: { item: any; index: number }) {
+function SearchResultCard({ item, index, jobId }: { item: any; index: number; jobId: string }) {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("markdown");
+  const [screenshotData, setScreenshotData] = useState<string | null>(null);
+  const [screenshotLoading, setScreenshotLoading] = useState(false);
 
   const hasMarkdown = !!item.markdown;
   const hasHtml = !!item.html;
@@ -49,10 +51,25 @@ function SearchResultCard({ item, index }: { item: any; index: number }) {
   const hasImages = item.images?.length > 0;
   const hasExtract = !!item.extract;
 
+  const loadScreenshot = useCallback(async () => {
+    if (screenshotData || screenshotLoading) return;
+    setScreenshotLoading(true);
+    try {
+      const detail = await api.getJobResultDetail(jobId, item.id);
+      if (detail.screenshot) {
+        setScreenshotData(detail.screenshot);
+      }
+    } catch {
+      // Silently fail for search result items
+    } finally {
+      setScreenshotLoading(false);
+    }
+  }, [jobId, item.id, screenshotData, screenshotLoading]);
+
   const tabs: { id: TabType; label: string; icon: any; available: boolean }[] = [
     { id: "markdown", label: "Markdown", icon: FileText, available: hasMarkdown },
     { id: "html", label: "HTML", icon: Code, available: hasHtml },
-    { id: "screenshot", label: "Screenshot", icon: Camera, available: hasScreenshot },
+    { id: "screenshot", label: "Screenshot", icon: Camera, available: true },
     { id: "links", label: "Links", icon: Link2, available: hasLinks },
     { id: "structured", label: "Structured Data", icon: Braces, available: hasStructured },
     { id: "headings", label: "Headings", icon: List, available: hasHeadings },
@@ -160,14 +177,33 @@ function SearchResultCard({ item, index }: { item: any; index: number }) {
               </pre>
             )}
 
-            {activeTab === "screenshot" && hasScreenshot && (
+            {activeTab === "screenshot" && (
               <div className="flex justify-center">
-                <img
-                  src={`data:image/jpeg;base64,${item.screenshot}`}
-                  alt={`Screenshot of ${item.url}`}
-                  className="max-w-full rounded-md border border-border shadow-lg"
-                  style={{ maxHeight: "600px" }}
-                />
+                {screenshotData ? (
+                  <img
+                    src={`data:image/jpeg;base64,${screenshotData}`}
+                    alt={`Screenshot of ${item.url}`}
+                    className="max-w-full rounded-md border border-border shadow-lg"
+                    style={{ maxHeight: "600px" }}
+                  />
+                ) : screenshotLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">Loading screenshot...</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Camera className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                    <button
+                      onClick={loadScreenshot}
+                      className="flex items-center gap-2 px-4 py-2 rounded-md border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                    >
+                      <Camera className="h-4 w-4" />
+                      Load Screenshot
+                    </button>
+                    <p className="text-xs text-muted-foreground mt-2">Screenshots are loaded on demand</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -596,7 +632,7 @@ export default function SearchStatusPage() {
                     Search Results
                   </h2>
                   {filteredData.map((item: any) => (
-                    <SearchResultCard key={item._index} item={item} index={item._index} />
+                    <SearchResultCard key={item._index} item={item} index={item._index} jobId={jobId} />
                   ))}
                 </div>
               ) : isRunning ? (
