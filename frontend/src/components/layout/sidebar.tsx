@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, createContext, useContext, useRef } from "react";
+import { useState, useEffect, createContext, useContext, useRef, Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Globe,
@@ -36,11 +36,11 @@ const navSections = [
   {
     label: "Playground",
     items: [
-      { href: "/scrape", label: "Scrape", icon: Search },
-      { href: "/crawl", label: "Crawl", icon: Globe },
-      { href: "/batch", label: "Batch", icon: Layers },
-      { href: "/search", label: "Search", icon: Search },
-      { href: "/map", label: "Map", icon: Map },
+      { href: "/playground?endpoint=scrape", label: "Scrape", icon: Search },
+      { href: "/playground?endpoint=crawl", label: "Crawl", icon: Globe },
+      { href: "/playground?endpoint=batch", label: "Batch", icon: Layers },
+      { href: "/playground?endpoint=search", label: "Search", icon: Search },
+      { href: "/playground?endpoint=map", label: "Map", icon: Map },
     ],
   },
   {
@@ -209,6 +209,7 @@ function SidebarThemeToggle({ collapsed }: { collapsed: boolean }) {
 
 function DesktopSidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [hovered, setHovered] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [user, setUser] = useState<{ email: string; name?: string } | null>(null);
@@ -277,9 +278,15 @@ function DesktopSidebar() {
             {collapsed && <div className="h-px bg-border/30 mx-3 mb-2 mt-1" />}
             <div className={cn("space-y-0.5", collapsed ? "px-2" : "px-3")}>
               {section.items.map((item) => {
-                const isActive =
-                  pathname === item.href ||
-                  (item.href !== "/" && pathname.startsWith(item.href));
+                // Handle playground query-param routes
+                const isPlaygroundItem = item.href.startsWith("/playground?endpoint=");
+                let isActive = false;
+                if (isPlaygroundItem) {
+                  const itemEndpoint = new URL(item.href, "http://x").searchParams.get("endpoint");
+                  isActive = pathname === "/playground" && searchParams.get("endpoint") === itemEndpoint;
+                } else {
+                  isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+                }
                 return (
                   <Link
                     key={item.href}
@@ -379,6 +386,7 @@ export function MobileMenuButton() {
 
 function MobileSidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<{ email: string; name?: string } | null>(null);
 
   useEffect(() => {
@@ -409,9 +417,14 @@ function MobileSidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </p>
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const isActive =
-                  pathname === item.href ||
-                  (item.href !== "/" && pathname.startsWith(item.href));
+                const isPlaygroundItem = item.href.startsWith("/playground?endpoint=");
+                let isActive = false;
+                if (isPlaygroundItem) {
+                  const itemEndpoint = new URL(item.href, "http://x").searchParams.get("endpoint");
+                  isActive = pathname === "/playground" && searchParams.get("endpoint") === itemEndpoint;
+                } else {
+                  isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+                }
                 return (
                   <Link
                     key={item.href}
@@ -484,7 +497,9 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop sidebar - hover expandable */}
-      <DesktopSidebar />
+      <Suspense fallback={null}>
+        <DesktopSidebar />
+      </Suspense>
 
       {/* Mobile overlay */}
       {open && (
@@ -498,7 +513,9 @@ export function Sidebar() {
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <MobileSidebarContent onNavigate={() => setOpen(false)} />
+        <Suspense fallback={null}>
+          <MobileSidebarContent onNavigate={() => setOpen(false)} />
+        </Suspense>
       </aside>
     </>
   );

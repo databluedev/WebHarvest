@@ -142,11 +142,10 @@ export default function HomePage() {
       if (res.job_id) {
         router.push(`/scrape/${res.job_id}`);
       } else if (res.data) {
-        // Synchronous result — go to scrape page with result
-        router.push("/scrape");
+        router.push("/playground?endpoint=scrape");
       }
     } catch {
-      router.push("/scrape");
+      router.push("/playground?endpoint=scrape");
     } finally {
       setLoading(false);
     }
@@ -201,7 +200,7 @@ export default function HomePage() {
                       <div className="flex items-center gap-2">
                         {/* Settings icon */}
                         <button
-                          onClick={() => router.push("/scrape")}
+                          onClick={() => router.push("/playground?endpoint=scrape")}
                           className="h-8 w-8 rounded-md bg-muted/50 grid place-items-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
                           title="Advanced settings"
                         >
@@ -209,7 +208,7 @@ export default function HomePage() {
                         </button>
                         {/* Grid icon */}
                         <button
-                          onClick={() => router.push("/batch")}
+                          onClick={() => router.push("/playground?endpoint=batch")}
                           className="h-8 w-8 rounded-md bg-muted/50 grid place-items-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"
                           title="Batch scrape"
                         >

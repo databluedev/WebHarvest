@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { Suspense } from "react";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Search,
@@ -11,20 +12,27 @@ import {
 } from "lucide-react";
 
 const modes = [
-  { id: "scrape", label: "Scrape", icon: Search, href: "/scrape" },
-  { id: "search", label: "Search", icon: Radar, href: "/search" },
-  { id: "map", label: "Map", icon: Map, href: "/map" },
-  { id: "crawl", label: "Crawl", icon: Globe, href: "/crawl" },
-  { id: "batch", label: "Batch", icon: Layers, href: "/batch" },
+  { id: "scrape", label: "Scrape", icon: Search },
+  { id: "search", label: "Search", icon: Radar },
+  { id: "map", label: "Map", icon: Map },
+  { id: "crawl", label: "Crawl", icon: Globe },
+  { id: "batch", label: "Batch", icon: Layers },
 ];
 
-export function ModeSwitcher() {
+function ModeSwitcherInner() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
 
-  const activeMode = modes.find(
-    (m) => pathname === m.href || pathname.startsWith(m.href + "/")
-  )?.id;
+  // Determine active mode from query param when on /playground
+  const isPlayground = pathname === "/playground";
+  const endpointParam = searchParams.get("endpoint");
+  const activeMode = isPlayground ? (endpointParam || "scrape") : undefined;
+
+  const handleClick = (modeId: string) => {
+    // Always navigate to /playground with the endpoint query param
+    router.push(`/playground?endpoint=${modeId}`);
+  };
 
   return (
     <div className="flex justify-center">
@@ -34,7 +42,7 @@ export function ModeSwitcher() {
           return (
             <button
               key={mode.id}
-              onClick={() => router.push(mode.href)}
+              onClick={() => handleClick(mode.id)}
               className={cn(
                 "flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-all duration-200",
                 isActive
@@ -49,5 +57,13 @@ export function ModeSwitcher() {
         })}
       </div>
     </div>
+  );
+}
+
+export function ModeSwitcher() {
+  return (
+    <Suspense fallback={null}>
+      <ModeSwitcherInner />
+    </Suspense>
   );
 }
