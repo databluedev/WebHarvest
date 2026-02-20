@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { Footer } from "@/components/layout/footer";
@@ -34,6 +34,9 @@ import {
   Download,
   ArrowRight,
   Clock,
+  X,
+  CheckCircle2,
+  XCircle,
   Crosshair,
   Satellite,
   Network,
@@ -222,12 +225,119 @@ function PlaygroundContent() {
   const [mapResult, setMapResult] = useState<any>(null);
   const [copied, setCopied] = useState(false);
 
+  // ── Active job tracking (inline progress) ──
+  const [activeJob, setActiveJob] = useState<{
+    id: string;
+    type: Endpoint;
+    status: string;
+    target: string;
+    total: number;
+    completed: number;
+    data?: any[];
+    error?: string;
+  } | null>(null);
+  const sseRef = useRef<EventSource | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     if (!api.getToken()) { router.push("/auth/login"); return; }
     api.getUsageHistory({ per_page: 9 })
       .then((res) => { setRecentJobs(res.jobs || []); setJobsLoaded(true); })
       .catch(() => setJobsLoaded(true));
   }, [router]);
+
+  // ── Fetch job status (unified for all types) ──
+  const fetchJobStatus = useCallback(async (jobId: string, jobType: Endpoint) => {
+    try {
+      let res: any;
+      switch (jobType) {
+        case "scrape": res = await api.getScrapeStatus(jobId); break;
+        case "crawl": res = await api.getCrawlStatus(jobId, 1, 20); break;
+        case "search": res = await api.getSearchStatus(jobId); break;
+        case "map": res = await api.getMapStatus(jobId); break;
+        case "batch": res = await api.getBatchStatus(jobId); break;
+      }
+      setActiveJob((prev) => prev && prev.id === jobId ? {
+        ...prev,
+        status: res.status || prev.status,
+        total: res.total_pages || res.total_results || res.total_urls || res.total || prev.total,
+        completed: res.completed_pages || res.completed_results || res.completed_urls || prev.completed,
+        data: res.data || res.links || prev.data,
+        error: res.error,
+      } : prev);
+      return res.status;
+    } catch { return null; }
+  }, []);
+
+  // ── SSE / polling for active job ──
+  useEffect(() => {
+    if (!activeJob || ["completed", "failed", "cancelled"].includes(activeJob.status)) return;
+
+    const jobId = activeJob.id;
+    const jobType = activeJob.type;
+
+    // Try SSE first
+    try {
+      const sseUrl = api.getSSEUrl(jobId);
+      const es = new EventSource(sseUrl);
+      sseRef.current = es;
+
+      es.onmessage = async () => {
+        const status = await fetchJobStatus(jobId, jobType);
+        if (status && ["completed", "failed", "cancelled"].includes(status)) {
+          es.close();
+          sseRef.current = null;
+          // Refresh recent runs
+          api.getUsageHistory({ per_page: 9 }).then((r) => setRecentJobs(r.jobs || [])).catch(() => {});
+        }
+      };
+
+      es.onerror = () => {
+        es.close();
+        sseRef.current = null;
+        // Fallback to polling
+        const interval = setInterval(async () => {
+          const status = await fetchJobStatus(jobId, jobType);
+          if (status && ["completed", "failed", "cancelled"].includes(status)) {
+            clearInterval(interval);
+            pollRef.current = null;
+            api.getUsageHistory({ per_page: 9 }).then((r) => setRecentJobs(r.jobs || [])).catch(() => {});
+          }
+        }, 2000);
+        pollRef.current = interval;
+      };
+    } catch {
+      // SSE not available, use polling
+      const interval = setInterval(async () => {
+        const status = await fetchJobStatus(jobId, jobType);
+        if (status && ["completed", "failed", "cancelled"].includes(status)) {
+          clearInterval(interval);
+          pollRef.current = null;
+          api.getUsageHistory({ per_page: 9 }).then((r) => setRecentJobs(r.jobs || [])).catch(() => {});
+        }
+      }, 2000);
+      pollRef.current = interval;
+    }
+
+    // Also do an immediate fetch
+    fetchJobStatus(jobId, jobType);
+
+    return () => {
+      if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    };
+  }, [activeJob?.id, activeJob?.status, fetchJobStatus]);
+
+  const dismissJob = useCallback(() => {
+    if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    setActiveJob(null);
+  }, []);
+
+  const handleDownloadActiveJob = useCallback(() => {
+    if (!activeJob) return;
+    handleDownload({ id: activeJob.id, type: activeJob.type });
+  }, [activeJob]);
 
   useEffect(() => {
     if (mobile && devicePresets.length === 0) {
@@ -285,7 +395,7 @@ function PlaygroundContent() {
           if (headersText.trim()) { try { params.headers = JSON.parse(headersText); } catch {} }
           if (cookiesText.trim()) { try { params.cookies = JSON.parse(cookiesText); } catch {} }
           const res = await api.scrape(params);
-          if (res.job_id) router.push(`/scrape/${res.job_id}`);
+          if (res.job_id) setActiveJob({ id: res.job_id, type: "scrape", status: "running", target: fullUrl, total: 1, completed: 0 });
           break;
         }
         case "crawl": {
@@ -306,7 +416,7 @@ function PlaygroundContent() {
             params.scrape_options = { ...params.scrape_options, extract: { prompt: extractPrompt.trim() } };
           }
           const res = await api.startCrawl(params);
-          if (res.success) router.push(`/crawl/${res.job_id}`);
+          if (res.success && res.job_id) setActiveJob({ id: res.job_id, type: "crawl", status: "running", target: fullUrl, total: maxPages, completed: 0 });
           break;
         }
         case "search": {
@@ -314,14 +424,14 @@ function PlaygroundContent() {
           const params: any = { query: searchQuery.trim(), num_results: numResults, engine, formats, only_main_content: onlyMainContent, use_proxy: useProxy || undefined, mobile: mobile || undefined, mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined, webhook_url: webhookUrl.trim() || undefined, webhook_secret: webhookSecret.trim() || undefined };
           if (extractEnabled && extractPrompt.trim()) params.extract = { prompt: extractPrompt.trim() };
           const res = await api.startSearch(params);
-          if (res.success) router.push(`/search/${res.job_id}`);
+          if (res.success && res.job_id) setActiveJob({ id: res.job_id, type: "search", status: "running", target: searchQuery.trim(), total: numResults, completed: 0 });
           break;
         }
         case "map": {
           if (!url.trim()) return;
           const fullUrl = url.startsWith("http") ? url : `https://${url}`;
           const res = await api.mapSite({ url: fullUrl, search: mapSearch || undefined, limit: mapLimit, include_subdomains: includeSubdomains || undefined, use_sitemap: useSitemap });
-          if (res.success && res.job_id) router.push(`/map/${res.job_id}`);
+          if (res.success && res.job_id) setActiveJob({ id: res.job_id, type: "map", status: "running", target: fullUrl, total: mapLimit, completed: 0 });
           else if (res.success) setMapResult(res);
           else setError("Map failed");
           break;
@@ -334,7 +444,7 @@ function PlaygroundContent() {
           if (headersText.trim()) { try { params.headers = JSON.parse(headersText); } catch {} }
           if (cookiesText.trim()) { try { params.cookies = JSON.parse(cookiesText); } catch {} }
           const res = await api.startBatch(params);
-          if (res.success) router.push(`/batch/${res.job_id}`);
+          if (res.success && res.job_id) setActiveJob({ id: res.job_id, type: "batch", status: "running", target: `${urls.length} URLs`, total: urls.length, completed: 0 });
           break;
         }
       }
@@ -695,6 +805,134 @@ function PlaygroundContent() {
                           value={extractPrompt}
                           onChange={(e) => setExtractPrompt(e.target.value)}
                         />
+                      )}
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* ── Active Job Progress ── */}
+              {activeJob && (
+                <section className="max-w-2xl mx-auto w-full mb-8 animate-scale-in">
+                  <div className="rounded-2xl border border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden shadow-lg shadow-primary/5">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-border/30">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {activeJob.status === "running" ? (
+                          <div className="h-9 w-9 rounded-lg bg-primary/15 grid place-items-center shrink-0">
+                            <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                          </div>
+                        ) : activeJob.status === "completed" ? (
+                          <div className="h-9 w-9 rounded-lg bg-emerald-500/15 grid place-items-center shrink-0">
+                            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                          </div>
+                        ) : (
+                          <div className="h-9 w-9 rounded-lg bg-red-500/15 grid place-items-center shrink-0">
+                            <XCircle className="h-5 w-5 text-red-400" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base font-bold capitalize">{activeJob.type}</span>
+                            <span className={cn(
+                              "text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full",
+                              activeJob.status === "running" ? "bg-primary/15 text-primary" :
+                              activeJob.status === "completed" ? "bg-emerald-500/15 text-emerald-400" :
+                              "bg-red-500/15 text-red-400"
+                            )}>
+                              {activeJob.status === "running" ? "In progress" : activeJob.status}
+                            </span>
+                          </div>
+                          <p className="text-[13px] text-muted-foreground truncate mt-0.5">{activeJob.target}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={dismissJob}
+                        className="h-8 w-8 rounded-lg grid place-items-center text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all shrink-0"
+                        title="Dismiss"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Progress */}
+                    <div className="px-5 py-4 space-y-3">
+                      {/* Progress bar */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-semibold text-foreground">
+                            {activeJob.completed} <span className="text-muted-foreground font-medium">of</span> {activeJob.total > 0 ? activeJob.total : "—"} <span className="text-muted-foreground font-medium">completed</span>
+                          </span>
+                          <span className="font-bold text-primary tabular-nums">
+                            {activeJob.total > 0 ? Math.round((activeJob.completed / activeJob.total) * 100) : 0}%
+                          </span>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-muted/80 overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all duration-500 ease-out",
+                              activeJob.status === "completed" ? "bg-emerald-500" :
+                              activeJob.status === "failed" ? "bg-red-500" :
+                              "bg-primary"
+                            )}
+                            style={{ width: `${activeJob.total > 0 ? Math.min(100, (activeJob.completed / activeJob.total) * 100) : 0}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Counter pills */}
+                      {activeJob.status === "running" && activeJob.completed > 0 && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-[13px] font-bold">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {activeJob.completed} done
+                          </div>
+                          {activeJob.total > 0 && activeJob.total - activeJob.completed > 0 && (
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/60 text-muted-foreground text-[13px] font-medium">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {activeJob.total - activeJob.completed} remaining
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Error message */}
+                      {activeJob.error && (
+                        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm text-red-400 font-medium">
+                          {activeJob.error}
+                        </div>
+                      )}
+
+                      {/* Completed actions */}
+                      {activeJob.status === "completed" && (
+                        <div className="flex items-center gap-3 pt-1">
+                          <button
+                            onClick={handleDownloadActiveJob}
+                            className="flex items-center gap-2 h-10 rounded-lg px-5 text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-md shadow-primary/15"
+                          >
+                            <Download className="h-[18px] w-[18px]" />
+                            Download JSON
+                          </button>
+                          <Link
+                            href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })}
+                            className="flex items-center gap-2 h-10 rounded-lg px-5 text-sm font-medium border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                          >
+                            <ExternalLink className="h-[18px] w-[18px]" />
+                            View full results
+                          </Link>
+                        </div>
+                      )}
+
+                      {(activeJob.status === "failed" || activeJob.status === "cancelled") && (
+                        <div className="flex items-center gap-3 pt-1">
+                          <Link
+                            href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })}
+                            className="flex items-center gap-2 h-10 rounded-lg px-5 text-sm font-medium border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                          >
+                            <ExternalLink className="h-[18px] w-[18px]" />
+                            View details
+                          </Link>
+                        </div>
                       )}
                     </div>
                   </div>
