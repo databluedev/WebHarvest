@@ -250,6 +250,25 @@ def process_crawl(self, job_id: str, config: dict):
                             )
                             discovered_links = scrape_data.links or []
 
+                        # Content quality gate — skip thin/empty pages so they
+                        # don't eat into the max_pages budget.  We still harvest
+                        # their links for frontier expansion.
+                        _MIN_WORDS = 150  # pages below this are login walls, empty shells, etc.
+                        md_text = scrape_data.markdown or ""
+                        word_count = len(md_text.split())
+                        is_thin = word_count < _MIN_WORDS
+
+                        # Always harvest links regardless of content quality
+                        if discovered_links:
+                            await crawler.add_to_frontier(discovered_links, depth + 1)
+
+                        if is_thin:
+                            logger.info(
+                                f"Skipping thin page ({word_count} words): {url}"
+                            )
+                            # task_done() is called in the finally block below
+                            continue
+
                         # Build rich metadata
                         metadata = {}
                         if scrape_data.metadata:
@@ -305,10 +324,6 @@ def process_crawl(self, job_id: str, config: dict):
                                 if job.status == "cancelled":
                                     cancelled = True
                             await db.commit()
-
-                        # Add discovered links to frontier
-                        if discovered_links:
-                            await crawler.add_to_frontier(discovered_links, depth + 1)
 
                     except Exception as e:
                         logger.warning(

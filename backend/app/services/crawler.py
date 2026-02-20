@@ -98,6 +98,31 @@ class WebCrawler:
             await self._redis.sadd(self._frontier_key, url)
             await self._redis.hset(self._depth_key, url, depth)
 
+    # URL path segments that indicate low-value pages (login walls, account,
+    # legal, empty shells).  Checked as substrings of the lowercased path.
+    _LOW_VALUE_PATH_KEYWORDS = {
+        "/signin", "/sign-in", "/sign_in",
+        "/login", "/log-in", "/log_in",
+        "/signup", "/sign-up", "/sign_up",
+        "/register",
+        "/account", "/my-account",
+        "/cart", "/checkout", "/buy",
+        "/wishlist", "/wish-list",
+        "/help", "/support", "/contact-us", "/contact",
+        "/terms", "/tos", "/privacy", "/legal", "/cookie-policy",
+        "/affiliate", "/become-an-affiliate",
+        "/seller", "/sell-on", "/global-selling",
+        "/app-download", "/download-app",
+        "/unsubscribe", "/preferences",
+        "/404", "/error",
+        "/auth/", "/oauth/", "/sso/",
+    }
+
+    # Query-string keys that signal non-content pages
+    _LOW_VALUE_QUERY_KEYS = {
+        "ref_", "tag", "utm_source", "utm_medium", "utm_campaign",
+    }
+
     def _should_crawl(self, url: str, depth: int) -> bool:
         """Check if a URL should be crawled based on config filters."""
         parsed = urlparse(url)
@@ -134,6 +159,11 @@ class WebCrawler:
         path_lower = parsed.path.lower()
         if any(path_lower.endswith(ext) for ext in skip_extensions):
             return False
+
+        # Skip low-value pages (login, account, help, legal, etc.)
+        for kw in self._LOW_VALUE_PATH_KEYWORDS:
+            if kw in path_lower:
+                return False
 
         path = parsed.path
 
