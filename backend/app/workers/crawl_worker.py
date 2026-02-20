@@ -251,6 +251,74 @@ def process_crawl(self, job_id: str, config: dict):
                             )
                             discovered_links = scrape_data.links or []
 
+                        # --- Content quality gate ---
+                        # Detect login walls, empty shells, and gated pages
+                        # generically by analyzing the extracted markdown.
+                        # Skipped pages still contribute links to the frontier
+                        # but don't count toward max_pages.
+                        md_text = (scrape_data.markdown or "").strip()
+                        _word_count = len(md_text.split())
+
+                        _skip_reason = None
+                        if _word_count < 80:
+                            _skip_reason = "empty"
+                        elif _word_count < 800:
+                            # For short pages, check if they're login/auth
+                            # walls or gated content that offers no value.
+                            md_lower = md_text.lower()
+                            # Generic login/auth wall signals
+                            _auth_signals = sum(
+                                1
+                                for p in (
+                                    "sign in",
+                                    "log in",
+                                    "sign up",
+                                    "create account",
+                                    "create an account",
+                                    "register",
+                                    "forgot password",
+                                    "reset password",
+                                )
+                                if p in md_lower
+                            )
+                            # Generic gated/empty content signals
+                            _empty_signals = sum(
+                                1
+                                for p in (
+                                    "personalized recommendations",
+                                    "recently viewed",
+                                    "browsing history",
+                                    "enable javascript",
+                                    "javascript is required",
+                                    "please enable cookies",
+                                    "cookies are required",
+                                    "access denied",
+                                    "403 forbidden",
+                                    "page not found",
+                                    "404",
+                                    "subscribe to continue",
+                                    "subscribe to read",
+                                    "this content is available to",
+                                    "members only",
+                                    "premium content",
+                                )
+                                if p in md_lower
+                            )
+                            if _auth_signals >= 2 or _empty_signals >= 1:
+                                _skip_reason = "login_wall" if _auth_signals >= 2 else "gated"
+
+                        if _skip_reason:
+                            logger.info(
+                                f"Skipping low-quality page ({_word_count}w, reason={_skip_reason}): {url}"
+                            )
+                            # Still harvest links for frontier expansion
+                            if discovered_links:
+                                await crawler.add_to_frontier(
+                                    discovered_links, depth + 1
+                                )
+                            # task_done() is called in the finally block
+                            continue
+
                         # Build rich metadata
                         metadata = {}
                         if scrape_data.metadata:

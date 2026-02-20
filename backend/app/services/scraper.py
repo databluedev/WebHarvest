@@ -572,10 +572,13 @@ def _looks_blocked(html: str) -> bool:
     body_text = re.sub(r"\s+", " ", body_text)
 
     # Pages with substantial visible text content are never block pages
-    if len(body_text) > 5000:
+    if len(body_text) > 3000:
         return False
 
-    if len(body_text) < 1500:
+    # Only check block patterns on very short pages — pages with moderate
+    # text (e.g. partially loaded product pages) shouldn't be flagged just
+    # because they contain words like "captcha" in a footer link or script ref.
+    if len(body_text) < 800:
         for pattern in _BLOCK_PATTERNS:
             if pattern in body_text:
                 return True
