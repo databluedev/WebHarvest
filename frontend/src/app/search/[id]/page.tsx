@@ -240,7 +240,7 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                         <div key={i} className="flex items-center gap-2 text-xs">
                           <ArrowDownLeft className="h-3 w-3 text-blue-400 shrink-0" />
                           <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{link.url}</a>
-                          {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-48">"{link.text}"</span>}
+                          {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-48">&quot;{link.text}&quot;</span>}
                         </div>
                       ))}
                     </div>
@@ -254,7 +254,7 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                         <div key={i} className="flex items-center gap-2 text-xs">
                           <ArrowUpRight className="h-3 w-3 text-orange-400 shrink-0" />
                           <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{link.url}</a>
-                          {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-48">"{link.text}"</span>}
+                          {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-48">&quot;{link.text}&quot;</span>}
                         </div>
                       ))}
                     </div>
@@ -484,7 +484,7 @@ export default function SearchStatusPage() {
               <h1 className="text-3xl font-bold tracking-tight">Search Results</h1>
               {status?.query && (
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  Query: <span className="font-medium text-foreground">"{status.query}"</span>
+                  Query: <span className="font-medium text-foreground">&quot;{status.query}&quot;</span>
                 </p>
               )}
               <p className="text-xs text-muted-foreground font-mono">{jobId}</p>

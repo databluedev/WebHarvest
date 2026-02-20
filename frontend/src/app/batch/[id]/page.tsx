@@ -267,7 +267,7 @@ const BatchResultCard = memo(function BatchResultCard({ item, index, jobId }: { 
                         <div key={i} className="flex items-center gap-2 text-xs">
                           <ArrowDownLeft className="h-3 w-3 text-blue-400 shrink-0" />
                           <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{link.url}</a>
-                          {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-48">"{link.text}"</span>}
+                          {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-48">&quot;{link.text}&quot;</span>}
                         </div>
                       ))}
                     </div>
@@ -281,7 +281,7 @@ const BatchResultCard = memo(function BatchResultCard({ item, index, jobId }: { 
                         <div key={i} className="flex items-center gap-2 text-xs">
                           <ArrowUpRight className="h-3 w-3 text-orange-400 shrink-0" />
                           <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{link.url}</a>
-                          {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-48">"{link.text}"</span>}
+                          {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-48">&quot;{link.text}&quot;</span>}
                         </div>
                       ))}
                     </div>

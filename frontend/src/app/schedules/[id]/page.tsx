@@ -368,7 +368,7 @@ export default function ScheduleDetailPage() {
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Clock className="h-10 w-10 text-muted-foreground/40 mb-3" />
                   <p className="text-sm text-muted-foreground">
-                    No runs yet. This schedule hasn't triggered any jobs.
+                    No runs yet. This schedule hasn&apos;t triggered any jobs.
                   </p>
                 </div>
               ) : (

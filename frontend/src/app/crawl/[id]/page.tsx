@@ -260,7 +260,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                           </a>
                           {link.text && (
                             <span className="text-muted-foreground truncate shrink-0 max-w-48">
-                              "{link.text}"
+                              &quot;{link.text}&quot;
                             </span>
                           )}
                         </div>
@@ -286,7 +286,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                           </a>
                           {link.text && (
                             <span className="text-muted-foreground truncate shrink-0 max-w-48">
-                              "{link.text}"
+                              &quot;{link.text}&quot;
                             </span>
                           )}
                         </div>

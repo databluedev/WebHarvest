@@ -416,7 +416,7 @@ export default function ScrapeDetailPage() {
                                     <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">
                                       {link.url}
                                     </a>
-                                    {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-40">"{link.text}"</span>}
+                                    {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-40">&quot;{link.text}&quot;</span>}
                                   </div>
                                 ))}
                               </div>
@@ -433,7 +433,7 @@ export default function ScrapeDetailPage() {
                                     <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">
                                       {link.url}
                                     </a>
-                                    {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-40">"{link.text}"</span>}
+                                    {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-40">&quot;{link.text}&quot;</span>}
                                   </div>
                                 ))}
                               </div>
