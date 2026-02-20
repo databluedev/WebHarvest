@@ -34,6 +34,8 @@ class WebCrawler:
 
     async def initialize(self):
         """Set up Redis connection, initial frontier, and persistent browser session."""
+        from app.services.scraper import _is_hard_site
+
         # Create a fresh Redis connection for this crawl task
         self._redis = aioredis.from_url(
             settings.REDIS_URL,
@@ -47,7 +49,19 @@ class WebCrawler:
         for key in [self._frontier_key, self._visited_key, self._depth_key]:
             await self._redis.expire(key, 86400)
 
-        # Create persistent browser session for this crawl
+        # For hard sites (Amazon, Nike, etc.), skip the shared browser session.
+        # These sites flag shared sessions after the first bot detection, poisoning
+        # every subsequent page. Instead, each page gets scraped with fresh browser
+        # instances through the full scrape_url path (all 5 tiers, new fingerprint).
+        if _is_hard_site(self.base_url):
+            logger.info(
+                f"Crawl {self.job_id}: hard site detected ({self.base_domain}), "
+                f"using fresh instances per page instead of shared session"
+            )
+            self._crawl_session = None
+            return
+
+        # Create persistent browser session for normal sites (faster, reuses context)
         from app.services.browser import CrawlSession, browser_pool
 
         self._crawl_session = CrawlSession(browser_pool)
@@ -222,7 +236,15 @@ class WebCrawler:
         }
 
     async def fetch_page_only(self, url: str) -> dict | None:
-        """Fetch-only phase for pipeline mode — returns raw data without extraction."""
+        """Fetch-only phase for pipeline mode — returns raw data without extraction.
+
+        For hard sites (no crawl session), returns None so the crawl worker
+        falls back to scrape_page() which uses full scrape_url with fresh instances.
+        """
+        if not self._crawl_session:
+            # Hard site mode: skip fetch-only, let caller use scrape_page()
+            return None
+
         opts = self.config.scrape_options or ScrapeOptions()
         formats = list(set(opts.formats) | {"links"})
 
