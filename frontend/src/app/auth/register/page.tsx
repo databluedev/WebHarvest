@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
-import { ArrowRight, Globe } from "lucide-react";
+import { ArrowRight, Flame } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -33,22 +33,20 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background grid-bg noise">
-      <div className="mesh-gradient fixed inset-0 pointer-events-none" />
-      <div className="fixed top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-primary/[0.04] blur-[120px] pointer-events-none animate-breathe" />
+    <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="w-full max-w-md px-6 animate-float-in relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-primary/8 border border-primary/15 grid place-items-center animate-glow-pulse">
-              <Globe className="h-6 w-6 text-primary" />
+            <div className="h-12 w-12 rounded-lg bg-primary/10 grid place-items-center">
+              <Flame className="h-6 w-6 text-primary" />
             </div>
             <span className="text-2xl font-bold tracking-tight">WebHarvest</span>
           </div>
         </div>
 
         {/* Register Card */}
-        <div className="glass-card rounded-2xl p-8">
+        <div className="bg-card border border-border rounded-lg p-8">
           <div className="mb-6">
             <h1 className="text-2xl font-bold tracking-tight">Create account</h1>
             <p className="text-sm text-muted-foreground/60 mt-1">
@@ -58,7 +56,7 @@ export default function RegisterPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="rounded-xl border border-red-500/15 bg-red-500/8 p-3 text-sm text-red-400">
+              <div className="rounded-md border border-red-500/15 bg-red-500/8 p-3 text-sm text-red-400">
                 {error}
               </div>
             )}
@@ -70,7 +68,7 @@ export default function RegisterPage() {
                 placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="rounded-xl"
+                className="rounded-md"
               />
             </div>
             <div className="space-y-2">
@@ -81,7 +79,7 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="rounded-xl"
+                className="rounded-md"
               />
             </div>
             <div className="space-y-2">
@@ -93,10 +91,10 @@ export default function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
-                className="rounded-xl"
+                className="rounded-md"
               />
             </div>
-            <Button type="submit" variant="glow" className="w-full rounded-xl gap-2" disabled={loading}>
+            <Button type="submit" variant="default" className="w-full rounded-lg gap-2" disabled={loading}>
               {loading ? "Creating account..." : (
                 <>
                   Create Account

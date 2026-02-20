@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { Be_Vietnam_Pro } from "next/font/google";
+import { Outfit } from "next/font/google";
 import "./globals.css";
 
-const font = Be_Vietnam_Pro({
+const font = Outfit({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800"],
 });
@@ -41,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className={`${font.className} noise`}>{children}</body>
+      <body className={font.className}>{children}</body>
     </html>
   );
 }

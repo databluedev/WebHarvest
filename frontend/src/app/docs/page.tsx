@@ -32,11 +32,11 @@ interface Section {
 // ---------------------------------------------------------------------------
 
 const METHOD_STYLES: Record<HttpMethod, string> = {
-  GET: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25 backdrop-blur-sm",
-  POST: "bg-blue-500/15 text-blue-400 border-blue-500/25 backdrop-blur-sm",
-  DELETE: "bg-red-500/15 text-red-400 border-red-500/25 backdrop-blur-sm",
-  PATCH: "bg-amber-500/15 text-amber-400 border-amber-500/25 backdrop-blur-sm",
-  PUT: "bg-orange-500/15 text-orange-400 border-orange-500/25 backdrop-blur-sm",
+  GET: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
+  POST: "bg-blue-500/15 text-blue-400 border-blue-500/25",
+  DELETE: "bg-red-500/15 text-red-400 border-red-500/25",
+  PATCH: "bg-amber-500/15 text-amber-400 border-amber-500/25",
+  PUT: "bg-orange-500/15 text-orange-400 border-orange-500/25",
 };
 
 // ---------------------------------------------------------------------------
@@ -1366,7 +1366,7 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
           )}
         </button>
       </div>
-      <pre className="rounded-xl border border-border/40 bg-background/50 p-4 overflow-x-auto text-[12px] leading-relaxed font-mono text-foreground/70">
+      <pre className="rounded-lg border border-border bg-muted p-4 overflow-x-auto text-[12px] leading-relaxed font-mono text-foreground/70">
         <code>{code}</code>
       </pre>
     </div>
@@ -1381,7 +1381,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="glass-card rounded-2xl overflow-hidden transition-all duration-200">
+    <div className="rounded-lg border border-border bg-card overflow-hidden transition-all duration-200">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-3 p-4 text-left hover:bg-foreground/[0.02] transition-all duration-150"
@@ -1407,7 +1407,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 pt-0 border-t border-border/30 animate-scale-in">
+        <div className="px-4 pb-4 pt-0 border-t border-border animate-scale-in">
           <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
             {endpoint.description}
           </p>
@@ -1486,15 +1486,13 @@ export default function DocsPage() {
   );
 
   return (
-    <div className="flex h-screen bg-background grid-bg noise">
-      <div className="mesh-gradient fixed inset-0 pointer-events-none" />
-
+    <div className="flex h-screen bg-background">
       {/* Sidebar Navigation */}
-      <aside className="hidden lg:flex flex-col w-72 border-r border-border/40 bg-card/60 backdrop-blur-xl relative z-10">
+      <aside className="hidden lg:flex flex-col w-72 border-r border-border bg-sidebar">
         {/* Sidebar Header */}
-        <div className="p-6 border-b border-border/40">
+        <div className="p-6 border-b border-border">
           <div className="flex items-center gap-2.5 mb-4">
-            <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 grid place-items-center">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 grid place-items-center">
               <FileText className="h-4.5 w-4.5 text-primary" />
             </div>
             <div>
@@ -1510,7 +1508,7 @@ export default function DocsPage() {
               placeholder="Search endpoints..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 rounded-xl text-sm h-9 bg-background/30 border-border/40"
+              className="pl-9 rounded-md text-sm h-9"
             />
           </div>
         </div>
@@ -1523,7 +1521,7 @@ export default function DocsPage() {
               <button
                 key={section.id}
                 onClick={() => handleSectionClick(section.id)}
-                className={`relative w-full flex items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-all duration-150 mb-0.5 ${
+                className={`relative w-full flex items-center justify-between rounded-md px-3 py-2.5 text-left text-sm transition-all duration-150 mb-0.5 ${
                   isActive
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-muted-foreground hover:text-foreground/80 hover:bg-foreground/[0.03]"
@@ -1546,8 +1544,8 @@ export default function DocsPage() {
         </nav>
 
         {/* Sidebar Footer */}
-        <div className="p-4 border-t border-border/40">
-          <div className="glass-card rounded-xl p-3">
+        <div className="p-4 border-t border-border">
+          <div className="rounded-lg border border-border bg-muted/50 p-3">
             <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
               <span className="text-foreground/60 font-medium">{API_SECTIONS.length} sections</span>
               {" / "}
@@ -1562,19 +1560,19 @@ export default function DocsPage() {
 
       {/* Main Content */}
       <main
-        className="flex-1 overflow-y-auto relative z-10"
+        className="flex-1 overflow-y-auto"
         onScroll={handleScroll}
       >
         <div className="max-w-4xl mx-auto px-6 md:px-10 py-10">
           {/* Page Header */}
           <header className="mb-10 animate-float-in">
-            <div className="glass-card glass-sm inline-flex items-center gap-2 rounded-2xl px-3.5 py-1.5 mb-5">
+            <div className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3.5 py-1.5 mb-5">
               <FileText className="h-3.5 w-3.5 text-primary" />
               <span className="text-xs text-foreground/60">API Reference</span>
             </div>
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight leading-[1.1]">
               API{" "}
-              <span className="gradient-text-white">Documentation</span>
+              <span className="text-foreground">Documentation</span>
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mt-4 leading-relaxed font-light">
               Complete reference for the WebHarvest REST API. All endpoints accept and
@@ -1586,7 +1584,7 @@ export default function DocsPage() {
             </p>
 
             {/* Auth example */}
-            <div className="mt-5 glass-card rounded-2xl p-4">
+            <div className="mt-5 rounded-lg border border-border bg-card p-4">
               <p className="text-[10px] text-muted-foreground/50 uppercase tracking-widest font-medium mb-2">
                 Authorization Header
               </p>
@@ -1604,7 +1602,7 @@ export default function DocsPage() {
                 placeholder="Search endpoints..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 rounded-xl text-sm h-10 bg-background/30 border-border/40"
+                className="pl-9 rounded-md text-sm h-10"
               />
             </div>
 
@@ -1614,10 +1612,10 @@ export default function DocsPage() {
                 <button
                   key={section.id}
                   onClick={() => handleSectionClick(section.id)}
-                  className={`rounded-xl px-3 py-1.5 text-xs transition-all duration-150 border ${
+                  className={`rounded-md px-3 py-1.5 text-xs transition-all duration-150 border ${
                     activeSection === section.id
                       ? "bg-primary/10 text-primary border-primary/20"
-                      : "text-muted-foreground border-border/40 hover:bg-foreground/[0.03]"
+                      : "text-muted-foreground border-border hover:bg-muted"
                   }`}
                 >
                   {section.title}
@@ -1629,7 +1627,7 @@ export default function DocsPage() {
           {/* Sections */}
           <div className="space-y-12">
             {filteredSections.length === 0 && (
-              <div className="glass-card rounded-2xl p-12 text-center">
+              <div className="rounded-lg border border-border bg-card p-12 text-center">
                 <Search className="h-10 w-10 text-muted-foreground/30 mx-auto mb-4" />
                 <p className="text-muted-foreground text-sm">
                   No endpoints matching{" "}
@@ -1658,7 +1656,7 @@ export default function DocsPage() {
                     {section.title}
                     <Badge
                       variant="outline"
-                      className="text-[10px] font-normal text-muted-foreground/50 border-border/50"
+                      className="text-[10px] font-normal text-muted-foreground border-border"
                     >
                       {section.endpoints.length}{" "}
                       {section.endpoints.length === 1 ? "endpoint" : "endpoints"}
@@ -1683,8 +1681,8 @@ export default function DocsPage() {
           </div>
 
           {/* Footer */}
-          <footer className="mt-16 mb-8 pt-8 border-t border-border/30">
-            <div className="glass-card rounded-2xl p-6 text-center">
+          <footer className="mt-16 mb-8 pt-8 border-t border-border">
+            <div className="rounded-lg border border-border bg-card p-6 text-center">
               <p className="text-sm text-muted-foreground">
                 Need help?{" "}
                 <a href="/api-keys" className="text-primary hover:underline">

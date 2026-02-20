@@ -85,7 +85,7 @@ export function ExportDropdown({
         <ChevronDown className="h-3 w-3 ml-0.5" />
       </Button>
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-56 rounded-xl border border-border/50 bg-popover/95 backdrop-blur-xl shadow-2xl shadow-black/20 z-50 py-1.5 animate-scale-in">
+        <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-border bg-popover shadow-lg z-50 py-1 animate-scale-in">
           {formats.map((fmt) => {
             const config = formatConfig[fmt];
             const Icon = config.icon;
@@ -93,13 +93,12 @@ export function ExportDropdown({
               <button
                 key={fmt}
                 onClick={() => handleExport(fmt)}
-                className="flex items-center gap-3 w-full px-3 py-2.5 text-sm hover:bg-foreground/[0.04] transition-colors text-left rounded-lg mx-0.5"
-                style={{ width: "calc(100% - 4px)" }}
+                className="flex items-center gap-3 w-full px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
               >
                 <Icon className={`h-4 w-4 ${config.color}`} />
                 <div>
                   <div className="font-medium text-[13px]">{config.label}</div>
-                  <div className="text-[11px] text-muted-foreground/60">
+                  <div className="text-[11px] text-muted-foreground">
                     {config.description}
                   </div>
                 </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -98,7 +98,6 @@ const actions = [
     desc: "Extract content from any URL with JS rendering and stealth mode",
     color: "text-emerald-400",
     bg: "bg-emerald-500/8",
-    glow: "group-hover:shadow-emerald-500/5",
   },
   {
     href: "/crawl",
@@ -108,7 +107,6 @@ const actions = [
     desc: "Recursively crawl entire sites with BFS and persistent sessions",
     color: "text-blue-400",
     bg: "bg-blue-500/8",
-    glow: "group-hover:shadow-blue-500/5",
   },
   {
     href: "/map",
@@ -118,7 +116,6 @@ const actions = [
     desc: "Fast sitemap discovery and URL mapping without content extraction",
     color: "text-violet-400",
     bg: "bg-violet-500/8",
-    glow: "group-hover:shadow-violet-500/5",
   },
 ];
 
@@ -140,16 +137,17 @@ export default function Dashboard() {
   if (!user) return null;
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto grid-bg">
-        <div className="mesh-gradient min-h-full">
-          <div className="p-8 md:p-14 max-w-5xl mx-auto">
+    <SidebarProvider>
+      <div className="flex h-screen">
+        <Sidebar />
+        <main className="flex-1 overflow-auto bg-background">
+          <MobileMenuButton />
+          <div className="p-6 lg:p-8 md:p-14 max-w-5xl mx-auto">
 
             {/* Hero Section */}
             <section className="mb-16 animate-float-in">
-              {/* Glass pill badge */}
-              <div className="glass-sm inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 mb-6 border border-border/30">
+              {/* Pill badge */}
+              <div className="bg-muted/50 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 mb-6 border border-border/30">
                 <div className="h-5 w-5 grid place-items-center rounded-full bg-emerald-500/10 text-emerald-400">
                   <Shield className="h-3 w-3" />
                 </div>
@@ -160,7 +158,7 @@ export default function Dashboard() {
               <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[0.92]">
                 {user.name ? "Welcome back," : "Web scraping"}
                 <br />
-                <span className="gradient-text-white">
+                <span className="text-foreground">
                   {user.name ? `${user.name}.` : "made simple."}
                 </span>
               </h1>
@@ -176,7 +174,7 @@ export default function Dashboard() {
                 {features.map((f) => (
                   <div
                     key={f.label}
-                    className="glass-sm inline-flex items-center gap-2 rounded-full px-3 py-1.5 border border-border/20 hover:border-border/40 transition-colors cursor-default"
+                    className="bg-muted/50 inline-flex items-center gap-2 rounded-full px-3 py-1.5 border border-border/20 hover:border-border/40 transition-colors cursor-default"
                   >
                     <f.icon className="h-3.5 w-3.5 text-muted-foreground/60" />
                     <span className="text-[11px] text-foreground/50">{f.label}</span>
@@ -187,13 +185,13 @@ export default function Dashboard() {
               {/* CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mt-8">
                 <Link href="/scrape">
-                  <Button variant="glow" size="lg" className="rounded-2xl px-6 gap-2 hover:-translate-y-0.5 transition-all">
+                  <Button variant="default" size="lg" className="rounded-lg px-6 gap-2 hover:-translate-y-0.5 transition-all">
                     <Play className="h-4 w-4" />
                     Start scraping
                   </Button>
                 </Link>
                 <Link href="/api-keys">
-                  <Button variant="outline" size="lg" className="rounded-2xl px-6 gap-2 hover:-translate-y-0.5 transition-all">
+                  <Button variant="outline" size="lg" className="rounded-lg px-6 gap-2 hover:-translate-y-0.5 transition-all">
                     <ArrowRight className="h-4 w-4" />
                     Get API key
                   </Button>
@@ -206,7 +204,7 @@ export default function Dashboard() {
               {/* Mini metrics */}
               <div className="mt-6 grid grid-cols-3 gap-3 max-w-md">
                 {metrics.map((m) => (
-                  <div key={m.label} className="glass-card rounded-2xl p-4 hover-lift">
+                  <div key={m.label} className="rounded-lg border border-border/50 bg-card p-4 hover:bg-muted/50 transition-colors">
                     <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/50">{m.label}</div>
                     <div className="mt-1 text-lg font-bold tracking-tight">{m.value}</div>
                   </div>
@@ -219,7 +217,7 @@ export default function Dashboard() {
               <div className="grid gap-3 md:grid-cols-3 stagger-children">
                 {actions.map((item) => (
                   <Link key={item.href} href={item.href}>
-                    <div className={`group glass-card rounded-2xl p-5 hover-lift cursor-pointer h-full ${item.glow}`}>
+                    <div className="group rounded-lg border border-border/50 bg-card p-5 hover:bg-muted/50 transition-colors cursor-pointer h-full">
                       <div className="flex items-center justify-between mb-3">
                         <div className={`h-9 w-9 rounded-xl ${item.bg} grid place-items-center`}>
                           <item.icon className={`h-4 w-4 ${item.color}`} />
@@ -256,7 +254,7 @@ export default function Dashboard() {
                     const jobUrl = getJobUrl(job);
                     return (
                       <Link key={job.id} href={getJobDetailPath(job)}>
-                        <div className="glass-card rounded-2xl p-4 hover:bg-foreground/[0.02] transition-all cursor-pointer h-full glow-ring">
+                        <div className="rounded-lg border border-border/50 bg-card p-4 hover:bg-muted/50 transition-colors cursor-pointer h-full">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-1.5">
                               <Badge variant="outline" className="capitalize text-[10px] gap-1">
@@ -302,7 +300,7 @@ export default function Dashboard() {
             <section className="animate-float-in" style={{ animationDelay: "0.25s" }}>
               <div className="grid gap-3 md:grid-cols-2">
                 {/* Capabilities */}
-                <div className="glass-card rounded-2xl p-6">
+                <div className="rounded-lg border border-border/50 bg-card p-6">
                   <h3 className="text-sm font-medium flex items-center gap-2 mb-4 text-foreground/80">
                     <Zap className="h-4 w-4 text-emerald-400" />
                     Capabilities
@@ -327,7 +325,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Quickstart */}
-                <div className="glass-card rounded-2xl p-6">
+                <div className="rounded-lg border border-border/50 bg-card p-6">
                   <h3 className="text-sm font-medium flex items-center gap-2 mb-4 text-foreground/80">
                     <Play className="h-4 w-4 text-blue-400" />
                     Quickstart
@@ -369,8 +367,8 @@ export default function Dashboard() {
             </section>
 
           </div>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

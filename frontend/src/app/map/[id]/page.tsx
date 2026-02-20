@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -80,10 +80,11 @@ export default function MapDetailPage() {
   }, [status?.links, urlFilter]);
 
   return (
+    <SidebarProvider>
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto grid-bg">
-        <div className="mesh-gradient min-h-full">
+      <main className="flex-1 overflow-auto bg-background">
+        <MobileMenuButton />
         <div className="p-8 max-w-5xl mx-auto">
           <div className="mb-6 flex items-center gap-4">
             <Link href="/map">
@@ -261,8 +262,8 @@ export default function MapDetailPage() {
             </>
           )}
         </div>
-        </div>
       </main>
     </div>
+    </SidebarProvider>
   );
 }

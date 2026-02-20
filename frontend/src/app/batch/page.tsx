@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -109,10 +109,11 @@ export default function BatchPage() {
   const urlCount = urlText.split("\n").filter((l) => l.trim()).length;
 
   return (
+    <SidebarProvider>
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto grid-bg">
-        <div className="mesh-gradient min-h-full">
+      <main className="flex-1 overflow-auto bg-background">
+        <MobileMenuButton />
         <div className="p-8 max-w-4xl mx-auto">
           <div className="mb-8 animate-float-in">
             <h1 className="text-3xl font-bold">Batch Scrape</h1>
@@ -411,8 +412,8 @@ export default function BatchPage() {
             </CardContent>
           </Card>
         </div>
-        </div>
       </main>
     </div>
+    </SidebarProvider>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -280,10 +280,11 @@ export default function WebhooksPage() {
   // ---- Render --------------------------------------------------------------
 
   return (
+    <SidebarProvider>
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto grid-bg">
-        <div className="mesh-gradient min-h-full">
+      <main className="flex-1 overflow-auto bg-background">
+        <MobileMenuButton />
         <div className="p-8">
           {/* Header */}
           <div className="mb-8 flex items-center justify-between animate-float-in">
@@ -313,7 +314,7 @@ export default function WebhooksPage() {
 
           {/* Stats Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-            <Card className="glass-card">
+            <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Total Deliveries
@@ -334,7 +335,7 @@ export default function WebhooksPage() {
               </CardContent>
             </Card>
 
-            <Card className="glass-card">
+            <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Success Rate
@@ -360,7 +361,7 @@ export default function WebhooksPage() {
               </CardContent>
             </Card>
 
-            <Card className="glass-card">
+            <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Avg Response Time
@@ -381,7 +382,7 @@ export default function WebhooksPage() {
               </CardContent>
             </Card>
 
-            <Card className="glass-card">
+            <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   Failed Deliveries
@@ -404,7 +405,7 @@ export default function WebhooksPage() {
           </div>
 
           {/* Test Webhook Section */}
-          <Card className="mb-8 glass-card">
+          <Card className="mb-8">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Send className="h-5 w-5 text-primary" />
@@ -670,9 +671,9 @@ export default function WebhooksPage() {
             </CardContent>
           </Card>
         </div>
-        </div>
       </main>
     </div>
+    </SidebarProvider>
   );
 }
 

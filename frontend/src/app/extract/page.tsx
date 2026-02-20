@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -232,10 +232,11 @@ export default function ExtractPage() {
     .filter((l) => l.trim()).length;
 
   return (
+    <SidebarProvider>
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto grid-bg">
-        <div className="mesh-gradient min-h-full">
+      <main className="flex-1 overflow-auto bg-background">
+        <MobileMenuButton />
         <div className="p-8 max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-6 animate-float-in">
@@ -666,8 +667,8 @@ export default function ExtractPage() {
             </div>
           </div>
         </div>
-        </div>
       </main>
     </div>
+    </SidebarProvider>
   );
 }

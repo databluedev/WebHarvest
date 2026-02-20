@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -215,10 +215,11 @@ export default function ScrapePage() {
   };
 
   return (
+    <SidebarProvider>
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto grid-bg">
-        <div className="mesh-gradient min-h-full">
+      <main className="flex-1 overflow-auto bg-background">
+        <MobileMenuButton />
         <div className="p-8 max-w-6xl mx-auto">
           <div className="mb-6 animate-float-in">
             <h1 className="text-3xl font-bold">Scrape</h1>
@@ -726,8 +727,8 @@ export default function ScrapePage() {
             </div>
           </div>
         </div>
-        </div>
       </main>
     </div>
+    </SidebarProvider>
   );
 }

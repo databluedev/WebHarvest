@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -177,10 +177,11 @@ export default function SchedulesPage() {
   };
 
   return (
+    <SidebarProvider>
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto grid-bg">
-        <div className="mesh-gradient min-h-full">
+      <main className="flex-1 overflow-auto bg-background">
+        <MobileMenuButton />
         <div className="p-8 max-w-5xl mx-auto">
           <div className="flex items-center justify-between mb-8 animate-float-in">
             <div>
@@ -477,8 +478,8 @@ export default function SchedulesPage() {
             </CardContent>
           </Card>
         </div>
-        </div>
       </main>
     </div>
+    </SidebarProvider>
   );
 }

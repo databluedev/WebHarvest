@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, createContext, useContext } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,10 @@ import {
   Eye,
   Webhook,
   Sparkles,
+  Menu,
+  X,
+  Flame,
+  ChevronLeft,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -32,7 +37,7 @@ const navSections = [
     ],
   },
   {
-    label: "Tools",
+    label: "Playground",
     items: [
       { href: "/scrape", label: "Scrape", icon: Search },
       { href: "/crawl", label: "Crawl", icon: Globe },
@@ -52,16 +57,26 @@ const navSections = [
     ],
   },
   {
-    label: "Settings",
+    label: "Configure",
     items: [
       { href: "/api-keys", label: "API Keys", icon: Key },
-      { href: "/docs", label: "API Docs", icon: FileText },
+      { href: "/docs", label: "Docs", icon: FileText },
       { href: "/settings", label: "Settings", icon: Settings },
     ],
   },
 ];
 
-export function Sidebar() {
+// Context for mobile menu state
+const SidebarContext = createContext<{
+  open: boolean;
+  setOpen: (v: boolean) => void;
+}>({ open: false, setOpen: () => {} });
+
+export function useSidebar() {
+  return useContext(SidebarContext);
+}
+
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   const handleLogout = () => {
@@ -70,23 +85,20 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex h-screen w-[260px] flex-col border-r border-border/30 bg-background/80 backdrop-blur-xl">
+    <div className="flex h-full flex-col">
       {/* Logo */}
-      <div className="flex h-[60px] items-center gap-3 border-b border-border/30 px-5">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/15">
-          <Globe className="h-4 w-4 text-primary" />
+      <div className="flex h-14 items-center gap-2.5 px-4 border-b border-border shrink-0">
+        <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10">
+          <Flame className="h-4 w-4 text-primary" />
         </div>
-        <div className="flex flex-col">
-          <span className="text-[13px] font-semibold tracking-tight gradient-text">WebHarvest</span>
-          <span className="text-[10px] text-muted-foreground/40 font-mono">v0.1.0</span>
-        </div>
+        <span className="text-sm font-semibold tracking-tight">WebHarvest</span>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5">
+      <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-4">
         {navSections.map((section) => (
           <div key={section.label}>
-            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/40">
+            <p className="px-2 mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
               {section.label}
             </p>
             <div className="space-y-0.5">
@@ -96,17 +108,15 @@ export function Sidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={onNavigate}
                     className={cn(
-                      "relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200",
+                      "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
                       isActive
-                        ? "bg-primary/8 text-primary"
-                        : "text-muted-foreground/70 hover:bg-foreground/[0.03] hover:text-foreground/80"
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
                   >
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full bg-primary shadow-[0_0_8px_hsla(var(--primary),0.4)]" />
-                    )}
-                    <item.icon className={cn("h-[15px] w-[15px] shrink-0", isActive ? "text-primary" : "text-muted-foreground/50")} />
+                    <item.icon className={cn("h-4 w-4 shrink-0", isActive && "text-primary")} />
                     <span>{item.label}</span>
                   </Link>
                 );
@@ -117,16 +127,74 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border/30 p-3 space-y-0.5">
+      <div className="border-t border-border p-3 space-y-0.5 shrink-0">
         <ThemeToggle />
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium text-muted-foreground/60 transition-all duration-200 hover:bg-red-500/8 hover:text-red-400"
+          className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
         >
-          <LogOut className="h-[15px] w-[15px]" />
-          Logout
+          <LogOut className="h-4 w-4" />
+          Log out
         </button>
       </div>
-    </aside>
+    </div>
+  );
+}
+
+export function MobileMenuButton() {
+  const { open, setOpen } = useSidebar();
+
+  return (
+    <button
+      onClick={() => setOpen(!open)}
+      className="lg:hidden fixed top-3 left-3 z-50 flex items-center justify-center w-9 h-9 rounded-md bg-card border border-border text-muted-foreground hover:text-foreground transition-colors"
+      aria-label="Toggle menu"
+    >
+      {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+    </button>
+  );
+}
+
+export function SidebarProvider({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  return (
+    <SidebarContext.Provider value={{ open, setOpen }}>
+      {children}
+    </SidebarContext.Provider>
+  );
+}
+
+export function Sidebar() {
+  const { open, setOpen } = useSidebar();
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex h-screen w-[240px] flex-col border-r border-border bg-sidebar shrink-0">
+        <SidebarContent />
+      </aside>
+
+      {/* Mobile overlay */}
+      {open && (
+        <div className="sidebar-overlay" onClick={() => setOpen(false)} />
+      )}
+
+      {/* Mobile sidebar */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 w-[260px] bg-sidebar border-r border-border transform transition-transform duration-200 ease-out lg:hidden",
+          open ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <SidebarContent onNavigate={() => setOpen(false)} />
+      </aside>
+    </>
   );
 }

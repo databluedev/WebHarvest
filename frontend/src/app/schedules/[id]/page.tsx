@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
+import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -137,31 +137,36 @@ export default function ScheduleDetailPage() {
 
   if (loading) {
     return (
+      <SidebarProvider>
       <div className="flex h-screen">
         <Sidebar />
         <main className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </main>
       </div>
+      </SidebarProvider>
     );
   }
 
   if (!schedule) {
     return (
+      <SidebarProvider>
       <div className="flex h-screen">
         <Sidebar />
         <main className="flex-1 flex items-center justify-center">
           <p className="text-muted-foreground">Schedule not found</p>
         </main>
       </div>
+      </SidebarProvider>
     );
   }
 
   return (
+    <SidebarProvider>
     <div className="flex h-screen">
       <Sidebar />
-      <main className="flex-1 overflow-auto grid-bg">
-        <div className="mesh-gradient min-h-full">
+      <main className="flex-1 overflow-auto bg-background">
+        <MobileMenuButton />
         <div className="p-8 max-w-4xl mx-auto">
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
@@ -428,8 +433,8 @@ export default function ScheduleDetailPage() {
             </CardContent>
           </Card>
         </div>
-        </div>
       </main>
     </div>
+    </SidebarProvider>
   );
 }
