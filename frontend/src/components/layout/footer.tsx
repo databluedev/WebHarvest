@@ -7,11 +7,11 @@ const footerLinks = [
   {
     label: "Product",
     links: [
-      { text: "Scrape", href: "/scrape" },
-      { text: "Crawl", href: "/crawl" },
-      { text: "Map", href: "/map" },
-      { text: "Batch", href: "/batch" },
-      { text: "Search", href: "/search" },
+      { text: "Scrape", href: "/playground?endpoint=scrape" },
+      { text: "Crawl", href: "/playground?endpoint=crawl" },
+      { text: "Map", href: "/playground?endpoint=map" },
+      { text: "Batch", href: "/playground?endpoint=batch" },
+      { text: "Search", href: "/playground?endpoint=search" },
     ],
   },
   {
