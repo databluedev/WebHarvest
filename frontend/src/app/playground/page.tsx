@@ -669,9 +669,8 @@ function PlaygroundContent() {
         case "crawl": {
           if (!url.trim()) return;
           const fullUrl = url.startsWith("http") ? url : `https://${url}`;
-          const params: any = { url: fullUrl };
+          const params: any = { url: fullUrl, max_pages: maxPages, max_depth: maxDepth, concurrency };
           if (showAdvanced) {
-            params.max_pages = maxPages; params.max_depth = maxDepth; params.concurrency = concurrency;
             if (includePaths.trim()) params.include_paths = includePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
             if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
             if (webhookUrl.trim()) params.webhook_url = webhookUrl.trim();
