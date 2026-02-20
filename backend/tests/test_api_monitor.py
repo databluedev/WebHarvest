@@ -17,7 +17,7 @@ class TestCreateMonitor:
             ) as mock_rl,
             patch("app.api.v1.monitor.check_quota", new_callable=AsyncMock),
             patch("app.api.v1.monitor.increment_usage", new_callable=AsyncMock),
-            patch("app.api.v1.monitor.check_single_monitor_task") as mock_task,
+            patch("app.workers.monitor_worker.check_single_monitor_task") as mock_task,
         ):
             mock_rl.return_value = MagicMock(
                 allowed=True, limit=30, remaining=29, reset=60
@@ -140,7 +140,7 @@ class TestListMonitors:
             ) as mock_rl,
             patch("app.api.v1.monitor.check_quota", new_callable=AsyncMock),
             patch("app.api.v1.monitor.increment_usage", new_callable=AsyncMock),
-            patch("app.api.v1.monitor.check_single_monitor_task") as mock_task,
+            patch("app.workers.monitor_worker.check_single_monitor_task") as mock_task,
         ):
             mock_rl.return_value = MagicMock(
                 allowed=True, limit=30, remaining=29, reset=60
@@ -184,7 +184,7 @@ class TestUpdateMonitor:
             ) as mock_rl,
             patch("app.api.v1.monitor.check_quota", new_callable=AsyncMock),
             patch("app.api.v1.monitor.increment_usage", new_callable=AsyncMock),
-            patch("app.api.v1.monitor.check_single_monitor_task") as mock_task,
+            patch("app.workers.monitor_worker.check_single_monitor_task") as mock_task,
         ):
             mock_rl.return_value = MagicMock(
                 allowed=True, limit=30, remaining=29, reset=60
@@ -226,7 +226,7 @@ class TestDeleteMonitor:
             ) as mock_rl,
             patch("app.api.v1.monitor.check_quota", new_callable=AsyncMock),
             patch("app.api.v1.monitor.increment_usage", new_callable=AsyncMock),
-            patch("app.api.v1.monitor.check_single_monitor_task") as mock_task,
+            patch("app.workers.monitor_worker.check_single_monitor_task") as mock_task,
         ):
             mock_rl.return_value = MagicMock(
                 allowed=True, limit=30, remaining=29, reset=60
@@ -271,7 +271,7 @@ class TestTriggerCheck:
             ) as mock_rl,
             patch("app.api.v1.monitor.check_quota", new_callable=AsyncMock),
             patch("app.api.v1.monitor.increment_usage", new_callable=AsyncMock),
-            patch("app.api.v1.monitor.check_single_monitor_task") as mock_task,
+            patch("app.workers.monitor_worker.check_single_monitor_task") as mock_task,
         ):
             mock_rl.return_value = MagicMock(
                 allowed=True, limit=30, remaining=29, reset=60
@@ -291,7 +291,7 @@ class TestTriggerCheck:
 
         monitor_id = create_resp.json()["monitor"]["id"]
 
-        with patch("app.api.v1.monitor.check_single_monitor_task") as mock_task:
+        with patch("app.workers.monitor_worker.check_single_monitor_task") as mock_task:
             mock_task.delay = MagicMock()
 
             resp = await client.post(
@@ -312,7 +312,7 @@ class TestMonitorHistory:
             ) as mock_rl,
             patch("app.api.v1.monitor.check_quota", new_callable=AsyncMock),
             patch("app.api.v1.monitor.increment_usage", new_callable=AsyncMock),
-            patch("app.api.v1.monitor.check_single_monitor_task") as mock_task,
+            patch("app.workers.monitor_worker.check_single_monitor_task") as mock_task,
         ):
             mock_rl.return_value = MagicMock(
                 allowed=True, limit=30, remaining=29, reset=60

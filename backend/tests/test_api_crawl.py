@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job import Job
 from app.models.job_result import JobResult
+from app.models.user import User
+from app.core.security import hash_password
 
 
 # ---------------------------------------------------------------------------
@@ -160,10 +162,19 @@ class TestCrawlStatus:
         self, client: AsyncClient, auth_headers, db_session: AsyncSession
     ):
         """A user cannot see another user's crawl job."""
-        other_user_id = uuid.uuid4()
+        other_user = User(
+            id=uuid.uuid4(),
+            email=f"other_{uuid.uuid4().hex[:8]}@test.dev",
+            password_hash=hash_password("test"),
+            name="Other User",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db_session.add(other_user)
+        await db_session.flush()
         job = Job(
             id=uuid.uuid4(),
-            user_id=other_user_id,
+            user_id=other_user.id,
             type="crawl",
             status="completed",
             config={"url": "https://other.com"},

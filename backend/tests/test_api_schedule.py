@@ -10,6 +10,8 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.schedule import Schedule
+from app.models.user import User
+from app.core.security import hash_password
 
 
 # ---------------------------------------------------------------------------
@@ -182,8 +184,17 @@ class TestListSchedules:
         self, client: AsyncClient, auth_headers, db_session: AsyncSession, test_user
     ):
         """A user does not see another user's schedules."""
-        other_user_id = uuid.uuid4()
-        await _create_schedule_in_db(db_session, other_user_id, name="Other's sched")
+        other_user = User(
+            id=uuid.uuid4(),
+            email=f"other_{uuid.uuid4().hex[:8]}@test.dev",
+            password_hash=hash_password("test"),
+            name="Other User",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db_session.add(other_user)
+        await db_session.flush()
+        await _create_schedule_in_db(db_session, other_user.id, name="Other's sched")
         await _create_schedule_in_db(db_session, test_user.id, name="My sched")
 
         resp = await client.get("/v1/schedules", headers=auth_headers)
@@ -290,8 +301,17 @@ class TestUpdateSchedule:
         self, client: AsyncClient, auth_headers, db_session: AsyncSession
     ):
         """A user cannot update another user's schedule."""
-        other_user_id = uuid.uuid4()
-        sched = await _create_schedule_in_db(db_session, other_user_id, name="Not mine")
+        other_user = User(
+            id=uuid.uuid4(),
+            email=f"other_{uuid.uuid4().hex[:8]}@test.dev",
+            password_hash=hash_password("test"),
+            name="Other User",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db_session.add(other_user)
+        await db_session.flush()
+        sched = await _create_schedule_in_db(db_session, other_user.id, name="Not mine")
 
         resp = await client.put(
             f"/v1/schedules/{sched.id}",
@@ -335,8 +355,17 @@ class TestDeleteSchedule:
     async def test_delete_other_users_schedule(
         self, client: AsyncClient, auth_headers, db_session: AsyncSession
     ):
-        other_user_id = uuid.uuid4()
-        sched = await _create_schedule_in_db(db_session, other_user_id)
+        other_user = User(
+            id=uuid.uuid4(),
+            email=f"other_{uuid.uuid4().hex[:8]}@test.dev",
+            password_hash=hash_password("test"),
+            name="Other User",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db_session.add(other_user)
+        await db_session.flush()
+        sched = await _create_schedule_in_db(db_session, other_user.id)
 
         resp = await client.delete(f"/v1/schedules/{sched.id}", headers=auth_headers)
         assert resp.status_code == 404
@@ -398,13 +427,13 @@ class TestTriggerSchedule:
         with patch("app.workers.scrape_worker.process_scrape") as mock_task:
             mock_task.delay = MagicMock()
 
-            await client.post(
+            resp = await client.post(
                 f"/v1/schedules/{sched.id}/trigger",
                 headers=auth_headers,
             )
 
-        # Refresh from DB
-        await db_session.refresh(sched)
+        assert resp.status_code == 200
+        # The endpoint modifies the same ORM object via the shared session
         assert sched.run_count == 1
 
     @pytest.mark.asyncio
@@ -421,8 +450,17 @@ class TestTriggerSchedule:
     async def test_trigger_other_users_schedule(
         self, client: AsyncClient, auth_headers, db_session: AsyncSession
     ):
-        other_user_id = uuid.uuid4()
-        sched = await _create_schedule_in_db(db_session, other_user_id)
+        other_user = User(
+            id=uuid.uuid4(),
+            email=f"other_{uuid.uuid4().hex[:8]}@test.dev",
+            password_hash=hash_password("test"),
+            name="Other User",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        db_session.add(other_user)
+        await db_session.flush()
+        sched = await _create_schedule_in_db(db_session, other_user.id)
 
         resp = await client.post(
             f"/v1/schedules/{sched.id}/trigger", headers=auth_headers

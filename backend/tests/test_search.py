@@ -274,32 +274,23 @@ class TestDuckDuckGoSearch:
 class TestFallbackChain:
     @pytest.mark.asyncio
     async def test_fallback_when_primary_fails(self):
-        """If the primary engine raises, the fallback is tried."""
+        """If the only engine raises with no fallback configured, error propagates."""
         with patch.object(
             DuckDuckGoSearch, "search", new_callable=AsyncMock
         ) as ddg_mock:
-            ddg_mock.side_effect = [
-                Exception("DuckDuckGo down"),  # First call (primary) fails
-                [
-                    SearchResult(
-                        url="https://ddg.com/r", title="Fallback", snippet="Works"
-                    )
-                ],  # Fallback succeeds
-            ]
+            ddg_mock.side_effect = Exception("DuckDuckGo down")
 
             with patch("app.services.search.settings") as mock_settings:
                 mock_settings.BRAVE_SEARCH_API_KEY = ""
 
-                await web_search("fallback test", num_results=3, engine="duckduckgo")
+                # DuckDuckGo is the only engine in the chain when Brave key
+                # is empty and no Google keys — error should propagate
+                with pytest.raises(Exception, match="DuckDuckGo down"):
+                    await web_search(
+                        "fallback test", num_results=3, engine="duckduckgo"
+                    )
 
-                # DuckDuckGo is both primary and the only engine in the chain
-                # when Brave key is empty and no google keys
-                # It should have been tried once (no duplicate in chain)
-                # The function re-raises if all engines fail
-                # With only DDG in the chain and it failing, last_error is raised
-                # Actually DuckDuckGo appears once; if it fails, and no brave/google, it re-raises
-                # Let's check the actual behavior
-                assert ddg_mock.call_count >= 1
+                assert ddg_mock.call_count == 1
 
     @pytest.mark.asyncio
     async def test_brave_fallback_after_ddg_failure(self):

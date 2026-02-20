@@ -38,6 +38,9 @@ def _human_readable_next(next_run: datetime | None) -> str | None:
     if not next_run:
         return None
     now = datetime.now(timezone.utc)
+    # Handle naive datetimes (e.g. from SQLite which strips tz info)
+    if next_run.tzinfo is None:
+        next_run = next_run.replace(tzinfo=timezone.utc)
     delta = next_run - now
     total_seconds = int(delta.total_seconds())
     if total_seconds < 0:

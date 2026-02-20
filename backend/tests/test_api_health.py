@@ -21,9 +21,9 @@ class TestReadinessEndpoint:
     async def test_readiness_checks_all_services(self, client: AsyncClient):
         """GET /health/ready returns check results for DB, Redis, and browser pool."""
         with (
-            patch("app.api.v1.health.engine") as mock_engine,
-            patch("app.api.v1.health.redis_client") as mock_redis,
-            patch("app.api.v1.health.browser_pool") as mock_bp,
+            patch("app.core.database.engine") as mock_engine,
+            patch("app.core.redis.redis_client") as mock_redis,
+            patch("app.services.browser.browser_pool") as mock_bp,
         ):
             # Mock successful checks
             mock_conn = AsyncMock()
@@ -44,9 +44,9 @@ class TestReadinessEndpoint:
     async def test_readiness_returns_503_on_failure(self, client: AsyncClient):
         """GET /health/ready returns 503 when a service check fails."""
         with (
-            patch("app.api.v1.health.engine") as mock_engine,
-            patch("app.api.v1.health.redis_client") as mock_redis,
-            patch("app.api.v1.health.browser_pool") as mock_bp,
+            patch("app.core.database.engine") as mock_engine,
+            patch("app.core.redis.redis_client") as mock_redis,
+            patch("app.services.browser.browser_pool") as mock_bp,
         ):
             # DB fails
             mock_engine.connect.side_effect = Exception("Connection refused")

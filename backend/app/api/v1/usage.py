@@ -98,7 +98,14 @@ async def get_usage_stats(
         .order_by(text("day"))
     )
     jobs_per_day = [
-        {"date": row.day.isoformat() if row.day else "", "count": row.count}
+        {
+            "date": (
+                row.day.isoformat()
+                if hasattr(row.day, "isoformat")
+                else (str(row.day) if row.day else "")
+            ),
+            "count": row.count,
+        }
         for row in daily_q.all()
     ]
 
