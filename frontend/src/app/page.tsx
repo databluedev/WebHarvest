@@ -7,12 +7,6 @@ import { ModeSwitcher } from "@/components/layout/mode-switcher";
 import { Footer } from "@/components/layout/footer";
 import { api } from "@/lib/api";
 import {
-  Globe,
-  Search,
-  Map,
-  Layers,
-  ArrowRight,
-  Clock,
   FileText,
   Code,
   Link2,
@@ -23,28 +17,20 @@ import {
   ExternalLink,
   Loader2,
   SlidersHorizontal,
-  LayoutGrid,
   FileCode,
   ChevronDown,
-  Sparkles,
   Download,
+  ArrowRight,
+  Clock,
+  Search,
   Crosshair,
   Satellite,
   Bug,
   Network,
   Boxes,
-  Terminal,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-
-const ENDPOINT_COLORS: Record<string, { text: string; border: string; dot: string }> = {
-  scrape: { text: "text-amber-400", border: "border-amber-500/20", dot: "bg-amber-400" },
-  search: { text: "text-cyan-400", border: "border-cyan-500/20", dot: "bg-cyan-400" },
-  map: { text: "text-violet-400", border: "border-violet-500/20", dot: "bg-violet-400" },
-  crawl: { text: "text-emerald-400", border: "border-emerald-500/20", dot: "bg-emerald-400" },
-  batch: { text: "text-rose-400", border: "border-rose-500/20", dot: "bg-rose-400" },
-};
 
 function getJobDetailPath(job: any): string {
   switch (job.type) {
@@ -70,9 +56,7 @@ function getDomain(url: string): string {
   try {
     const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
     return parsed.hostname;
-  } catch {
-    return url;
-  }
+  } catch { return url; }
 }
 
 function getFavicon(url: string): string {
@@ -180,57 +164,42 @@ export default function HomePage() {
                 <ModeSwitcher />
               </div>
 
-              {/* URL Input Section */}
+              {/* URL Input */}
               <section className={cn("max-w-2xl mx-auto w-full animate-float-in", hasRuns ? "mb-10" : "mb-4")} style={{ animationDelay: "0.05s" }}>
-                <div className="rounded-2xl border border-amber-500/15 bg-card/80 backdrop-blur-sm p-4 shadow-xl shadow-amber-500/5">
-                  {/* URL Input */}
-                  <div className="flex items-center gap-0 rounded-xl bg-background/80 border border-border/40 px-4 h-12 mb-3 focus-within:ring-2 focus-within:ring-amber-500/15 focus-within:border-amber-500/25 transition-all">
-                    <span className="text-sm text-muted-foreground/35 shrink-0 select-none font-mono">https://</span>
+                <div className="rounded-2xl border border-primary/15 bg-card/80 backdrop-blur-sm p-4 shadow-xl shadow-primary/5">
+                  <div className="flex items-center gap-0 rounded-xl bg-background border border-border/50 px-4 h-12 mb-3 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/25 transition-all">
+                    <span className="text-sm text-muted-foreground shrink-0 select-none font-mono">https://</span>
                     <input
-                      type="text"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
+                      type="text" value={url} onChange={(e) => setUrl(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && !loading && handleScrape()}
                       placeholder="example.com"
-                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/25 ml-1"
+                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 ml-1"
                     />
-                    <Crosshair className="h-4 w-4 text-amber-400/30 shrink-0 ml-2" />
+                    <Crosshair className="h-4 w-4 text-primary/40 shrink-0 ml-2" />
                   </div>
 
-                  {/* Controls Row */}
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-1.5">
-                      <button onClick={() => router.push("/playground?endpoint=scrape")} className="h-8 w-8 rounded-lg bg-muted/40 grid place-items-center text-muted-foreground/40 hover:text-foreground hover:bg-muted/60 transition-all" title="Advanced settings">
+                      <button onClick={() => router.push("/playground?endpoint=scrape")} className="h-8 w-8 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="Advanced settings">
                         <SlidersHorizontal className="h-3.5 w-3.5" />
                       </button>
-                      <button onClick={() => router.push("/playground?endpoint=batch")} className="h-8 w-8 rounded-lg bg-muted/40 grid place-items-center text-muted-foreground/40 hover:text-foreground hover:bg-muted/60 transition-all" title="Batch mode">
+                      <button onClick={() => router.push("/playground?endpoint=batch")} className="h-8 w-8 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="Batch mode">
                         <Boxes className="h-3.5 w-3.5" />
                       </button>
-                      <button onClick={() => router.push("/docs")} className="h-8 w-8 rounded-lg bg-muted/40 grid place-items-center text-muted-foreground/40 hover:text-foreground hover:bg-muted/60 transition-all" title="API Docs">
-                        <Terminal className="h-3.5 w-3.5" />
+                      <button onClick={() => router.push("/docs")} className="h-8 w-8 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="API Docs">
+                        <FileCode className="h-3.5 w-3.5" />
                       </button>
 
-                      {/* Format Dropdown */}
                       <div className="relative">
-                        <button
-                          onClick={() => setShowFormatDropdown(!showFormatDropdown)}
-                          className="flex items-center gap-1.5 h-8 rounded-lg bg-muted/40 px-2.5 text-[12px] font-medium text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all"
-                        >
+                        <button onClick={() => setShowFormatDropdown(!showFormatDropdown)} className="flex items-center gap-1.5 h-8 rounded-lg bg-muted/60 px-2.5 text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
                           <FileText className="h-3.5 w-3.5" />
                           <span>{selectedFormat.charAt(0).toUpperCase() + selectedFormat.slice(1)}</span>
-                          <ChevronDown className="h-3 w-3 opacity-50" />
+                          <ChevronDown className="h-3 w-3 opacity-60" />
                         </button>
                         {showFormatDropdown && (
-                          <div className="absolute top-10 left-0 z-50 w-44 rounded-xl border border-border/50 bg-card shadow-xl p-1 animate-scale-in">
+                          <div className="absolute top-10 left-0 z-50 w-44 rounded-xl border border-border/60 bg-card shadow-xl p-1 animate-scale-in">
                             {["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"].map((fmt) => (
-                              <button
-                                key={fmt}
-                                onClick={() => { setSelectedFormat(fmt); setShowFormatDropdown(false); }}
-                                className={cn(
-                                  "flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-[12px] transition-all",
-                                  selectedFormat === fmt ? "bg-amber-500/10 text-amber-400" : "text-muted-foreground/60 hover:bg-muted/50 hover:text-foreground"
-                                )}
-                              >
+                              <button key={fmt} onClick={() => { setSelectedFormat(fmt); setShowFormatDropdown(false); }} className={cn("flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg text-[12px] transition-all", selectedFormat === fmt ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground")}>
                                 {(() => { const FIcon = formatIcons[fmt]?.icon; return FIcon ? <FIcon className="h-3 w-3" /> : null; })()}
                                 {fmt.charAt(0).toUpperCase() + fmt.slice(1).replace("_", " ")}
                               </button>
@@ -241,11 +210,11 @@ export default function HomePage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <button onClick={handleGetCode} className="flex items-center gap-1.5 h-8 rounded-lg px-3 text-[12px] font-medium text-muted-foreground/60 hover:text-foreground border border-border/40 hover:bg-muted/40 transition-all">
+                      <button onClick={handleGetCode} className="flex items-center gap-1.5 h-8 rounded-lg px-3 text-[12px] font-medium text-muted-foreground hover:text-foreground border border-border/50 hover:bg-muted/50 transition-all">
                         <Code className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Get code</span>
                       </button>
-                      <button onClick={handleScrape} disabled={loading || !url.trim()} className="flex items-center gap-1.5 h-8 rounded-lg px-4 text-[12px] font-bold bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-amber-500/15">
+                      <button onClick={handleScrape} disabled={loading || !url.trim()} className="flex items-center gap-1.5 h-8 rounded-lg px-4 text-[12px] font-bold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-primary/15">
                         {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>Start scraping</>}
                       </button>
                     </div>
@@ -259,9 +228,9 @@ export default function HomePage() {
                   <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-3">
                       <h2 className="text-lg font-bold tracking-tight">Recent Runs</h2>
-                      <div className="h-px flex-1 bg-gradient-to-r from-border/40 to-transparent min-w-[40px]" />
+                      <div className="h-px flex-1 bg-gradient-to-r from-border to-transparent min-w-[40px]" />
                     </div>
-                    <Link href="/jobs" className="text-[12px] text-muted-foreground/40 hover:text-foreground transition-colors flex items-center gap-1 font-medium">
+                    <Link href="/jobs" className="text-[12px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 font-medium">
                       View all <ArrowRight className="h-3 w-3" />
                     </Link>
                   </div>
@@ -271,14 +240,13 @@ export default function HomePage() {
                       const jobUrl = getJobUrl(job);
                       const domain = getDomain(jobUrl);
                       const TypeIcon = getTypeIcon(job.type);
-                      const jobColors = ENDPOINT_COLORS[job.type] || ENDPOINT_COLORS.scrape;
                       const { date, time } = job.created_at ? formatDate(job.created_at) : { date: "", time: "" };
                       const jobFormats: string[] = job.config?.formats || [];
                       const isCompleted = job.status === "completed";
 
                       return (
-                        <div key={job.id} className={cn("rounded-xl border bg-card/60 hover:bg-card/80 transition-all duration-200 group overflow-hidden", jobColors.border)}>
-                          <div className={cn("h-[2px]", jobColors.dot)} />
+                        <div key={job.id} className="rounded-xl border border-border/50 bg-card/70 hover:bg-card transition-all duration-200 group overflow-hidden">
+                          <div className="h-[2px] bg-primary" />
                           <Link href={getJobDetailPath(job)}>
                             <div className="flex items-center justify-between px-4 pt-3 pb-2.5">
                               <div className="flex items-center gap-2 min-w-0">
@@ -287,20 +255,20 @@ export default function HomePage() {
                                 )}
                                 <span className="text-sm font-semibold truncate">{domain || "No URL"}</span>
                               </div>
-                              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/20 group-hover:text-muted-foreground/50 transition-colors shrink-0" />
+                              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors shrink-0" />
                             </div>
                             <div className="px-4 pb-3 space-y-2">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5">
-                                  <TypeIcon className={cn("h-3.5 w-3.5", jobColors.text)} />
-                                  <span className={cn("text-[11px] font-bold uppercase tracking-wider", jobColors.text)}>{job.type}</span>
+                                  <TypeIcon className="h-3.5 w-3.5 text-primary" />
+                                  <span className="text-[11px] font-bold uppercase tracking-wider text-primary">{job.type}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                  <div className={cn("h-1.5 w-1.5 rounded-full", job.status === "completed" ? "bg-emerald-400" : job.status === "failed" ? "bg-red-400" : job.status === "running" ? "bg-amber-400 animate-pulse" : "bg-muted-foreground/30")} />
-                                  <span className="text-[11px] font-medium text-muted-foreground/60 capitalize">{job.status === "completed" ? "Done" : job.status}</span>
+                                  <div className={cn("h-1.5 w-1.5 rounded-full", job.status === "completed" ? "bg-emerald-400" : job.status === "failed" ? "bg-red-400" : job.status === "running" ? "bg-amber-400 animate-pulse" : "bg-muted-foreground")} />
+                                  <span className="text-[11px] font-medium text-muted-foreground capitalize">{job.status === "completed" ? "Done" : job.status}</span>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1.5 text-muted-foreground/35">
+                              <div className="flex items-center gap-1.5 text-muted-foreground">
                                 <Clock className="h-3 w-3" />
                                 <span className="text-[11px] font-medium">{date} {time}</span>
                               </div>
@@ -309,12 +277,7 @@ export default function HomePage() {
                                   {jobFormats.slice(0, 4).map((fmt: string) => {
                                     const fmtInfo = formatIcons[fmt];
                                     const FmtIcon = fmtInfo?.icon || FileText;
-                                    return (
-                                      <span key={fmt} className="inline-flex items-center gap-1 rounded-md bg-muted/40 px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground/50 uppercase tracking-wider">
-                                        <FmtIcon className="h-2.5 w-2.5" />
-                                        {fmtInfo?.label || fmt}
-                                      </span>
-                                    );
+                                    return (<span key={fmt} className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground uppercase tracking-wider"><FmtIcon className="h-2.5 w-2.5" /> {fmtInfo?.label || fmt}</span>);
                                   })}
                                 </div>
                               )}
@@ -322,12 +285,8 @@ export default function HomePage() {
                           </Link>
                           {isCompleted && (
                             <div className="px-4 pb-3 pt-0">
-                              <button
-                                onClick={(e) => { e.preventDefault(); handleDownload(job); }}
-                                className={cn("flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg text-[11px] font-bold transition-all duration-200 border", jobColors.border, jobColors.text, "hover:bg-muted/30")}
-                              >
-                                <Download className="h-3 w-3" />
-                                Download JSON
+                              <button onClick={(e) => { e.preventDefault(); handleDownload(job); }} className="flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg text-[11px] font-bold transition-all border border-primary/20 text-primary hover:bg-primary/10">
+                                <Download className="h-3 w-3" /> Download JSON
                               </button>
                             </div>
                           )}
@@ -338,12 +297,9 @@ export default function HomePage() {
                 </section>
               )}
 
-              {/* Empty state */}
               {!hasRuns && jobsLoaded && (
                 <div className="text-center py-4 animate-fade-in">
-                  <p className="text-[13px] text-muted-foreground/30 font-medium">
-                    Your runs will appear here
-                  </p>
+                  <p className="text-[13px] text-muted-foreground font-medium">Your runs will appear here</p>
                 </div>
               )}
             </div>
