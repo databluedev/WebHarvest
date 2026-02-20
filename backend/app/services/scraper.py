@@ -1077,9 +1077,10 @@ async def scrape_url(
         return bool(html) and not _looks_blocked(html)
 
     # === Tier 1: HTTP parallel — race(curl_cffi_multi, httpx) ===
+    # Skip for hard sites — HTTP never works on Amazon/Nike etc. and wastes ~10s
     custom_headers = getattr(request, "headers", None)
     custom_cookies = getattr(request, "cookies", None)
-    if not fetched and not needs_browser and starting_tier <= 1:
+    if not fetched and not needs_browser and starting_tier <= 1 and not hard_site:
         tier_start = time.time()
 
         http_coros = [
@@ -2863,7 +2864,8 @@ async def scrape_url_fetch_only(
             pass
 
     # === Tier 1: HTTP parallel ===
-    if not fetched and not needs_browser and starting_tier <= 1:
+    # Skip for hard sites — HTTP never works and wastes ~10s on timeout
+    if not fetched and not needs_browser and starting_tier <= 1 and not hard_site:
         tier_start = time.time()
         http_coros = [
             (
@@ -3060,15 +3062,10 @@ async def scrape_url_fetch_only(
             winning_strategy = race.winner_name
             winning_tier = 4
 
-    # Use best available — but NOT if it's blocked content (e.g. Amazon bot page).
-    # Returning None lets the crawl worker fall back to full scrape_url which has
-    # more aggressive strategies.
+    # Use best available content even if blocked — don't return None here because
+    # the crawl worker's fallback to scrape_page would retry the same strategies
+    # and just double the time. Better to return what we have and keep the crawl moving.
     if not fetched and raw_html_best:
-        if _looks_blocked(raw_html_best):
-            logger.warning(
-                f"Fetch-only {url}: best content looks blocked ({len(raw_html_best)} chars), returning None for fallback"
-            )
-            return None
         raw_html = raw_html_best
     if not raw_html:
         return None
