@@ -1134,15 +1134,24 @@ async def scrape_url(
 
         if crawl_session:
             # Use persistent CrawlSession — no context creation overhead
-            # Do NOT combine with Tier 3 in crawl mode — Tier 3 creates separate
-            # browser contexts that conflict with the persistent session on cancellation.
             browser_coros = [
                 (
                     "chromium_stealth",
                     _fetch_with_browser_session(url, request, crawl_session),
                 ),
             ]
-            t2_timeout = 30 if hard_site else 20
+            # For hard sites, also race a fresh browser — the crawl session may be
+            # flagged by anti-bot systems, so a standalone browser gives a second chance.
+            if hard_site:
+                browser_coros.append(
+                    (
+                        "chromium_stealth_fresh",
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright),
+                    ),
+                )
+                t2_timeout = 35
+            else:
+                t2_timeout = 20
         else:
             browser_coros = [
                 (
@@ -2909,14 +2918,23 @@ async def scrape_url_fetch_only(
             return bool(html) and not _looks_blocked(html)
 
         if crawl_session:
-            # Don't combine Tier 2+3 in crawl mode — avoids TargetClosedError
             browser_coros = [
                 (
                     "chromium_stealth",
                     _fetch_with_browser_session(url, request, crawl_session),
                 )
             ]
-            t2_timeout = 30 if _is_hard_site(url) else 20
+            # For hard sites, also race a fresh browser alongside the session
+            if hard_site:
+                browser_coros.append(
+                    (
+                        "chromium_stealth_fresh",
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright),
+                    ),
+                )
+                t2_timeout = 35
+            else:
+                t2_timeout = 20
         else:
             browser_coros = [
                 (
@@ -3042,8 +3060,15 @@ async def scrape_url_fetch_only(
             winning_strategy = race.winner_name
             winning_tier = 4
 
-    # Use best available
+    # Use best available — but NOT if it's blocked content (e.g. Amazon bot page).
+    # Returning None lets the crawl worker fall back to full scrape_url which has
+    # more aggressive strategies.
     if not fetched and raw_html_best:
+        if _looks_blocked(raw_html_best):
+            logger.warning(
+                f"Fetch-only {url}: best content looks blocked ({len(raw_html_best)} chars), returning None for fallback"
+            )
+            return None
         raw_html = raw_html_best
     if not raw_html:
         return None
