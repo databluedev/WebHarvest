@@ -200,7 +200,7 @@ function PlaygroundContent() {
   const [jobsLoaded, setJobsLoaded] = useState(false);
 
   // ── Crawl state ──
-  const [maxPages, setMaxPages] = useState(100);
+  const [maxPages, setMaxPages] = useState(10);
   const [maxDepth, setMaxDepth] = useState(3);
   const [includePaths, setIncludePaths] = useState("");
   const [excludePaths, setExcludePaths] = useState("");
@@ -260,7 +260,6 @@ function PlaygroundContent() {
       setActiveJob((prev) => prev && prev.id === jobId ? {
         ...prev,
         status: res.status || prev.status,
-        total: res.total_pages || res.total_results || res.total_urls || res.total || prev.total,
         completed: res.completed_pages || res.completed_results || res.completed_urls || prev.completed,
         data: res.data || res.links || prev.data,
         error: res.error,
