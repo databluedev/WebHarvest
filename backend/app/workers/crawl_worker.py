@@ -375,6 +375,7 @@ def process_crawl(self, job_id: str, config: dict):
 
                         # Capture screenshot — only for pages that pass
                         # the quality gate to avoid wasting browser time.
+                        # Retry once if the browser was mid-reinitialisation.
                         screenshot_val = scrape_data.screenshot
                         if not screenshot_val:
                             _raw_for_ss = ""
@@ -385,12 +386,17 @@ def process_crawl(self, job_id: str, config: dict):
                             elif scrape_data.html:
                                 _raw_for_ss = scrape_data.html
                             if _raw_for_ss:
-                                # Try crawl session first, fallback to
-                                # browser_pool if session is dead
-                                screenshot_val = await crawler.take_screenshot(
-                                    url, _raw_for_ss
-                                )
-                                if not screenshot_val:
+                                for _ss_attempt in range(2):
+                                    # Try crawl session first
+                                    screenshot_val = (
+                                        await crawler.take_screenshot(
+                                            url, _raw_for_ss
+                                        )
+                                    )
+                                    if screenshot_val:
+                                        break
+                                    # Fallback: browser_pool (independent
+                                    # browser instance)
                                     try:
                                         from app.services.browser import (
                                             browser_pool,
@@ -401,9 +407,13 @@ def process_crawl(self, job_id: str, config: dict):
                                         ) as _ss_page:
                                             await _ss_page.set_content(
                                                 _raw_for_ss,
-                                                wait_until="domcontentloaded",
+                                                wait_until=(
+                                                    "domcontentloaded"
+                                                ),
                                             )
-                                            await _ss_page.wait_for_timeout(500)
+                                            await _ss_page.wait_for_timeout(
+                                                500
+                                            )
                                             _ss_bytes = (
                                                 await _ss_page.screenshot(
                                                     type="jpeg",
@@ -411,11 +421,18 @@ def process_crawl(self, job_id: str, config: dict):
                                                     full_page=True,
                                                 )
                                             )
-                                            screenshot_val = base64.b64encode(
-                                                _ss_bytes
-                                            ).decode()
+                                            screenshot_val = (
+                                                base64.b64encode(
+                                                    _ss_bytes
+                                                ).decode()
+                                            )
                                     except Exception:
                                         pass
+                                    if screenshot_val:
+                                        break
+                                    # Brief wait for browser to reinitialize
+                                    if _ss_attempt == 0:
+                                        await asyncio.sleep(2)
 
                         # Store result
                         async with session_factory() as db:
