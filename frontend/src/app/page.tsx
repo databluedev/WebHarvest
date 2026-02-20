@@ -141,12 +141,12 @@ export default function Dashboard() {
       <Sidebar />
       <main className="flex-1 overflow-auto grid-bg">
         <div className="mesh-gradient min-h-full">
-          <div className="p-8 md:p-12 max-w-5xl mx-auto">
+          <div className="p-8 md:p-14 max-w-5xl mx-auto">
 
             {/* Hero Section */}
-            <section className="mb-16 animate-fade-in">
+            <section className="mb-16 animate-float-in">
               {/* Glass pill badge */}
-              <div className="border-gradient inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 mb-6">
+              <div className="border-gradient glass-sm inline-flex items-center gap-2 rounded-2xl px-3.5 py-1.5 mb-6">
                 <div className="h-5 w-5 grid place-items-center rounded-lg bg-emerald-500/10 text-emerald-400">
                   <Shield className="h-3 w-3" />
                 </div>
@@ -154,7 +154,7 @@ export default function Dashboard() {
               </div>
 
               {/* Large heading */}
-              <h1 className="text-5xl sm:text-6xl md:text-7xl font-semibold tracking-tight leading-[0.95]">
+              <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[0.95]">
                 {user.name ? "Welcome back," : "Web scraping"}
                 <br />
                 <span className="gradient-text-white">
@@ -163,7 +163,7 @@ export default function Dashboard() {
               </h1>
 
               {/* Description */}
-              <p className="text-sm sm:text-base text-foreground/50 max-w-lg mt-6 leading-relaxed">
+              <p className="text-sm sm:text-base text-muted-foreground max-w-lg mt-6 leading-relaxed font-light">
                 A self-hosted web crawling platform with 5-tier parallel extraction,
                 stealth browsing, and AI-powered content analysis.
               </p>
@@ -173,9 +173,9 @@ export default function Dashboard() {
                 {features.map((f) => (
                   <div
                     key={f.label}
-                    className="border-gradient inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 hover:bg-foreground/[0.04] transition-colors cursor-default"
+                    className="border-gradient glass-sm inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 hover:bg-foreground/[0.04] transition-colors cursor-default"
                   >
-                    <f.icon className="h-3.5 w-3.5 text-foreground/50" />
+                    <f.icon className="h-3.5 w-3.5 text-muted-foreground/80" />
                     <span className="text-xs text-foreground/60">{f.label}</span>
                   </div>
                 ))}
@@ -184,7 +184,7 @@ export default function Dashboard() {
               {/* CTAs */}
               <div className="flex flex-col sm:flex-row gap-3 mt-8">
                 <Link href="/scrape">
-                  <Button size="lg" className="rounded-2xl px-6 gap-2 hover:-translate-y-0.5 transition-all">
+                  <Button variant="glow" size="lg" className="rounded-2xl px-6 gap-2 hover:-translate-y-0.5 transition-all">
                     <Play className="h-4 w-4" />
                     Start scraping
                   </Button>
@@ -198,14 +198,14 @@ export default function Dashboard() {
               </div>
 
               {/* Divider */}
-              <div className="mt-10 h-px w-full bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
+              <div className="mt-10 h-px w-full bg-gradient-to-r from-transparent via-border to-transparent" />
 
               {/* Mini metrics */}
               <div className="mt-6 grid grid-cols-3 gap-4 max-w-md">
                 {metrics.map((m) => (
-                  <div key={m.label} className="border-gradient rounded-2xl p-4">
-                    <div className="text-xs text-foreground/50">{m.label}</div>
-                    <div className="mt-1 text-lg font-medium tracking-tight">{m.value}</div>
+                  <div key={m.label} className="border-gradient rounded-2xl p-4 hover-lift">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60">{m.label}</div>
+                    <div className="mt-1 text-lg font-bold tracking-tight">{m.value}</div>
                   </div>
                 ))}
               </div>
@@ -216,7 +216,7 @@ export default function Dashboard() {
               <div className="grid gap-4 md:grid-cols-3 stagger-children">
                 {actions.map((item) => (
                   <Link key={item.href} href={item.href}>
-                    <div className="group border-gradient rounded-2xl p-5 hover:bg-foreground/[0.03] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer h-full">
+                    <div className="group border-gradient rounded-2xl p-5 hover:bg-foreground/[0.03] hover-lift cursor-pointer h-full">
                       <div className="flex items-center justify-between mb-3">
                         <div className={`h-8 w-8 rounded-xl ${item.bg} grid place-items-center`}>
                           <item.icon className={`h-4 w-4 ${item.color}`} />
@@ -224,8 +224,8 @@ export default function Dashboard() {
                         <ArrowRight className="h-4 w-4 text-foreground/20 group-hover:text-foreground/50 group-hover:translate-x-0.5 transition-all" />
                       </div>
                       <h3 className="font-semibold tracking-tight">{item.title}</h3>
-                      <p className="text-xs text-foreground/50 mt-0.5">{item.subtitle}</p>
-                      <p className="text-xs text-foreground/40 mt-2 leading-relaxed">{item.desc}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{item.subtitle}</p>
+                      <p className="text-xs text-muted-foreground/70 mt-2 leading-relaxed">{item.desc}</p>
                     </div>
                   </Link>
                 ))}
@@ -234,14 +234,14 @@ export default function Dashboard() {
 
             {/* Recent Activity */}
             {recentJobs.length > 0 && (
-              <section className="mb-12 animate-fade-in" style={{ animationDelay: "0.2s" }}>
+              <section className="mb-12 animate-float-in" style={{ animationDelay: "0.2s" }}>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-medium flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-foreground/40" />
+                    <Activity className="h-4 w-4 text-muted-foreground/60" />
                     Recent activity
                   </h2>
                   <Link href="/jobs">
-                    <Button variant="ghost" size="sm" className="gap-1 text-foreground/50 text-xs">
+                    <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground text-xs">
                       View all
                       <ArrowRight className="h-3 w-3" />
                     </Button>
@@ -264,7 +264,7 @@ export default function Dashboard() {
                                 {job.status}
                               </Badge>
                             </div>
-                            <span className="text-[10px] text-foreground/40 flex items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground/60 flex items-center gap-1">
                               <Clock className="h-2.5 w-2.5" />
                               {timeAgo(job.created_at)}
                             </span>
@@ -282,7 +282,7 @@ export default function Dashboard() {
                                   style={{ width: `${Math.min(100, (job.completed_pages / job.total_pages) * 100)}%` }}
                                 />
                               </div>
-                              <span className="text-[10px] font-mono text-foreground/40">
+                              <span className="text-[10px] font-mono text-muted-foreground/60">
                                 {job.completed_pages}/{job.total_pages}
                               </span>
                             </div>
@@ -296,7 +296,7 @@ export default function Dashboard() {
             )}
 
             {/* Bottom Grid: Capabilities + Quickstart */}
-            <section className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
+            <section className="animate-float-in" style={{ animationDelay: "0.3s" }}>
               <div className="grid gap-4 md:grid-cols-2">
                 {/* Capabilities */}
                 <div className="border-gradient rounded-2xl p-6">
@@ -316,7 +316,7 @@ export default function Dashboard() {
                         </Badge>
                         <div>
                           <p className="text-xs font-medium">{item.label}</p>
-                          <p className="text-[11px] text-foreground/40 mt-0.5">{item.desc}</p>
+                          <p className="text-[11px] text-muted-foreground/70 mt-0.5">{item.desc}</p>
                         </div>
                       </div>
                     ))}
@@ -341,7 +341,7 @@ export default function Dashboard() {
                             <span className="text-primary font-mono text-xs font-bold">{item.step}</span>
                             <div>
                               <p className="text-xs font-medium">{item.label}</p>
-                              <p className="text-[11px] text-foreground/40">{item.desc}</p>
+                              <p className="text-[11px] text-muted-foreground/60">{item.desc}</p>
                             </div>
                           </div>
                           <ArrowRight className="h-3.5 w-3.5 text-foreground/20 group-hover:text-foreground/50 transition-colors" />
@@ -350,7 +350,7 @@ export default function Dashboard() {
                     ))}
                   </div>
 
-                  <div className="mt-4 p-3 rounded-xl bg-foreground/[0.03] border border-foreground/[0.06]">
+                  <div className="mt-4 p-3 rounded-xl bg-foreground/[0.03] border border-border/50">
                     <p className="text-[11px] font-mono text-foreground/50">
                       <span className="text-primary">$</span> curl -X POST /api/v1/scrape \
                     </p>

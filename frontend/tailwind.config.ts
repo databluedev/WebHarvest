@@ -11,6 +11,7 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
+        sans: ["'Outfit'", "system-ui", "sans-serif"],
         mono: ["'JetBrains Mono'", "'Fira Code'", "'Cascadia Code'", "monospace"],
       },
       colors: {
@@ -62,15 +63,35 @@ const config: Config = {
           from: { opacity: "0", transform: "translateY(24px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "float-in": {
+          from: { opacity: "0", transform: "translateY(12px) scale(0.98)" },
+          to: { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
+        "scale-in": {
+          from: { opacity: "0", transform: "scale(0.95)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
         "pulse-soft": {
           "0%, 100%": { opacity: "0.5" },
           "50%": { opacity: "1" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "glow-pulse": {
+          "0%, 100%": { boxShadow: "0 0 12px -3px hsla(160, 84%, 45%, 0.3)" },
+          "50%": { boxShadow: "0 0 20px -3px hsla(160, 84%, 45%, 0.5)" },
         },
       },
       animation: {
         "fade-in": "fade-in 0.5s ease-out forwards",
         "slide-up": "slide-up 0.6s ease-out forwards",
+        "float-in": "float-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards",
+        "scale-in": "scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards",
         "pulse-soft": "pulse-soft 2.5s ease-in-out infinite",
+        shimmer: "shimmer 2s infinite",
+        "glow-pulse": "glow-pulse 2s ease-in-out infinite",
       },
     },
   },

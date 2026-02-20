@@ -87,10 +87,10 @@ interface QuotaData {
   operations: Record<string, { limit: number; used: number; remaining: number; unlimited: boolean }>;
 }
 
-// ---- Chart color palette ----
+// ---- Chart color palette (theme-aware) ----
 
 const PIE_COLORS = [
-  "hsl(142, 76%, 36%)",
+  "hsl(160, 84%, 45%)",
   "hsl(200, 80%, 50%)",
   "hsl(45, 93%, 58%)",
   "hsl(280, 65%, 55%)",
@@ -98,8 +98,10 @@ const PIE_COLORS = [
   "hsl(340, 75%, 55%)",
 ];
 
-const GREEN_PRIMARY = "hsl(142, 76%, 36%)";
-const GREEN_LIGHT = "hsl(142, 76%, 46%)";
+const PRIMARY_CHART = "hsl(160, 84%, 45%)";
+const PRIMARY_CHART_LIGHT = "hsl(160, 84%, 55%)";
+const GRID_STROKE = "hsl(228 8% 13%)";
+const AXIS_TICK = "hsl(0 0% 50%)";
 
 // ---- Helpers ----
 
@@ -181,10 +183,10 @@ function getStatusVariant(status: string): "success" | "destructive" | "warning"
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border bg-card px-3 py-2 shadow-md">
+    <div className="rounded-lg border border-border/50 bg-card px-3 py-2 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       {payload.map((entry: any, i: number) => (
-        <p key={i} className="text-sm font-medium" style={{ color: entry.color }}>
+        <p key={i} className="text-sm font-bold" style={{ color: entry.color }}>
           {entry.name}: {entry.value}
         </p>
       ))}
@@ -196,7 +198,7 @@ function PieTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const data = payload[0];
   return (
-    <div className="rounded-lg border bg-card px-3 py-2 shadow-md">
+    <div className="rounded-lg border border-border/50 bg-card px-3 py-2 shadow-md">
       <p className="text-sm font-medium capitalize">{data.name}</p>
       <p className="text-xs text-muted-foreground">{data.value} jobs</p>
     </div>
@@ -295,9 +297,9 @@ export default function DashboardPage() {
       <main className="flex-1 overflow-auto">
         <div className="p-8 max-w-[1400px] mx-auto">
           {/* Header */}
-          <div className="mb-8 flex items-center justify-between">
+          <div className="mb-8 flex items-center justify-between animate-float-in">
             <div>
-              <h1 className="text-3xl font-bold">Dashboard</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
               <p className="mt-1 text-muted-foreground">
                 Real-time analytics, active jobs, and usage overview
               </p>
@@ -305,7 +307,7 @@ export default function DashboardPage() {
             <button
               onClick={loadData}
               disabled={loading}
-              className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-foreground disabled:opacity-50"
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -356,27 +358,31 @@ export default function DashboardPage() {
           {/* Stats content */}
           {stats && (
             <>
-              {/* ── Stat Cards (6-column grid) ── */}
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-8">
+              {/* Stat Cards (6-column grid) */}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-8 stagger-children">
                 <Card>
                   <CardContent className="pt-5 pb-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-muted-foreground">Total Jobs</span>
-                      <Activity className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Total Jobs</span>
+                      <div className="h-7 w-7 rounded-lg bg-primary/10 grid place-items-center">
+                        <Activity className="h-3.5 w-3.5 text-primary" />
+                      </div>
                     </div>
-                    <p className="text-2xl font-bold tabular-nums">{stats.total_jobs.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">All time</p>
+                    <p className="text-2xl font-bold tracking-tight tabular-nums">{stats.total_jobs.toLocaleString()}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">All time</p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardContent className="pt-5 pb-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-muted-foreground">Pages Scraped</span>
-                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Pages Scraped</span>
+                      <div className="h-7 w-7 rounded-lg bg-blue-500/10 grid place-items-center">
+                        <FileText className="h-3.5 w-3.5 text-blue-400" />
+                      </div>
                     </div>
-                    <p className="text-2xl font-bold tabular-nums">{stats.total_pages_scraped.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-2xl font-bold tracking-tight tabular-nums">{stats.total_pages_scraped.toLocaleString()}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
                       ~{stats.avg_pages_per_job.toFixed(1)} per job
                     </p>
                   </CardContent>
@@ -385,27 +391,31 @@ export default function DashboardPage() {
                 <Card>
                   <CardContent className="pt-5 pb-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-muted-foreground">Avg Duration</span>
-                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Avg Duration</span>
+                      <div className="h-7 w-7 rounded-lg bg-violet-500/10 grid place-items-center">
+                        <Clock className="h-3.5 w-3.5 text-violet-400" />
+                      </div>
                     </div>
-                    <p className="text-2xl font-bold tabular-nums">{formatDuration(stats.avg_duration_seconds)}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Per job completion</p>
+                    <p className="text-2xl font-bold tracking-tight tabular-nums">{formatDuration(stats.avg_duration_seconds)}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Per job completion</p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardContent className="pt-5 pb-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-muted-foreground">Success Rate</span>
-                      <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Success Rate</span>
+                      <div className="h-7 w-7 rounded-lg bg-emerald-500/10 grid place-items-center">
+                        <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
+                      </div>
                     </div>
-                    <p className="text-2xl font-bold tabular-nums">{stats.success_rate.toFixed(1)}%</p>
+                    <p className="text-2xl font-bold tracking-tight tabular-nums">{stats.success_rate.toFixed(1)}%</p>
                     <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-500"
                         style={{
                           width: `${Math.min(stats.success_rate, 100)}%`,
-                          backgroundColor: stats.success_rate >= 90 ? GREEN_PRIMARY : stats.success_rate >= 70 ? "hsl(45, 93%, 58%)" : "hsl(0, 84%, 60%)",
+                          backgroundColor: stats.success_rate >= 90 ? PRIMARY_CHART : stats.success_rate >= 70 ? "hsl(45, 93%, 58%)" : "hsl(0, 84%, 60%)",
                         }}
                       />
                     </div>
@@ -415,36 +425,40 @@ export default function DashboardPage() {
                 <Card>
                   <CardContent className="pt-5 pb-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-muted-foreground">Unique Domains</span>
-                      <Globe className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Unique Domains</span>
+                      <div className="h-7 w-7 rounded-lg bg-cyan-500/10 grid place-items-center">
+                        <Globe className="h-3.5 w-3.5 text-cyan-400" />
+                      </div>
                     </div>
-                    <p className="text-2xl font-bold tabular-nums">{totalUniqueDomains.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Distinct domains scraped</p>
+                    <p className="text-2xl font-bold tracking-tight tabular-nums">{totalUniqueDomains.toLocaleString()}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Distinct domains scraped</p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardContent className="pt-5 pb-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-muted-foreground">Active Now</span>
-                      <Zap className="h-4 w-4 text-yellow-500" />
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Active Now</span>
+                      <div className="h-7 w-7 rounded-lg bg-amber-500/10 grid place-items-center">
+                        <Zap className="h-3.5 w-3.5 text-amber-400" />
+                      </div>
                     </div>
-                    <p className="text-2xl font-bold tabular-nums">
+                    <p className="text-2xl font-bold tracking-tight tabular-nums">
                       {runningJobs + pendingJobs}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
                       {runningJobs} running, {pendingJobs} pending
                     </p>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* ── Active Jobs (only shown when there are running/pending jobs) ── */}
+              {/* Active Jobs (only shown when there are running/pending jobs) */}
               {activeJobs.length > 0 && (
-                <Card className="mb-8 border-yellow-500/30">
+                <Card className="mb-8 border-amber-500/30">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Loader2 className="h-5 w-5 text-yellow-500 animate-spin" />
+                      <Loader2 className="h-5 w-5 text-amber-400 animate-spin" />
                       Active Jobs
                       <Badge variant="warning" className="ml-1 text-xs">{activeJobs.length}</Badge>
                     </CardTitle>
@@ -456,9 +470,9 @@ export default function DashboardPage() {
                         const progress = job.total_pages > 0 ? (job.completed_pages / job.total_pages) * 100 : 0;
                         return (
                           <Link key={job.id} href={getJobDetailPath(job)}>
-                            <div className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
+                            <div className="flex items-center gap-4 p-3 rounded-lg border border-border/50 bg-card hover:bg-accent/50 transition-all duration-150 cursor-pointer">
                               <div className="shrink-0">
-                                <Icon className="h-5 w-5 text-yellow-500" />
+                                <Icon className="h-5 w-5 text-amber-400" />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
@@ -476,7 +490,7 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                                   <div
-                                    className="h-full rounded-full bg-yellow-500 transition-all duration-300"
+                                    className="h-full rounded-full bg-amber-500 transition-all duration-300 shadow-[0_0_8px_-2px_hsla(45,93%,58%,0.5)]"
                                     style={{ width: `${Math.min(progress, 100)}%` }}
                                   />
                                 </div>
@@ -494,7 +508,7 @@ export default function DashboardPage() {
                 </Card>
               )}
 
-              {/* ── Quota & Usage (if available) ── */}
+              {/* Quota & Usage (if available) */}
               {quota && Object.keys(quota.operations).length > 0 && (
                 <Card className="mb-8">
                   <CardHeader className="pb-3">
@@ -511,7 +525,7 @@ export default function DashboardPage() {
                       {Object.entries(quota.operations).map(([op, data]) => {
                         const pct = data.unlimited ? 0 : data.limit > 0 ? (data.used / data.limit) * 100 : 0;
                         return (
-                          <div key={op} className="rounded-lg border p-4">
+                          <div key={op} className="rounded-lg border border-border/50 p-4">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-sm font-medium capitalize">{op.replace(/_/g, " ")}</span>
                               {data.unlimited ? (
@@ -528,7 +542,7 @@ export default function DashboardPage() {
                                   className="h-full rounded-full transition-all duration-500"
                                   style={{
                                     width: `${Math.min(pct, 100)}%`,
-                                    backgroundColor: pct > 90 ? "hsl(0, 84%, 60%)" : pct > 70 ? "hsl(45, 93%, 58%)" : GREEN_PRIMARY,
+                                    backgroundColor: pct > 90 ? "hsl(0, 84%, 60%)" : pct > 70 ? "hsl(45, 93%, 58%)" : PRIMARY_CHART,
                                   }}
                                 />
                               </div>
@@ -551,7 +565,7 @@ export default function DashboardPage() {
                 </Card>
               )}
 
-              {/* ── Charts Row 1: Area chart + Pie chart ── */}
+              {/* Charts Row 1: Area chart + Pie chart */}
               <div className="grid gap-6 lg:grid-cols-3 mb-8">
                 <Card className="lg:col-span-2">
                   <CardHeader className="pb-3">
@@ -572,21 +586,21 @@ export default function DashboardPage() {
                         <AreaChart data={jobsPerDay}>
                           <defs>
                             <linearGradient id="greenGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor={GREEN_PRIMARY} stopOpacity={0.3} />
-                              <stop offset="95%" stopColor={GREEN_PRIMARY} stopOpacity={0} />
+                              <stop offset="5%" stopColor={PRIMARY_CHART} stopOpacity={0.3} />
+                              <stop offset="95%" stopColor={PRIMARY_CHART} stopOpacity={0} />
                             </linearGradient>
                           </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(0 0% 14.9%)" />
+                          <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
                           <XAxis
                             dataKey="label"
-                            tick={{ fill: "hsl(0 0% 63.9%)", fontSize: 11 }}
+                            tick={{ fill: AXIS_TICK, fontSize: 11 }}
                             tickLine={false}
-                            axisLine={{ stroke: "hsl(0 0% 14.9%)" }}
+                            axisLine={{ stroke: GRID_STROKE }}
                           />
                           <YAxis
-                            tick={{ fill: "hsl(0 0% 63.9%)", fontSize: 11 }}
+                            tick={{ fill: AXIS_TICK, fontSize: 11 }}
                             tickLine={false}
-                            axisLine={{ stroke: "hsl(0 0% 14.9%)" }}
+                            axisLine={{ stroke: GRID_STROKE }}
                             allowDecimals={false}
                           />
                           <Tooltip content={<ChartTooltip />} />
@@ -594,11 +608,11 @@ export default function DashboardPage() {
                             type="monotone"
                             dataKey="count"
                             name="Jobs"
-                            stroke={GREEN_PRIMARY}
+                            stroke={PRIMARY_CHART}
                             strokeWidth={2}
                             fill="url(#greenGradient)"
-                            dot={{ fill: GREEN_PRIMARY, r: 2 }}
-                            activeDot={{ r: 5, fill: GREEN_LIGHT }}
+                            dot={{ fill: PRIMARY_CHART, r: 2 }}
+                            activeDot={{ r: 5, fill: PRIMARY_CHART_LIGHT }}
                           />
                         </AreaChart>
                       </ResponsiveContainer>
@@ -646,7 +660,7 @@ export default function DashboardPage() {
                                 />
                                 <span className="capitalize text-muted-foreground">{item.name}</span>
                               </div>
-                              <span className="font-medium tabular-nums">{item.value}</span>
+                              <span className="font-bold tabular-nums">{item.value}</span>
                             </div>
                           ))}
                         </div>
@@ -656,7 +670,7 @@ export default function DashboardPage() {
                 </Card>
               </div>
 
-              {/* ── Charts Row 2: Status breakdown + Top domains ── */}
+              {/* Charts Row 2: Status breakdown + Top domains */}
               <div className="grid gap-6 lg:grid-cols-2 mb-8">
                 {/* Status breakdown */}
                 <Card>
@@ -676,7 +690,7 @@ export default function DashboardPage() {
                       <div className="space-y-3">
                         {Object.entries(stats.jobs_by_status).map(([status, count]) => {
                           const pct = stats.total_jobs > 0 ? (count / stats.total_jobs) * 100 : 0;
-                          const color = status === "completed" ? GREEN_PRIMARY
+                          const color = status === "completed" ? PRIMARY_CHART
                             : status === "failed" ? "hsl(0, 84%, 60%)"
                             : status === "running" ? "hsl(45, 93%, 58%)"
                             : "hsl(0 0% 45%)";
@@ -729,7 +743,7 @@ export default function DashboardPage() {
                                 <span className="text-sm text-muted-foreground truncate max-w-[200px]">
                                   {d.domain}
                                 </span>
-                                <span className="text-sm font-medium tabular-nums ml-2">{d.count}</span>
+                                <span className="text-sm font-bold tabular-nums ml-2">{d.count}</span>
                               </div>
                               <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                                 <div
@@ -749,7 +763,7 @@ export default function DashboardPage() {
                 </Card>
               </div>
 
-              {/* ── Recent Jobs Table ── */}
+              {/* Recent Jobs Table */}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center justify-between">
@@ -776,13 +790,13 @@ export default function DashboardPage() {
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b text-left">
-                            <th className="pb-2 font-medium text-muted-foreground text-xs">Type</th>
-                            <th className="pb-2 font-medium text-muted-foreground text-xs">URL / Query</th>
-                            <th className="pb-2 font-medium text-muted-foreground text-xs">Status</th>
-                            <th className="pb-2 font-medium text-muted-foreground text-xs text-right">Pages</th>
-                            <th className="pb-2 font-medium text-muted-foreground text-xs text-right">Duration</th>
-                            <th className="pb-2 font-medium text-muted-foreground text-xs text-right">When</th>
+                          <tr className="border-b border-border/50 text-left">
+                            <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Type</th>
+                            <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider">URL / Query</th>
+                            <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Status</th>
+                            <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider text-right">Pages</th>
+                            <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider text-right">Duration</th>
+                            <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider text-right">When</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -792,7 +806,7 @@ export default function DashboardPage() {
                             return (
                               <tr
                                 key={job.id}
-                                className="border-b border-border/50 hover:bg-accent/30 cursor-pointer transition-colors"
+                                className="border-b border-border/30 hover:bg-accent/30 cursor-pointer transition-colors"
                                 onClick={() => router.push(getJobDetailPath(job))}
                               >
                                 <td className="py-2.5 pr-3">
@@ -815,10 +829,10 @@ export default function DashboardPage() {
                                   {job.completed_pages}/{job.total_pages}
                                 </td>
                                 <td className="py-2.5 pr-3 text-right tabular-nums text-muted-foreground">
-                                  {job.duration_seconds != null ? formatDuration(job.duration_seconds) : "—"}
+                                  {job.duration_seconds != null ? formatDuration(job.duration_seconds) : "\u2014"}
                                 </td>
                                 <td className="py-2.5 text-right text-muted-foreground whitespace-nowrap">
-                                  {job.created_at ? timeAgo(job.created_at) : "—"}
+                                  {job.created_at ? timeAgo(job.created_at) : "\u2014"}
                                 </td>
                               </tr>
                             );
