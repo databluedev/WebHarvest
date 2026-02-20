@@ -1223,6 +1223,7 @@ class CrawlSession:
         self._semaphore_acquired = False
         self._cookies: list[dict] = []
         self._semaphore: asyncio.Semaphore | None = None
+        self._recreate_lock: asyncio.Lock | None = None
 
     async def start(self, proxy: dict | None = None, target_url: str | None = None):
         """Acquire semaphore + create persistent context with stealth."""
@@ -1360,6 +1361,7 @@ class CrawlSession:
         """Create a new page within the persistent context.
 
         Auto-recovers if the context was closed by a race cancellation or crash.
+        Uses a lock so only one coroutine recreates the context at a time.
         """
         if not self._context:
             raise RuntimeError("CrawlSession not started")
@@ -1368,11 +1370,26 @@ class CrawlSession:
         except Exception as e:
             # Context died (e.g. race cancellation TargetClosedError) — recreate it
             logger.warning(f"CrawlSession context dead, recreating: {e}")
-            await self._recreate_context()
+            if self._recreate_lock is None:
+                self._recreate_lock = asyncio.Lock()
+            async with self._recreate_lock:
+                # Double-check: another coroutine may have already recreated it
+                try:
+                    return await self._context.new_page()
+                except Exception:
+                    await self._recreate_context()
             return await self._context.new_page()
 
     async def _recreate_context(self):
         """Recreate the browser context after a crash, preserving cookies."""
+        # Close the old dead context (ignore errors — it may already be dead)
+        if self._context:
+            try:
+                await self._context.close()
+            except Exception:
+                pass
+            self._context = None
+
         is_firefox = self._use_firefox and self._pool._firefox is not None
         browser = self._pool._firefox if is_firefox else self._pool._chromium
 

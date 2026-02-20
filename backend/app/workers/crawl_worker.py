@@ -91,6 +91,32 @@ def process_crawl(self, job_id: str, config: dict):
             cancelled = False
             loop = asyncio.get_running_loop()
 
+            # Suppress Playwright TargetClosedError from cancelled race futures.
+            # During concurrent crawls, race cancellation closes browser pages
+            # while Playwright operations are still in-flight, producing
+            # "Future exception was never retrieved" errors that can kill the loop.
+            _original_handler = loop.get_exception_handler()
+
+            def _crawl_exception_handler(loop_ref, context):
+                exc = context.get("exception")
+                if exc:
+                    exc_name = type(exc).__name__
+                    exc_msg = str(exc).lower()
+                    if (
+                        "TargetClosedError" in exc_name
+                        or "target" in exc_name.lower()
+                        or "closed" in exc_msg
+                        or "event loop is closed" in exc_msg
+                    ):
+                        logger.debug(f"Suppressed browser error in crawl loop: {exc_name}")
+                        return
+                if _original_handler:
+                    _original_handler(loop_ref, context)
+                else:
+                    loop_ref.default_exception_handler(context)
+
+            loop.set_exception_handler(_crawl_exception_handler)
+
             # Producer-consumer pipeline queue
             extract_queue = asyncio.Queue(maxsize=concurrency * 2)
             extract_done = asyncio.Event()
@@ -366,6 +392,11 @@ def process_crawl(self, job_id: str, config: dict):
                 except Exception:
                     pass
         finally:
+            # Restore original exception handler
+            try:
+                loop.set_exception_handler(_original_handler)
+            except Exception:
+                pass
             await crawler.cleanup()
             await db_engine.dispose()
 

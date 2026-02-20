@@ -2108,8 +2108,15 @@ async def _fetch_with_browser_session(
     action_screenshots = []
     status_code = 0
     response_headers: dict[str, str] = {}
+    raw_html = ""
 
-    page = await crawl_session.new_page()
+    page = None
+    try:
+        page = await crawl_session.new_page()
+    except Exception as e:
+        logger.debug(f"CrawlSession.new_page() failed for {url}: {e}")
+        raise
+
     try:
         # Mobile viewport emulation (device preset or default iPhone 14)
         if getattr(request, "mobile", False) or getattr(request, "mobile_device", None):
@@ -2206,8 +2213,22 @@ async def _fetch_with_browser_session(
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
         raw_html = await page.content()
+    except Exception as e:
+        # Catch TargetClosedError and similar browser crashes gracefully.
+        # During concurrent crawls the race cancellation may close the page
+        # while Playwright operations are still in-flight.
+        exc_name = type(e).__name__
+        if "TargetClosedError" in exc_name or "Target" in exc_name or "closed" in str(e).lower():
+            logger.debug(f"Browser session page closed during fetch for {url}: {e}")
+            # Return whatever HTML we managed to get (may be empty)
+        else:
+            raise
     finally:
-        await crawl_session.close_page(page)
+        if page:
+            try:
+                await crawl_session.close_page(page)
+            except Exception:
+                pass
 
     return raw_html, status_code, screenshot_b64, action_screenshots, response_headers
 
