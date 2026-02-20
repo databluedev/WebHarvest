@@ -184,10 +184,11 @@ def process_crawl(self, job_id: str, config: dict):
                                         "depth": depth,
                                         "fetch_result": fetch_result,
                                     }
-                                # Fallback to full scrape for documents, etc.
+                                # Fallback to full scrape — shorter timeout since
+                                # the fast path already spent time trying.
                                 result = await asyncio.wait_for(
                                     crawler.scrape_page(url),
-                                    timeout=120,
+                                    timeout=60,
                                 )
                                 return {
                                     "url": url,

@@ -2214,15 +2214,15 @@ async def _fetch_with_browser_session(
 
         raw_html = await page.content()
     except Exception as e:
-        # Catch TargetClosedError and similar browser crashes gracefully.
-        # During concurrent crawls the race cancellation may close the page
-        # while Playwright operations are still in-flight.
-        exc_name = type(e).__name__
-        if "TargetClosedError" in exc_name or "Target" in exc_name or "closed" in str(e).lower():
-            logger.debug(f"Browser session page closed during fetch for {url}: {e}")
-            # Return whatever HTML we managed to get (may be empty)
-        else:
-            raise
+        # Catch TargetClosedError from race cancellation — clean up page safely
+        # then re-raise so the race treats this as a failed strategy.
+        if page:
+            try:
+                await crawl_session.close_page(page)
+            except Exception:
+                pass
+            page = None  # Prevent double-close in finally
+        raise
     finally:
         if page:
             try:
