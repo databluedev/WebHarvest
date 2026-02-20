@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, memo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { Footer } from "@/components/layout/footer";
@@ -21,6 +21,7 @@ import {
   FileCode,
   Code,
   ChevronDown,
+  ChevronUp,
   FileText,
   Link2,
   Camera,
@@ -147,6 +148,274 @@ async function handleDownload(job: any) {
     }
   } catch {}
 }
+
+// ── Inline Result Card ───────────────────────────────────────
+
+type ResultTab = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "json";
+
+const InlineResultCard = memo(function InlineResultCard({
+  page,
+  index,
+  jobId,
+}: {
+  page: any;
+  index: number;
+  jobId: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<ResultTab>("markdown");
+  const [screenshotData, setScreenshotData] = useState<string | null>(null);
+  const [screenshotLoading, setScreenshotLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const hasMarkdown = !!page.markdown;
+  const hasHtml = !!page.html;
+  const hasScreenshot = !!page.id;
+  const hasLinks = page.links?.length > 0 || page.links_detail;
+  const hasStructured = page.structured_data && Object.keys(page.structured_data).length > 0;
+  const hasHeadings = page.headings?.length > 0;
+  const hasImages = page.images?.length > 0;
+  const hasExtract = !!page.extract;
+
+  const tabs: { id: ResultTab; label: string; icon: any; available: boolean }[] = [
+    { id: "markdown", label: "Markdown", icon: FileText, available: hasMarkdown },
+    { id: "html", label: "HTML", icon: Code, available: hasHtml },
+    { id: "screenshot", label: "Screenshot", icon: Camera, available: hasScreenshot },
+    { id: "links", label: "Links", icon: Link2, available: hasLinks },
+    { id: "structured", label: "Structured", icon: Braces, available: hasStructured },
+    { id: "headings", label: "Headings", icon: List, available: hasHeadings },
+    { id: "images", label: "Images", icon: ImageIcon, available: hasImages },
+    { id: "extract", label: "AI Extract", icon: Sparkles, available: hasExtract },
+    { id: "json", label: "JSON", icon: FileCode, available: true },
+  ];
+
+  const availableTabs = tabs.filter((t) => t.available);
+
+  useEffect(() => {
+    if (!availableTabs.find((t) => t.id === activeTab)) {
+      setActiveTab(availableTabs[0]?.id || "json");
+    }
+  }, []);
+
+  const loadScreenshot = useCallback(async () => {
+    if (screenshotData || screenshotLoading || !page.id) return;
+    setScreenshotLoading(true);
+    try {
+      const detail = await api.getJobResultDetail(jobId, page.id);
+      setScreenshotData(detail.screenshot || null);
+    } catch {
+      setScreenshotData(null);
+    } finally {
+      setScreenshotLoading(false);
+    }
+  }, [jobId, page.id, screenshotData, screenshotLoading]);
+
+  const copyContent = () => {
+    let text = "";
+    switch (activeTab) {
+      case "markdown": text = page.markdown || ""; break;
+      case "html": text = page.html || ""; break;
+      case "links": text = (page.links || []).join("\n"); break;
+      case "json": text = JSON.stringify(page, null, 2); break;
+      default: text = JSON.stringify(page[activeTab], null, 2); break;
+    }
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const wordCount = page.metadata?.word_count || 0;
+  const statusCode = page.metadata?.status_code;
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-card/60 overflow-hidden transition-all duration-200">
+      {/* Header */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-3 w-full px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+      >
+        <span className="text-[12px] text-muted-foreground font-mono w-6 shrink-0 text-right tabular-nums">
+          {index + 1}
+        </span>
+        {page.url && (
+          <img
+            src={`https://www.google.com/s2/favicons?domain=${getDomain(page.url)}&sz=32`}
+            alt=""
+            className="h-4 w-4 rounded-sm shrink-0"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium truncate">{page.url || "Unknown URL"}</p>
+          {page.metadata?.title && (
+            <p className="text-[12px] text-muted-foreground truncate mt-0.5">{page.metadata.title}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {wordCount > 0 && (
+            <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
+              {wordCount.toLocaleString()} words
+            </span>
+          )}
+          {statusCode && (
+            <span className={cn(
+              "text-[11px] font-bold px-2 py-0.5 rounded-md",
+              statusCode >= 200 && statusCode < 400
+                ? "bg-emerald-500/10 text-emerald-400"
+                : "bg-red-500/10 text-red-400"
+            )}>
+              {statusCode}
+            </span>
+          )}
+          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="border-t border-border/40">
+          {/* Tab bar */}
+          <div className="flex items-center gap-1 px-3 py-2 border-b border-border/30 bg-muted/20 overflow-x-auto">
+            {availableTabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    if (tab.id === "screenshot" && !screenshotData && !screenshotLoading) loadScreenshot();
+                  }}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all whitespace-nowrap",
+                    activeTab === tab.id
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
+            <div className="flex-1" />
+            {activeTab !== "screenshot" && (
+              <button onClick={copyContent} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all">
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+            )}
+          </div>
+
+          {/* Tab content */}
+          <div className="p-4">
+            {activeTab === "markdown" && hasMarkdown && (
+              <pre className="max-h-80 overflow-auto text-[13px] text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4 leading-relaxed">
+                {page.markdown}
+              </pre>
+            )}
+
+            {activeTab === "html" && hasHtml && (
+              <pre className="max-h-80 overflow-auto text-[12px] text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4">
+                {page.html}
+              </pre>
+            )}
+
+            {activeTab === "screenshot" && hasScreenshot && (
+              <div className="flex justify-center">
+                {screenshotData ? (
+                  <img
+                    src={`data:image/jpeg;base64,${screenshotData}`}
+                    alt={`Screenshot of ${page.url}`}
+                    className="max-w-full rounded-lg border border-border/50 shadow-lg"
+                    style={{ maxHeight: "500px" }}
+                  />
+                ) : screenshotLoading ? (
+                  <div className="flex items-center gap-2 py-8 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm font-medium">Loading screenshot...</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={loadScreenshot}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
+                  >
+                    <Camera className="h-4 w-4" />
+                    Load Screenshot
+                  </button>
+                )}
+              </div>
+            )}
+
+            {activeTab === "links" && hasLinks && (
+              <div className="space-y-2 max-h-80 overflow-auto">
+                {page.links_detail ? (
+                  <>
+                    <div className="flex gap-4 text-[13px] pb-2 border-b border-border/30">
+                      <span className="font-medium">{page.links_detail.total} total</span>
+                      {page.links_detail.internal && <span className="text-blue-400">{page.links_detail.internal.count} internal</span>}
+                      {page.links_detail.external && <span className="text-amber-400">{page.links_detail.external.count} external</span>}
+                    </div>
+                    {page.links_detail.internal?.links?.map((link: any, i: number) => (
+                      <a key={`i-${i}`} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-[12px] text-primary hover:underline truncate">{link.url}</a>
+                    ))}
+                    {page.links_detail.external?.links?.map((link: any, i: number) => (
+                      <a key={`e-${i}`} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-[12px] text-amber-400/80 hover:underline truncate">{link.url}</a>
+                    ))}
+                  </>
+                ) : page.links?.map((link: string, i: number) => (
+                  <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="block text-[12px] text-primary hover:underline truncate">{link}</a>
+                ))}
+              </div>
+            )}
+
+            {activeTab === "structured" && hasStructured && (
+              <pre className="max-h-80 overflow-auto text-[12px] font-mono bg-muted/30 rounded-lg p-4">
+                {JSON.stringify(page.structured_data, null, 2)}
+              </pre>
+            )}
+
+            {activeTab === "headings" && hasHeadings && (
+              <div className="space-y-1 max-h-80 overflow-auto">
+                {page.headings.map((h: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2 text-[13px]" style={{ paddingLeft: `${(h.level - 1) * 16}px` }}>
+                    <span className="text-[10px] font-bold text-primary/60 bg-primary/10 px-1.5 py-0.5 rounded shrink-0">H{h.level}</span>
+                    <span className={h.level === 1 ? "font-semibold" : "text-muted-foreground"}>{h.text}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === "images" && hasImages && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-80 overflow-auto">
+                {page.images.map((img: any, i: number) => (
+                  <div key={i} className="border border-border/40 rounded-lg overflow-hidden bg-muted/20">
+                    <div className="aspect-video bg-muted/30 flex items-center justify-center">
+                      <img src={img.src} alt={img.alt || ""} className="max-w-full max-h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    </div>
+                    <div className="p-2">
+                      <p className="text-[11px] text-muted-foreground truncate">{img.src.split("/").pop()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === "extract" && hasExtract && (
+              <pre className="max-h-80 overflow-auto text-[13px] whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4">
+                {JSON.stringify(page.extract, null, 2)}
+              </pre>
+            )}
+
+            {activeTab === "json" && (
+              <pre className="max-h-80 overflow-auto text-[12px] font-mono bg-muted/30 rounded-lg p-4">
+                {JSON.stringify(page, null, 2)}
+              </pre>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 // ── Main Component ───────────────────────────────────────────
 
@@ -812,7 +1081,10 @@ function PlaygroundContent() {
 
               {/* ── Active Job Progress ── */}
               {activeJob && (
-                <section className="max-w-2xl mx-auto w-full mb-8 animate-scale-in">
+                <section className={cn(
+                  "mx-auto w-full mb-8 animate-scale-in",
+                  activeJob.data && activeJob.data.length > 0 ? "max-w-5xl" : "max-w-2xl"
+                )}>
                   <div className="rounded-2xl border border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden shadow-lg shadow-primary/5">
                     {/* Header */}
                     <div className="flex items-center justify-between px-5 py-4 border-b border-border/30">
@@ -934,6 +1206,63 @@ function PlaygroundContent() {
                         </div>
                       )}
                     </div>
+
+                    {/* ── Inline Results ── */}
+                    {activeJob.data && activeJob.data.length > 0 && activeJob.type !== "map" && (
+                      <div className="border-t border-border/30">
+                        <div className="px-5 py-3 flex items-center justify-between bg-muted/10">
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-4 w-4 text-primary" />
+                            <span className="text-[13px] font-bold text-foreground">
+                              {activeJob.data.length} {activeJob.data.length === 1 ? "result" : "results"}
+                            </span>
+                          </div>
+                          {activeJob.status === "running" && (
+                            <div className="flex items-center gap-1.5 text-[12px] text-primary font-medium">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Live
+                            </div>
+                          )}
+                        </div>
+                        <div className="px-4 pb-4 space-y-2 max-h-[600px] overflow-auto">
+                          {activeJob.data.map((page: any, i: number) => (
+                            <InlineResultCard
+                              key={page.id || page.url || i}
+                              page={page}
+                              index={i}
+                              jobId={activeJob.id}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Map inline results (URL list only) */}
+                    {activeJob.data && activeJob.data.length > 0 && activeJob.type === "map" && (
+                      <div className="border-t border-border/30">
+                        <div className="px-5 py-3 flex items-center gap-2 bg-muted/10">
+                          <Network className="h-4 w-4 text-primary" />
+                          <span className="text-[13px] font-bold text-foreground">
+                            {activeJob.data.length} URLs discovered
+                          </span>
+                        </div>
+                        <div className="max-h-[400px] overflow-auto">
+                          {activeJob.data.map((link: any, i: number) => (
+                            <div key={i} className="flex items-center justify-between px-5 py-2.5 hover:bg-muted/30 group transition-colors">
+                              <a
+                                href={link.url || link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[13px] text-primary hover:underline truncate"
+                              >
+                                {link.url || link}
+                              </a>
+                              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </section>
               )}
