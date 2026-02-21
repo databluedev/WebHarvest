@@ -35,17 +35,14 @@ from app.core.redis import redis_client as _redis
 logger = logging.getLogger(__name__)
 
 
-async def domain_throttle(domain: str, delay: float = 1.0) -> None:
+async def domain_throttle(domain: str, delay: float = 0.5) -> None:
     """Redis-backed per-domain rate limiter. Ensures at least `delay` seconds between requests to the same domain."""
     key = f"throttle:{domain}"
-    while True:
-        last = await _redis.get(key)
-        if last is None:
-            break
+    last = await _redis.get(key)
+    if last is not None:
         wait = float(last) + delay - time.time()
-        if wait <= 0:
-            break
-        await asyncio.sleep(wait)
+        if wait > 0:
+            await asyncio.sleep(wait)
     await _redis.set(key, str(time.time()), ex=int(delay * 2) + 1)
 
 
