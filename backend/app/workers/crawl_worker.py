@@ -173,6 +173,7 @@ def process_crawl(self, job_id: str, config: dict):
                     empty_retries = 0
 
                     async def fetch_one(url: str, depth: int) -> dict | None:
+                        nonlocal _pinned_strategy, _pinned_tier
                         async with semaphore:
                             try:
                                 # Domain throttle
