@@ -193,6 +193,26 @@ class WebCrawler:
             await self._redis.sadd(self._queued_key, norm)
             await self._redis.hset(self._depth_key, url, depth)
 
+    # Paths that never have useful content — utility/chrome pages
+    _JUNK_PATH_SEGMENTS = {
+        "signin", "sign-in", "sign_in", "login", "log-in", "log_in",
+        "signup", "sign-up", "sign_up", "register", "registration",
+        "cart", "checkout", "basket", "bag", "payment", "order",
+        "account", "my-account", "myaccount", "profile", "settings",
+        "wishlist", "wish-list", "favorites", "favourites", "saved",
+        "help", "contact", "contact-us", "support", "faq", "faqs",
+        "privacy", "privacy-policy", "terms", "terms-of-service",
+        "terms-of-use", "legal", "disclaimer", "cookie-policy",
+        "language", "locale", "region", "country-selector",
+        "subscribe", "unsubscribe", "newsletter",
+        "compare", "comparison",
+        "returns", "return-policy", "refund", "shipping",
+        "sitemap", "sitemap.xml",
+        "feed", "rss", "atom",
+        "print", "share", "email-friend",
+        "404", "error", "not-found",
+    }
+
     def _should_crawl(self, url: str, depth: int) -> bool:
         """Check if a URL should be crawled based on config filters."""
         parsed = urlparse(url)
@@ -228,6 +248,11 @@ class WebCrawler:
         }
         path_lower = parsed.path.lower()
         if any(path_lower.endswith(ext) for ext in skip_extensions):
+            return False
+
+        # Skip utility/chrome pages (sign in, cart, account, etc.)
+        path_segments = [s.lower() for s in parsed.path.strip("/").split("/") if s]
+        if path_segments and path_segments[0] in self._JUNK_PATH_SEGMENTS:
             return False
 
         path = parsed.path
