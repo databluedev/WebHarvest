@@ -124,12 +124,16 @@ def mock_redis():
     r.pipeline.return_value = AsyncMock()
     r.pipeline.return_value.execute = AsyncMock(return_value=[0, True, 1, True])
     r.sadd = AsyncMock(return_value=1)
+    r.sismember = AsyncMock(return_value=False)
     r.get = AsyncMock(return_value=None)
     r.set = AsyncMock(return_value=True)
     r.delete = AsyncMock(return_value=1)
     r.zremrangebyscore = AsyncMock()
     r.zadd = AsyncMock()
     r.zcard = AsyncMock(return_value=1)
+    r.rpush = AsyncMock(return_value=1)
+    r.lpop = AsyncMock(return_value=None)
+    r.llen = AsyncMock(return_value=0)
     r.expire = AsyncMock()
     return r
 
