@@ -59,6 +59,43 @@ _curl_sessions: dict[str, Any] = {}  # profile -> AsyncSession
 _curl_loop_id: int | None = None  # Track which event loop curl sessions belong to
 
 
+async def cleanup_async_pools() -> None:
+    """Close all pooled async clients/sessions.
+
+    MUST be called before the event loop closes (e.g. in Celery _run_async)
+    so that no stale sessions survive referencing a dead loop.
+    """
+    global _httpx_client, _httpx_loop_id, _curl_loop_id
+    global _stealth_client, _stealth_loop_id
+
+    # httpx client
+    if _httpx_client is not None:
+        try:
+            await _httpx_client.aclose()
+        except Exception:
+            pass
+        _httpx_client = None
+        _httpx_loop_id = None
+
+    # curl_cffi sessions
+    for session in _curl_sessions.values():
+        try:
+            session.close()
+        except Exception:
+            pass
+    _curl_sessions.clear()
+    _curl_loop_id = None
+
+    # stealth engine client
+    if _stealth_client is not None:
+        try:
+            await _stealth_client.aclose()
+        except Exception:
+            pass
+        _stealth_client = None
+        _stealth_loop_id = None
+
+
 async def _get_httpx_client(proxy_url: str | None = None) -> httpx.AsyncClient:
     """Get or create a reusable httpx client (no proxy variant).
 
@@ -85,13 +122,21 @@ async def _get_httpx_client(proxy_url: str | None = None) -> httpx.AsyncClient:
 def _get_curl_session(profile: str = "chrome124"):
     """Get or create a reusable curl_cffi session for a given TLS profile.
 
-    Recreates sessions when running in a different event loop.
+    Recreates sessions when running in a different event loop (Celery workers
+    create a fresh loop per task).  Old sessions are explicitly closed before
+    clearing to prevent "Event loop is closed" errors.
     """
     global _curl_loop_id
     from curl_cffi.requests import AsyncSession as CurlAsyncSession
 
     current_loop_id = id(asyncio.get_running_loop())
     if _curl_loop_id != current_loop_id:
+        # Explicitly close stale sessions bound to the old (dead) event loop
+        for old_session in _curl_sessions.values():
+            try:
+                old_session.close()
+            except Exception:
+                pass
         _curl_sessions.clear()
         _curl_loop_id = current_loop_id
     if profile not in _curl_sessions:

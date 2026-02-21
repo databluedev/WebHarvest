@@ -12,6 +12,11 @@ def _run_async(coro):
     try:
         return loop.run_until_complete(coro)
     finally:
+        try:
+            from app.services.scraper import cleanup_async_pools
+            loop.run_until_complete(cleanup_async_pools())
+        except Exception:
+            pass
         loop.close()
 
 

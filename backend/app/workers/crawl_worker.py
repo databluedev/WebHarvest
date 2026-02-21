@@ -21,6 +21,13 @@ def _run_async(coro):
     try:
         return loop.run_until_complete(coro)
     finally:
+        # Tear down all pooled async clients BEFORE closing the loop
+        # so nothing is left referencing a dead event loop.
+        try:
+            from app.services.scraper import cleanup_async_pools
+            loop.run_until_complete(cleanup_async_pools())
+        except Exception:
+            pass
         loop.close()
 
 
@@ -465,11 +472,15 @@ def process_crawl(self, job_id: str, config: dict):
                 extract_consumer(),
             )
 
-            # Mark job as completed
+            # Mark job as completed or failed
             async with session_factory() as db:
                 job = await db.get(Job, UUID(job_id))
                 if job and job.status != "cancelled":
-                    job.status = "completed"
+                    if pages_crawled > 0:
+                        job.status = "completed"
+                    else:
+                        job.status = "failed"
+                        job.error = "Crawl finished but no pages were successfully scraped. The site may be blocking requests."
                     job.total_pages = pages_crawled
                     job.completed_pages = pages_crawled
                     job.completed_at = datetime.now(timezone.utc)
@@ -486,9 +497,7 @@ def process_crawl(self, job_id: str, config: dict):
                             await send_webhook(
                                 url=request.webhook_url,
                                 payload={
-                                    "event": "job.completed"
-                                    if job.status == "completed"
-                                    else "job.cancelled",
+                                    "event": f"job.{job.status}",
                                     "job_id": job_id,
                                     "job_type": "crawl",
                                     "status": job.status,
