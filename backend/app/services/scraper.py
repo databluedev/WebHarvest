@@ -3146,10 +3146,21 @@ async def scrape_url_fetch_only(
     # When a previous crawl page succeeded with a specific strategy,
     # try it first before the full tier cascade.
     _is_stealth_pinned = pinned_strategy in ("stealth_chromium", "stealth_firefox")
-    if pinned_strategy and (not needs_browser or _is_stealth_pinned):
+    _is_session_pinned = pinned_strategy == "crawl_session"
+    if pinned_strategy and (not needs_browser or _is_stealth_pinned or _is_session_pinned):
         tier_start = time.time()
         try:
-            if pinned_strategy.startswith("curl_cffi:"):
+            if _is_session_pinned and crawl_session:
+                # Persistent crawl session browser — reuses existing browser,
+                # just opens new tabs. Much faster than stealth engine.
+                result = await _fetch_with_browser_session(url, request, crawl_session)
+                html = result[0]
+                if html and not _looks_blocked(html):
+                    raw_html, status_code, screenshot_b64, action_screenshots, response_headers = result
+                    fetched = True
+                    winning_strategy = "crawl_session"
+                    winning_tier = pinned_tier
+            elif pinned_strategy.startswith("curl_cffi:"):
                 profile = pinned_strategy.split(":", 1)[1]
                 result = await _fetch_with_curl_cffi_single(
                     url,

@@ -182,16 +182,14 @@ def process_crawl(self, job_id: str, config: dict):
             _pinned_strategy: str | None = None
             _pinned_tier: int | None = None
             if crawler.detected_doc_framework:
-                from app.config import settings
-                if settings.STEALTH_ENGINE_URL:
-                    _pinned_strategy = "stealth_chromium"
-                    _pinned_tier = 2
-                else:
-                    _pinned_strategy = "chromium_stealth"
-                    _pinned_tier = 2
+                # Use the persistent crawl session browser — it's already open
+                # and reuses tabs, much faster than stealth engine (which creates
+                # a new browser context per page).
+                _pinned_strategy = "crawl_session"
+                _pinned_tier = 2
                 logger.warning(
                     f"Doc framework '{crawler.detected_doc_framework}' detected — "
-                    f"pre-pinned to {_pinned_strategy} (tier {_pinned_tier}) for full JS rendering"
+                    f"pre-pinned to crawl_session (tier {_pinned_tier}) for full JS rendering"
                 )
 
             async def fetch_producer():
