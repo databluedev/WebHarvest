@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import logging
+import random
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -167,6 +168,246 @@ async def execute_actions(page, actions: list[dict]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Cloudflare challenge detection & solving
+# ---------------------------------------------------------------------------
+
+
+async def _is_cloudflare_challenge(page) -> bool:
+    """Check if the current page is a Cloudflare challenge page.
+
+    Uses a fast title check first (from CloudflareBypassForScraping), then falls
+    back to DOM element and body-text scanning for edge cases.
+    """
+    try:
+        # Fast path: Cloudflare sets title to "Just a moment..." during challenges
+        title = (await page.title()).lower()
+        if "just a moment" in title:
+            return True
+
+        # Quick pre-filter: if "cloudflare" isn't anywhere in the HTML, skip
+        # the expensive element checks
+        has_cf = await page.evaluate(
+            "() => document.documentElement.innerHTML.substring(0, 10000).toLowerCase().includes('cloudflare')"
+        )
+        if not has_cf:
+            return False
+
+        # Check for Turnstile iframe or challenge-specific elements
+        cf_selectors = [
+            'iframe[src*="challenges.cloudflare.com"]',
+            "#challenge-running",
+            "#challenge-stage",
+            ".cf-turnstile",
+            "#turnstile-wrapper",
+        ]
+        for sel in cf_selectors:
+            el = await page.query_selector(sel)
+            if el:
+                return True
+
+        # Check visible body text for challenge phrases
+        body_text = await page.evaluate(
+            "() => (document.body && document.body.innerText || '').substring(0, 2000).toLowerCase()"
+        )
+        cf_phrases = [
+            "verify you are human",
+            "press & hold",
+            "press and hold",
+            "checking your browser",
+            "checking if the site connection is secure",
+            "please complete the captcha",
+            "enable javascript and cookies to continue",
+        ]
+        for phrase in cf_phrases:
+            if phrase in body_text:
+                return True
+    except Exception:
+        pass
+    return False
+
+
+async def _detect_challenge_type(page) -> str | None:
+    """Distinguish between Cloudflare challenge types.
+
+    Returns:
+        "interstitial" — passive "just a moment" page that may auto-resolve
+        "turnstile"    — interactive CAPTCHA widget that needs a click
+        None           — not a Cloudflare challenge
+    """
+    try:
+        html_lower = await page.evaluate(
+            "() => document.documentElement.innerHTML.substring(0, 10000).toLowerCase()"
+        )
+        title_lower = (await page.title()).lower()
+
+        if "please complete the captcha" in html_lower:
+            return "turnstile"
+
+        # Check for Turnstile iframe explicitly
+        iframe = await page.query_selector('iframe[src*="challenges.cloudflare.com"]')
+        if iframe:
+            return "turnstile"
+
+        if "just a moment" in title_lower:
+            return "interstitial"
+    except Exception:
+        pass
+    return None
+
+
+async def _solve_cloudflare_challenge(page, timeout_ms: int = 20000) -> bool:
+    """Attempt to solve a Cloudflare challenge.
+
+    Handles both interstitial (auto-resolving) and Turnstile (click) challenges.
+    Returns True if the challenge was resolved (page navigated to real content).
+    """
+    import time
+
+    deadline = time.monotonic() + timeout_ms / 1000
+    attempt = 0
+
+    # Step 1: Initial wait — Patchright/Camoufox often auto-pass managed
+    # challenges and interstitials. The reference CloudflareBypassForScraping
+    # repo uses a 5s wait here.
+    initial_wait = min(5.0, (deadline - time.monotonic()) * 0.6)
+    if initial_wait > 0:
+        logger.info("Waiting %.1fs for potential auto-resolve...", initial_wait)
+        await page.wait_for_timeout(int(initial_wait * 1000))
+
+    # Check if already resolved after initial wait
+    if not await _is_cloudflare_challenge(page):
+        logger.info("Cloudflare challenge auto-resolved during initial wait")
+        return True
+
+    while time.monotonic() < deadline:
+        attempt += 1
+        logger.info("Cloudflare challenge solve attempt %d", attempt)
+
+        # Determine challenge type on each attempt
+        challenge_type = await _detect_challenge_type(page)
+        if challenge_type is None:
+            logger.info("Challenge no longer detected, resolved")
+            return True
+
+        if challenge_type == "interstitial":
+            # Passive challenge — just wait for it to auto-resolve
+            wait_s = min(3.0, deadline - time.monotonic())
+            if wait_s > 0:
+                logger.info("Interstitial challenge, waiting %.1fs for auto-resolve...", wait_s)
+                await page.wait_for_timeout(int(wait_s * 1000))
+            if not await _is_cloudflare_challenge(page):
+                logger.info("Interstitial challenge auto-resolved on attempt %d", attempt)
+                return True
+            continue
+
+        # --- Turnstile challenge: need to find and click the widget ---
+
+        if time.monotonic() >= deadline:
+            break
+
+        # Step 2: Find the Turnstile iframe
+        iframe_el = None
+        for sel in [
+            'iframe[src*="challenges.cloudflare.com"]',
+            ".cf-turnstile iframe",
+            "#turnstile-wrapper iframe",
+            "#challenge-stage iframe",
+        ]:
+            iframe_el = await page.query_selector(sel)
+            if iframe_el:
+                break
+
+        if not iframe_el:
+            logger.info("No Turnstile iframe found, waiting for it to appear...")
+            try:
+                iframe_el = await page.wait_for_selector(
+                    'iframe[src*="challenges.cloudflare.com"]',
+                    timeout=min(3000, max(500, int((deadline - time.monotonic()) * 1000))),
+                )
+            except Exception:
+                pass
+
+        if not iframe_el:
+            # No iframe — challenge may be transitioning, loop back
+            await page.wait_for_timeout(500)
+            continue
+
+        # Step 3: Get iframe bounding box and click at its center
+        box = await iframe_el.bounding_box()
+        if not box:
+            logger.info("Iframe has no bounding box, retrying...")
+            await page.wait_for_timeout(500)
+            continue
+
+        # Target: center of the checkbox area (typically left side of iframe)
+        target_x = box["x"] + min(box["width"] * 0.3, 30)
+        target_y = box["y"] + box["height"] / 2
+
+        # Step 4: Human-like mouse movement to target
+        # Start from a random nearby position
+        start_x = target_x + random.uniform(50, 120) * random.choice([-1, 1])
+        start_y = target_y + random.uniform(30, 80) * random.choice([-1, 1])
+        await page.mouse.move(start_x, start_y)
+        await page.wait_for_timeout(random.randint(100, 250))
+
+        # Move to target in steps (natural arc with smoothstep easing)
+        steps = random.randint(12, 20)
+        for i in range(1, steps + 1):
+            t = i / steps
+            ease_t = t * t * (3 - 2 * t)  # smoothstep
+            mx = start_x + (target_x - start_x) * ease_t + random.uniform(-2, 2)
+            my = start_y + (target_y - start_y) * ease_t + random.uniform(-2, 2)
+            await page.mouse.move(mx, my)
+            await page.wait_for_timeout(random.randint(8, 25))
+
+        # Final move to exact target
+        await page.mouse.move(target_x, target_y)
+        await page.wait_for_timeout(random.randint(80, 250))
+
+        # Step 5: Press & Hold
+        logger.info("Clicking and holding Turnstile checkbox at (%.0f, %.0f)", target_x, target_y)
+        await page.mouse.down()
+
+        # Hold for 2.5-4s with micro-jitter every ~400ms
+        hold_ms = random.randint(2500, 4000)
+        elapsed = 0
+        jitter_interval = 400
+        while elapsed < hold_ms:
+            wait_chunk = min(jitter_interval, hold_ms - elapsed)
+            await page.wait_for_timeout(wait_chunk)
+            elapsed += wait_chunk
+            # Micro-jitter: small random movement while holding
+            jx = target_x + random.uniform(-2, 2)
+            jy = target_y + random.uniform(-2, 2)
+            await page.mouse.move(jx, jy)
+
+        await page.mouse.up()
+        logger.info("Released mouse button after %dms hold", hold_ms)
+
+        # Step 6: Wait for navigation / redirect after solving
+        try:
+            await page.wait_for_load_state(
+                "networkidle",
+                timeout=min(8000, max(1000, int((deadline - time.monotonic()) * 1000))),
+            )
+        except Exception:
+            pass
+
+        # Give the page a moment to settle after redirect
+        await page.wait_for_timeout(1500)
+
+        # Step 7: Check if challenge is resolved
+        if not await _is_cloudflare_challenge(page):
+            logger.info("Cloudflare challenge solved on attempt %d", attempt)
+            return True
+
+        logger.info("Challenge still present after attempt %d, retrying...", attempt)
+
+    logger.warning("Cloudflare challenge not solved within timeout (%dms)", timeout_ms)
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Core scrape logic
 # ---------------------------------------------------------------------------
 
@@ -210,6 +451,14 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
         # Use explicit wait_after_load if provided, otherwise apply a 2s default.
         wait_ms = req.wait_after_load if req.wait_after_load > 0 else 2000
         await page.wait_for_timeout(min(wait_ms, 30000))
+
+        # Detect and solve Cloudflare challenge
+        if status_code in (403, 503) or await _is_cloudflare_challenge(page):
+            logger.info("Cloudflare challenge detected for %s (status=%d)", req.url, status_code)
+            solved = await _solve_cloudflare_challenge(page, timeout_ms=20000)
+            if solved:
+                status_code = 200
+                resp_headers = {}  # Original headers are stale after redirect
 
         # Scroll to bottom to trigger lazy-loaded content
         try:
@@ -289,6 +538,14 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
         # Default JS render wait — SPAs need time to hydrate even after networkidle.
         wait_ms = req.wait_after_load if req.wait_after_load > 0 else 2000
         await page.wait_for_timeout(min(wait_ms, 30000))
+
+        # Detect and solve Cloudflare challenge
+        if status_code in (403, 503) or await _is_cloudflare_challenge(page):
+            logger.info("Cloudflare challenge detected for %s (status=%d)", req.url, status_code)
+            solved = await _solve_cloudflare_challenge(page, timeout_ms=20000)
+            if solved:
+                status_code = 200
+                resp_headers = {}  # Original headers are stale after redirect
 
         # Scroll to bottom to trigger lazy-loaded content
         try:
