@@ -390,24 +390,16 @@ class TestTriggerSchedule:
         )
 
         with (
-            patch("app.api.v1.schedule.process_crawl", create=True) as mock_crawl,
-            patch("app.api.v1.schedule.process_batch", create=True) as mock_batch,
-            patch("app.api.v1.schedule.process_scrape", create=True) as mock_scrape,
+            patch("app.workers.scrape_worker.process_scrape") as mock_scrape,
+            patch("app.workers.crawl_worker.process_crawl") as mock_crawl,
         ):
             mock_scrape.delay = MagicMock()
             mock_crawl.delay = MagicMock()
-            mock_batch.delay = MagicMock()
 
-            # Need to patch the imports inside the function
-            with (
-                patch("app.workers.scrape_worker.process_scrape", mock_scrape),
-                patch("app.workers.crawl_worker.process_crawl", mock_crawl),
-                patch("app.workers.batch_worker.process_batch", mock_batch),
-            ):
-                resp = await client.post(
-                    f"/v1/schedules/{sched.id}/trigger",
-                    headers=auth_headers,
-                )
+            resp = await client.post(
+                f"/v1/schedules/{sched.id}/trigger",
+                headers=auth_headers,
+            )
 
             assert resp.status_code == 200
             data = resp.json()

@@ -631,11 +631,17 @@ def _resolve_relative_urls(soup: BeautifulSoup, base_url: str) -> None:
             tag["src"] = urljoin(base_url, src)
 
 
-def _clean_soup_light(html: str) -> BeautifulSoup:
-    """Light cleaning: strip only truly junk tags (scripts, styles, hidden).
+def _clean_soup_light(html: str, base_url: str = "") -> BeautifulSoup:
+    """Smart content cleaning inspired by Crawl4AI's filtering pipeline.
 
-    Keeps ALL structural content — nav, sidebar, footer, breadcrumbs, etc.
-    This is the Firecrawl-style approach: full page minus non-renderable junk.
+    Applies multiple filtering passes:
+    1. Strip non-renderable tags (scripts, styles, SVG, etc.)
+    2. Remove invisible/hidden elements
+    3. Remove hard junk (cookie banners, modals, ads, chat widgets)
+    4. Per-block word-count filtering — remove trivial blocks (<10 words)
+       unless they contain images, code, headings, or tables
+    5. External image filtering — strip images hosted on other domains
+    6. Social media link stripping — remove links to social platforms
     """
     soup = BeautifulSoup(html, "lxml")
 
@@ -659,7 +665,129 @@ def _clean_soup_light(html: str) -> BeautifulSoup:
         except Exception:
             pass
 
+    # ── Crawl4AI-style per-block word-count filtering ──
+    # Remove leaf-level blocks with fewer than BLOCK_WORD_THRESHOLD words,
+    # unless the block contains valuable non-text content.
+    _filter_thin_blocks(soup)
+
+    # ── External image filtering ──
+    # Remove <img> tags hosted on domains different from the page
+    if base_url:
+        _filter_external_images(soup, base_url)
+
+    # ── Social media link stripping ──
+    # Replace <a> tags pointing to social platforms with their plain text
+    _strip_social_media_links(soup)
+
     return soup
+
+
+# Minimum words for a block to be kept (Crawl4AI default: 10)
+BLOCK_WORD_THRESHOLD = 10
+
+# Tags that contain valuable non-text content — never filtered by word count
+_VALUABLE_CHILDREN = {"img", "pre", "code", "table", "video", "audio", "picture"}
+
+# Tags that are block-level *wrappers* eligible for word-count filtering.
+# Excludes content-bearing tags like <p>, <li>, <blockquote> which may
+# legitimately be short (e.g. single-sentence paragraphs, list items).
+_BLOCK_TAGS = {
+    "div", "section", "aside", "figure", "figcaption",
+    "details", "summary",
+}
+
+# Known social media domains (matches Crawl4AI defaults + extras)
+_SOCIAL_MEDIA_DOMAINS = {
+    "facebook.com", "www.facebook.com",
+    "twitter.com", "www.twitter.com",
+    "x.com", "www.x.com",
+    "linkedin.com", "www.linkedin.com",
+    "instagram.com", "www.instagram.com",
+    "pinterest.com", "www.pinterest.com",
+    "tiktok.com", "www.tiktok.com",
+    "snapchat.com", "www.snapchat.com",
+    "reddit.com", "www.reddit.com",
+    "youtube.com", "www.youtube.com",
+    "whatsapp.com", "www.whatsapp.com",
+    "t.me",
+    "discord.gg", "discord.com",
+}
+
+
+def _filter_thin_blocks(soup: BeautifulSoup) -> None:
+    """Remove leaf-level blocks with fewer than BLOCK_WORD_THRESHOLD words.
+
+    A 'leaf-level block' is a block-level element that doesn't contain other
+    block-level children. This avoids accidentally removing a parent <div>
+    that wraps multiple content paragraphs.
+
+    Blocks containing images, code, tables, or headings are always kept
+    regardless of word count — they carry non-textual value.
+    """
+    for el in list(soup.find_all(list(_BLOCK_TAGS))):
+        # Skip if already decomposed
+        if el.parent is None:
+            continue
+
+        # Skip if this block contains nested block children (it's a wrapper)
+        if el.find(list(_BLOCK_TAGS)):
+            continue
+
+        # Skip if it contains valuable non-text content
+        if el.find(list(_VALUABLE_CHILDREN)):
+            continue
+
+        # Skip if it contains any heading
+        if el.find(re.compile(r"^h[1-6]$")):
+            continue
+
+        # Check word count
+        text = el.get_text(strip=True)
+        if len(text.split()) < BLOCK_WORD_THRESHOLD:
+            el.decompose()
+
+
+def _filter_external_images(soup: BeautifulSoup, base_url: str) -> None:
+    """Remove <img> tags whose src points to a different domain.
+
+    Keeps images from the same domain and subdomains. This strips
+    tracking pixels, third-party ad images, and CDN decorations
+    while preserving the site's own content images.
+    """
+    base_domain = urlparse(base_url).netloc
+    # Extract root domain (e.g., 'example.com' from 'www.example.com')
+    base_parts = base_domain.split(".")
+    root_domain = ".".join(base_parts[-2:]) if len(base_parts) >= 2 else base_domain
+
+    for img in list(soup.find_all("img")):
+        src = img.get("src", "").strip()
+        if not src or src.startswith("data:"):
+            continue
+        # Resolve relative URLs
+        absolute = urljoin(base_url, src)
+        img_domain = urlparse(absolute).netloc
+        # Keep if same root domain (includes subdomains like cdn.example.com)
+        if img_domain and not img_domain.endswith(root_domain):
+            img.decompose()
+
+
+def _strip_social_media_links(soup: BeautifulSoup) -> None:
+    """Replace social media <a> tags with their plain text.
+
+    Doesn't remove the text content, just strips the link — so
+    'Follow us on Twitter' keeps the text but loses the <a> wrapper.
+    """
+    for a_tag in list(soup.find_all("a", href=True)):
+        href = a_tag["href"].strip()
+        if not href:
+            continue
+        try:
+            link_domain = urlparse(href).netloc.lower()
+        except Exception:
+            continue
+        if link_domain in _SOCIAL_MEDIA_DOMAINS:
+            # Replace <a> with its text content
+            a_tag.replace_with(a_tag.get_text())
 
 
 def extract_and_convert(
@@ -681,8 +809,9 @@ def extract_and_convert(
     if only_main_content:
         tag = _extract_main_tag(raw_html, url)
     else:
-        # Firecrawl-style: light clean (strip scripts/styles/hidden) but keep everything
-        tag = _clean_soup_light(raw_html)
+        # Crawl4AI-style: smart filtering (junk removal, per-block word threshold,
+        # external image filtering, social media link stripping)
+        tag = _clean_soup_light(raw_html, base_url=url)
 
     # Resolve relative URLs to absolute before markdown conversion
     _resolve_relative_urls(tag, url)

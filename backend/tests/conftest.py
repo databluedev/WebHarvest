@@ -131,6 +131,9 @@ def mock_redis():
     r.zremrangebyscore = AsyncMock()
     r.zadd = AsyncMock()
     r.zcard = AsyncMock(return_value=1)
+    r.zpopmax = AsyncMock(return_value=[])
+    r.hset = AsyncMock()
+    r.hget = AsyncMock(return_value=None)
     r.rpush = AsyncMock(return_value=1)
     r.lpop = AsyncMock(return_value=None)
     r.llen = AsyncMock(return_value=0)
@@ -235,10 +238,6 @@ async def client(db_session: AsyncSession, mock_redis):
         ),
         patch(
             "app.api.v1.crawl.check_rate_limit_full",
-            side_effect=_always_allow,
-        ),
-        patch(
-            "app.api.v1.batch.check_rate_limit_full",
             side_effect=_always_allow,
         ),
         patch(

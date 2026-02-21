@@ -5,36 +5,24 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
 from httpx import AsyncClient
-from app.schemas.map import LinkResult
 
 
 class TestMapSite:
     @pytest.mark.asyncio
     async def test_map_site_success(self, client: AsyncClient, auth_headers):
-        """POST /v1/map with mocked mapper returns discovered links."""
-        mock_links = [
-            LinkResult(
-                url="https://example.com/page1",
-                title="Page 1",
-                description="First page",
-            ),
-            LinkResult(
-                url="https://example.com/page2",
-                title="Page 2",
-                description="Second page",
-            ),
-        ]
-
+        """POST /v1/map dispatches Celery task and returns job_id."""
         with (
             patch(
                 "app.api.v1.map.check_rate_limit_full", new_callable=AsyncMock
             ) as mock_rl,
-            patch("app.api.v1.map.map_website", new_callable=AsyncMock) as mock_map,
+            patch("app.api.v1.map.get_cached_map", new_callable=AsyncMock) as mock_cache,
+            patch("app.api.v1.map.process_map") as mock_task,
         ):
             mock_rl.return_value = MagicMock(
                 allowed=True, limit=50, remaining=49, reset=60
             )
-            mock_map.return_value = mock_links
+            mock_cache.return_value = None
+            mock_task.delay = MagicMock()
 
             resp = await client.post(
                 "/v1/map",
@@ -47,8 +35,8 @@ class TestMapSite:
             assert resp.status_code == 200
             data = resp.json()
             assert data["success"] is True
-            assert data["total"] == 2
-            assert len(data["links"]) == 2
+            assert "job_id" in data
+            mock_task.delay.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_map_site_unauthenticated(self, client: AsyncClient):
@@ -68,35 +56,6 @@ class TestMapSite:
 
             resp = await client.post("/v1/map", json={}, headers=auth_headers)
             assert resp.status_code == 422
-
-    @pytest.mark.asyncio
-    async def test_map_site_error_returns_success_false(
-        self, client: AsyncClient, auth_headers
-    ):
-        """POST /v1/map when mapper raises returns success=false."""
-        with (
-            patch(
-                "app.api.v1.map.check_rate_limit_full", new_callable=AsyncMock
-            ) as mock_rl,
-            patch("app.api.v1.map.map_website", new_callable=AsyncMock) as mock_map,
-        ):
-            mock_rl.return_value = MagicMock(
-                allowed=True, limit=50, remaining=49, reset=60
-            )
-            mock_map.side_effect = RuntimeError("Sitemap unreachable")
-
-            resp = await client.post(
-                "/v1/map",
-                json={
-                    "url": "https://example.com",
-                },
-                headers=auth_headers,
-            )
-
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["success"] is False
-            assert "Sitemap unreachable" in data["error"]
 
 
 class TestGetMapStatus:

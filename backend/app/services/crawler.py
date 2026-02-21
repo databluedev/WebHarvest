@@ -1,5 +1,6 @@
 import fnmatch
 import logging
+import re
 from urllib.parse import urlparse
 
 import httpx
@@ -13,13 +14,63 @@ from app.services.scraper import scrape_url, scrape_url_fetch_only
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# URL priority scoring — content-rich pages (products, articles) rank higher
+# ---------------------------------------------------------------------------
+
+_SLUG_RE = re.compile(r"[a-z0-9]+-[a-z0-9]+-[a-z0-9]+")  # word-word-word slugs
+_ALNUM_ID_RE = re.compile(r"^[A-Z0-9]{6,}$")  # e.g. B09V3KXJPB (ASIN)
+_NUMERIC_ID_RE = re.compile(r"^\d{4,}$")  # numeric product/article IDs
+_DATE_RE = re.compile(r"\d{4}[/-]\d{2}")  # date patterns in path (blog posts)
+
+
+def score_url(url: str) -> float:
+    """Score a URL for crawl priority.  Higher = crawled sooner.
+
+    Heuristics (additive):
+      +3  slug-like path segment (word-word-word) → likely product/article
+      +2  alphanumeric ID segment (≥6 chars)      → likely product detail
+      +2  numeric ID segment (≥4 digits)           → likely item page
+      +1  date pattern in path                     → likely blog post
+      -1  per path segment beyond 2                → penalise deep nav
+      -1  per query parameter                      → penalise filter pages
+      -2  segment > 40 chars                       → penalise hash/noise
+    """
+    parsed = urlparse(url)
+    segments = [s for s in parsed.path.strip("/").split("/") if s]
+    score = 10.0  # base score
+
+    for seg in segments:
+        if _SLUG_RE.search(seg):
+            score += 3
+        if _ALNUM_ID_RE.match(seg):
+            score += 2
+        if _NUMERIC_ID_RE.match(seg):
+            score += 2
+        if len(seg) > 40:
+            score -= 2
+
+    if _DATE_RE.search(parsed.path):
+        score += 1
+
+    # Penalise deep paths
+    if len(segments) > 2:
+        score -= (len(segments) - 2)
+
+    # Penalise query-heavy URLs
+    if parsed.query:
+        params = parsed.query.count("&") + 1
+        score -= params
+
+    return max(score, 0.0)
+
 
 class WebCrawler:
-    """BFS web crawler with Redis-backed FIFO frontier and visited set.
+    """Priority web crawler with Redis-backed ZSET frontier and visited set.
 
-    The frontier uses a Redis LIST (RPUSH/LPOP) for page-order BFS,
-    with a companion SET for O(1) duplicate prevention.  URLs are
-    crawled in the order they appear on each page (top to bottom).
+    The frontier uses a Redis sorted set (ZADD/ZPOPMAX) so that
+    content-rich pages (products, articles) are crawled before
+    navigation / category pages.
     """
 
     def __init__(self, job_id: str, config: CrawlRequest, proxy_manager=None):
@@ -37,7 +88,6 @@ class WebCrawler:
         self._frontier_key = f"crawl:{job_id}:frontier"
         self._visited_key = f"crawl:{job_id}:visited"
         self._depth_key = f"crawl:{job_id}:depth"
-        self._queued_key = f"crawl:{job_id}:queued"
 
     async def initialize(self):
         """Set up Redis connection, initial frontier, and persistent browser session.
@@ -55,15 +105,12 @@ class WebCrawler:
             decode_responses=True,
         )
 
-        # Seed the frontier with the start URL (FIFO — first in, first out)
-        from app.services.dedup import normalize_url
-
-        norm = normalize_url(self.base_url)
-        await self._redis.rpush(self._frontier_key, self.base_url)
-        await self._redis.sadd(self._queued_key, norm)
+        # Seed the frontier with the start URL (highest priority)
+        start_score = score_url(self.base_url) + 100  # boost start URL
+        await self._redis.zadd(self._frontier_key, {self.base_url: start_score})
         await self._redis.hset(self._depth_key, self.base_url, 0)
         # Set TTL on all keys (24 hours)
-        for key in [self._frontier_key, self._visited_key, self._depth_key, self._queued_key]:
+        for key in [self._frontier_key, self._visited_key, self._depth_key]:
             await self._redis.expire(key, 86400)
 
         # Deep JS Navigation Discovery: pre-seed frontier for doc sites
@@ -120,7 +167,7 @@ class WebCrawler:
                 f"{f' (framework: {doc_framework})' if doc_framework else ''}"
             )
 
-            # Filter and add to frontier (preserves discovery order = top-to-bottom)
+            # Filter and add to frontier with priority scoring
             from app.services.dedup import normalize_url
 
             added = 0
@@ -128,15 +175,13 @@ class WebCrawler:
                 if added >= self.config.max_pages * 5:
                     break
                 norm = normalize_url(link_url)
-                if await self._redis.sismember(self._queued_key, norm):
-                    continue
                 if await self.is_visited(norm):
                     continue
                 if not self._should_crawl(link_url, depth=1):
                     continue
 
-                await self._redis.rpush(self._frontier_key, link_url)
-                await self._redis.sadd(self._queued_key, norm)
+                url_score = score_url(link_url)
+                await self._redis.zadd(self._frontier_key, {link_url: url_score})
                 await self._redis.hset(self._depth_key, link_url, 1)
                 added += 1
 
@@ -148,10 +193,11 @@ class WebCrawler:
             # Non-fatal — BFS will still work via normal link extraction
 
     async def get_next_url(self) -> tuple[str, int] | None:
-        """Pop the next URL from the FIFO frontier. Returns (url, depth) or None."""
-        url = await self._redis.lpop(self._frontier_key)
-        if not url:
+        """Pop the highest-priority URL from the frontier. Returns (url, depth) or None."""
+        result = await self._redis.zpopmax(self._frontier_key, count=1)
+        if not result:
             return None
+        url, _score = result[0]
         depth = await self._redis.hget(self._depth_key, url)
         return url, int(depth or 0)
 
@@ -165,16 +211,15 @@ class WebCrawler:
         return await self._redis.scard(self._visited_key)
 
     async def get_frontier_size(self) -> int:
-        return await self._redis.llen(self._frontier_key)
+        return await self._redis.zcard(self._frontier_key)
 
     async def add_to_frontier(self, urls: list[str], depth: int):
-        """Add discovered URLs to the FIFO frontier (preserves page order)."""
+        """Add discovered URLs to the priority frontier (scored by content likelihood)."""
         from app.services.dedup import normalize_url
 
         for url in urls:
             norm = normalize_url(url)
-            if await self._redis.sismember(self._queued_key, norm):
-                continue
+            # ZSET handles dedup implicitly (same member = update score)
             if await self.is_visited(norm):
                 continue
             if not self._should_crawl(url, depth):
@@ -189,8 +234,8 @@ class WebCrawler:
             if visited_count + frontier_size >= self.config.max_pages * 5:
                 break
 
-            await self._redis.rpush(self._frontier_key, url)
-            await self._redis.sadd(self._queued_key, norm)
+            url_score = score_url(url) - depth  # penalise deeper pages
+            await self._redis.zadd(self._frontier_key, {url: url_score})
             await self._redis.hset(self._depth_key, url, depth)
 
     # Paths that never have useful content — utility/chrome pages
@@ -425,7 +470,7 @@ class WebCrawler:
             self._crawl_session = None
         if self._redis:
             await self._redis.delete(
-                self._frontier_key, self._visited_key, self._depth_key, self._queued_key
+                self._frontier_key, self._visited_key, self._depth_key
             )
             await self._redis.aclose()
             self._redis = None

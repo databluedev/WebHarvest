@@ -1659,7 +1659,7 @@ async def scrape_url(
         if request.only_main_content:
             clean_html = extract_main_content(raw_html, url)
         else:
-            clean_html = str(_clean_soup_light(raw_html))
+            clean_html = str(_clean_soup_light(raw_html, base_url=url))
         if request.include_tags or request.exclude_tags:
             clean_html = apply_tag_filters(
                 clean_html, request.include_tags, request.exclude_tags
@@ -3605,7 +3605,7 @@ def extract_content(
         if request.only_main_content:
             clean_html = extract_main_content(raw_html, url)
         else:
-            clean_html = str(_clean_soup_light(raw_html))
+            clean_html = str(_clean_soup_light(raw_html, base_url=url))
         if request.include_tags or request.exclude_tags:
             clean_html = apply_tag_filters(
                 clean_html, request.include_tags, request.exclude_tags
