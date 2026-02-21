@@ -208,7 +208,7 @@ services:
       target: prod
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-        - CACHE_BUST=${CACHE_BUST:-v4}
+        - CACHE_BUST=${CACHE_BUST:-v5}
     depends_on:
       - backend
     environment:

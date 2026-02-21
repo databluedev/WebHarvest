@@ -14,10 +14,10 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package.json ./
 RUN npm install
+ARG CACHE_BUST=1
 COPY . .
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ARG CACHE_BUST=1
 RUN npm run build
 
 # ---- Production runtime ----
