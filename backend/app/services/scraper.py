@@ -2508,17 +2508,40 @@ async def _fetch_with_browser_session(
         except Exception:
             pass
 
+        # ── User-like interaction for ALL pages ──
+        # Scroll down progressively to trigger lazy loading, infinite scroll,
+        # and dynamic product grids.  Move mouse naturally so anti-bot
+        # systems see human-like behavior.
+        vp = page.viewport_size or {"width": 1920, "height": 1080}
+
         if hard_site:
             await page.wait_for_timeout(random.randint(500, 1000))
-            vp = page.viewport_size or {"width": 1920, "height": 1080}
-            await page.mouse.move(
-                random.randint(200, vp["width"] - 200),
-                random.randint(150, vp["height"] - 200),
-                steps=random.randint(8, 15),
-            )
-            await page.mouse.wheel(0, random.randint(300, 600))
-            await page.wait_for_timeout(random.randint(200, 400))
 
+        # Natural mouse movement
+        await page.mouse.move(
+            random.randint(200, vp["width"] - 200),
+            random.randint(150, vp["height"] - 200),
+            steps=random.randint(8, 15),
+        )
+
+        # Progressive scroll — scroll down in viewport-sized steps to
+        # trigger lazy loading and render all content (products, articles)
+        scroll_distance = 0
+        max_scroll = 8000  # Cap at ~8 screen heights
+        step = vp["height"] - 100  # Slightly less than viewport
+        while scroll_distance < max_scroll:
+            await page.mouse.wheel(0, step)
+            scroll_distance += step
+            await page.wait_for_timeout(random.randint(150, 350))
+
+        # Brief pause for final lazy loads to settle
+        await page.wait_for_timeout(random.randint(200, 500))
+
+        # Scroll back to top so full-page content() captures everything
+        await page.evaluate("window.scrollTo(0, 0)")
+        await page.wait_for_timeout(random.randint(100, 200))
+
+        if hard_site:
             # Challenge re-check for Akamai/PerimeterX
             for _retry in range(2):
                 html_check = await page.content()
@@ -2530,8 +2553,6 @@ async def _fetch_with_browser_session(
                     random.randint(150, vp["height"] - 200),
                     steps=random.randint(8, 15),
                 )
-        else:
-            await page.wait_for_timeout(random.randint(100, 250))
 
         # Doc framework detection: if this is a JS-rendered doc site,
         # wait for content-specific selectors to appear (up to 5s)
