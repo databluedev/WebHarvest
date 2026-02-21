@@ -177,6 +177,9 @@ def process_crawl(self, job_id: str, config: dict):
             # fetches that return empty shell HTML.
             _pinned_strategy: str | None = None
             _pinned_tier: int | None = None
+            _thin_content_check_done = False  # Only check first few pages
+            _thin_page_count = 0  # Track consecutive thin pages
+
             if crawler.detected_doc_framework:
                 # Use the persistent crawl session browser — it's already open
                 # and reuses tabs, much faster than stealth engine (which creates
@@ -310,7 +313,8 @@ def process_crawl(self, job_id: str, config: dict):
 
             async def extract_consumer():
                 """Extract content from fetched pages, save to DB."""
-                nonlocal pages_crawled, cancelled
+                nonlocal pages_crawled, cancelled, _pinned_strategy, _pinned_tier
+                nonlocal _thin_content_check_done, _thin_page_count
 
                 while True:
                     try:
@@ -354,6 +358,29 @@ def process_crawl(self, job_id: str, config: dict):
                         if _word_count == 0:
                             _skip = True
                             logger.warning(f"Skipping empty page (0 words): {url}")
+
+                        # Thin-content detection: if early pages are thin via
+                        # HTTP, upgrade to browser for remaining pages.  JS-heavy
+                        # sites (TradingView, SPAs) return large HTML shells but
+                        # very little extracted text via HTTP.
+                        if (
+                            not _thin_content_check_done
+                            and _pinned_strategy
+                            and _pinned_strategy != "crawl_session"
+                            and pages_crawled < 3
+                        ):
+                            if _word_count < 500:
+                                _thin_page_count += 1
+                            if _thin_page_count >= 2 or (pages_crawled == 0 and _word_count < 200):
+                                logger.warning(
+                                    f"Thin content detected ({_word_count}w) via "
+                                    f"{_pinned_strategy} — upgrading to browser"
+                                )
+                                _pinned_strategy = "crawl_session"
+                                _pinned_tier = 2
+                                _thin_content_check_done = True
+                            elif pages_crawled >= 2:
+                                _thin_content_check_done = True
 
                         if _skip:
                             # Still harvest links for frontier expansion
