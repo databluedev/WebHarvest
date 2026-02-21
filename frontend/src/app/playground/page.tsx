@@ -531,7 +531,7 @@ function PlaygroundContent() {
       setActiveJob((prev) => {
         if (!prev || prev.id !== jobId) return prev;
         const completed = res.completed_pages ?? res.completed_results ?? res.completed_urls ?? prev.completed;
-        const total = res.total_pages ?? res.total_results ?? res.total_urls ?? res.total ?? prev.total;
+        const total = res.total_pages || res.total_results || res.total_urls || res.total || prev.total;
         const data = res.data || res.links || prev.data;
         return {
           ...prev,
