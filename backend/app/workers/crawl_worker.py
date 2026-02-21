@@ -369,9 +369,9 @@ def process_crawl(self, job_id: str, config: dict):
                             and _pinned_strategy != "crawl_session"
                             and pages_crawled < 3
                         ):
-                            if _word_count < 500:
+                            if _word_count < 2000:
                                 _thin_page_count += 1
-                            if _thin_page_count >= 2 or (pages_crawled == 0 and _word_count < 200):
+                            if _thin_page_count >= 2 or (pages_crawled == 0 and _word_count < 1000):
                                 logger.warning(
                                     f"Thin content detected ({_word_count}w) via "
                                     f"{_pinned_strategy} — upgrading to browser"
