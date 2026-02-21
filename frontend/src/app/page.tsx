@@ -273,7 +273,7 @@ export default function LandingPage() {
                 <input
                   type="text"
                   value={url}
-                  onChange={(e) => setUrl(e.target.value)}
+                  onChange={(e) => setUrl(e.target.value.replace(/^https?:\/\//, ""))}
                   onKeyDown={(e) => e.key === "Enter" && !loading && handleScrape()}
                   placeholder="example.com"
                   className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground/50 ml-1"

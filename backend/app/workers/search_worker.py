@@ -140,20 +140,22 @@ def process_search(self, job_id: str, config: dict):
                         timeout=120,
                     )
 
+                    _req_fmts = set(request.formats)
+
                     metadata = {}
                     if result.metadata:
                         metadata = result.metadata.model_dump(exclude_none=True)
                     # Store search snippet in metadata
                     metadata["title"] = sr.title
                     metadata["snippet"] = sr.snippet
-                    # Store rich data types in metadata for frontend tabs
-                    if result.structured_data:
+                    # Store rich data types in metadata — only if user requested them
+                    if result.structured_data and (not _req_fmts or "structured_data" in _req_fmts):
                         metadata["structured_data"] = result.structured_data
-                    if result.headings:
+                    if result.headings and (not _req_fmts or "headings" in _req_fmts):
                         metadata["headings"] = result.headings
-                    if result.images:
+                    if result.images and (not _req_fmts or "images" in _req_fmts):
                         metadata["images"] = result.images
-                    if result.links_detail:
+                    if result.links_detail and (not _req_fmts or "links" in _req_fmts):
                         metadata["links_detail"] = result.links_detail
 
                     # LLM extraction if configured
@@ -178,11 +180,11 @@ def process_search(self, job_id: str, config: dict):
                         job_result = JobResult(
                             job_id=UUID(job_id),
                             url=sr.url,
-                            markdown=result.markdown,
-                            html=result.html,
-                            links=result.links if result.links else None,
+                            markdown=result.markdown if not _req_fmts or "markdown" in _req_fmts else None,
+                            html=result.html if not _req_fmts or "html" in _req_fmts else None,
+                            links=result.links if result.links and (not _req_fmts or "links" in _req_fmts) else None,
                             extract=extract_data,
-                            screenshot_url=result.screenshot,
+                            screenshot_url=result.screenshot if not _req_fmts or "screenshot" in _req_fmts else None,
                             metadata_=metadata,
                         )
                         db.add(job_result)

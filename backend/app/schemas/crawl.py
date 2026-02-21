@@ -1,20 +1,14 @@
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
-from app.schemas.scrape import PageMetadata, ExtractConfig
+from app.schemas.scrape import PageMetadata, ExtractConfig, _normalize_url
 
 
 class ScrapeOptions(BaseModel):
     formats: list[str] = [
         "markdown",
-        "html",
-        "links",
-        "screenshot",
-        "structured_data",
-        "headings",
-        "images",
     ]
     only_main_content: bool = True
     wait_for: int = 0
@@ -42,6 +36,11 @@ class CrawlRequest(BaseModel):
     webhook_url: str | None = None
     webhook_secret: str | None = None
 
+    @field_validator("url", mode="before")
+    @classmethod
+    def _add_protocol(cls, v: str) -> str:
+        return _normalize_url(v)
+
 
 class CrawlStartResponse(BaseModel):
     success: bool
@@ -51,6 +50,8 @@ class CrawlStartResponse(BaseModel):
 
 
 class CrawlPageData(BaseModel):
+    model_config = {"exclude_none": True}
+
     id: str | None = None
     url: str
     markdown: str | None = None
@@ -66,6 +67,8 @@ class CrawlPageData(BaseModel):
 
 
 class CrawlStatusResponse(BaseModel):
+    model_config = {"exclude_none": True}
+
     success: bool
     job_id: UUID
     status: str  # pending, running, completed, failed, cancelled

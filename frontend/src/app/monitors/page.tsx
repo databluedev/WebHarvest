@@ -214,7 +214,7 @@ export default function MonitorsPage() {
     try {
       await api.createMonitor({
         name: formName.trim(),
-        url: formUrl.trim(),
+        url: formUrl.trim().startsWith("http") ? formUrl.trim() : `https://${formUrl.trim()}`,
         check_interval_minutes: formInterval,
         css_selector: formSelector.trim() || undefined,
         notify_on: formNotifyOn,
@@ -509,11 +509,15 @@ export default function MonitorsPage() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium">URL</label>
-                      <Input
-                        placeholder="https://example.com/page"
-                        value={formUrl}
-                        onChange={(e) => setFormUrl(e.target.value)}
-                      />
+                      <div className="flex items-center rounded-md border border-input bg-background px-3 h-9 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                        <span className="text-sm text-muted-foreground shrink-0 select-none font-mono">https://</span>
+                        <input
+                          placeholder="example.com/page"
+                          value={formUrl}
+                          onChange={(e) => setFormUrl(e.target.value.replace(/^https?:\/\//, ""))}
+                          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 ml-1"
+                        />
+                      </div>
                     </div>
                   </div>
 

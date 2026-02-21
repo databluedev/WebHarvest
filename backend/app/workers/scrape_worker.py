@@ -81,28 +81,29 @@ def process_scrape(self, job_id: str, url: str, config: dict):
                     timeout=120,
                 )
 
-                # Build rich metadata
+                # Build rich metadata — only include data the user requested
+                _req_fmts = set(request.formats)
                 metadata = {}
                 if result.metadata:
                     metadata = result.metadata.model_dump(exclude_none=True)
-                if result.structured_data:
+                if result.structured_data and (not _req_fmts or "structured_data" in _req_fmts):
                     metadata["structured_data"] = result.structured_data
-                if result.headings:
+                if result.headings and (not _req_fmts or "headings" in _req_fmts):
                     metadata["headings"] = result.headings
-                if result.images:
+                if result.images and (not _req_fmts or "images" in _req_fmts):
                     metadata["images"] = result.images
-                if result.links_detail:
+                if result.links_detail and (not _req_fmts or "links" in _req_fmts):
                     metadata["links_detail"] = result.links_detail
 
-                # Store result
+                # Store result — only include fields the user requested
                 job_result = JobResult(
                     job_id=UUID(job_id),
                     url=url,
-                    markdown=result.markdown,
-                    html=result.html,
-                    links=result.links if result.links else None,
+                    markdown=result.markdown if not _req_fmts or "markdown" in _req_fmts else None,
+                    html=result.html if not _req_fmts or "html" in _req_fmts else None,
+                    links=result.links if result.links and (not _req_fmts or "links" in _req_fmts) else None,
                     extract=result.extract,
-                    screenshot_url=result.screenshot,
+                    screenshot_url=result.screenshot if not _req_fmts or "screenshot" in _req_fmts else None,
                     metadata_=metadata if metadata else None,
                 )
                 db.add(job_result)

@@ -77,10 +77,10 @@ async def cleanup_async_pools() -> None:
         _httpx_client = None
         _httpx_loop_id = None
 
-    # curl_cffi sessions
+    # curl_cffi sessions (AsyncSession.close() is a coroutine)
     for session in _curl_sessions.values():
         try:
-            session.close()
+            await session.close()
         except Exception:
             pass
     _curl_sessions.clear()
@@ -131,12 +131,10 @@ def _get_curl_session(profile: str = "chrome124"):
 
     current_loop_id = id(asyncio.get_running_loop())
     if _curl_loop_id != current_loop_id:
-        # Explicitly close stale sessions bound to the old (dead) event loop
-        for old_session in _curl_sessions.values():
-            try:
-                old_session.close()
-            except Exception:
-                pass
+        # Stale sessions are bound to a dead event loop — AsyncSession.close()
+        # is a coroutine, but we can't await it here (sync context) and the old
+        # loop is gone anyway.  Just drop the references; cleanup_async_pools()
+        # handles proper async teardown before loop.close().
         _curl_sessions.clear()
         _curl_loop_id = current_loop_id
     if profile not in _curl_sessions:

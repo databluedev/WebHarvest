@@ -135,6 +135,7 @@ async def start_crawl(
 @router.get(
     "/{job_id}",
     response_model=CrawlStatusResponse,
+    response_model_exclude_none=True,
     summary="Get crawl status and results",
     description="Retrieve paginated crawl results including progress, scraped pages, and extracted content. Poll this endpoint until status is 'completed' or 'failed'.",
 )
@@ -179,6 +180,12 @@ async def get_crawl_status(
         )
         results = result.scalars().all()
 
+        # Determine which formats the user originally requested
+        requested_formats = set()
+        if job.config:
+            scrape_opts = job.config.get("scrape_options") or {}
+            requested_formats = set(scrape_opts.get("formats", []))
+
         data = []
         for r in results:
             page_metadata = None
@@ -210,18 +217,19 @@ async def get_crawl_status(
                     response_headers=meta.get("response_headers"),
                 )
 
+            # Only include fields the user actually requested
             data.append(
                 CrawlPageData(
                     id=str(r.id),
                     url=r.url,
-                    markdown=r.markdown,
-                    html=r.html,
-                    links=r.links,
-                    links_detail=links_detail,
-                    screenshot=r.screenshot_url,
-                    structured_data=structured_data,
-                    headings=headings,
-                    images=images,
+                    markdown=r.markdown if not requested_formats or "markdown" in requested_formats else None,
+                    html=r.html if not requested_formats or "html" in requested_formats else None,
+                    links=r.links if not requested_formats or "links" in requested_formats else None,
+                    links_detail=links_detail if not requested_formats or "links" in requested_formats else None,
+                    screenshot=r.screenshot_url if not requested_formats or "screenshot" in requested_formats else None,
+                    structured_data=structured_data if not requested_formats or "structured_data" in requested_formats else None,
+                    headings=headings if not requested_formats or "headings" in requested_formats else None,
+                    images=images if not requested_formats or "images" in requested_formats else None,
                     extract=r.extract,
                     metadata=page_metadata,
                 )

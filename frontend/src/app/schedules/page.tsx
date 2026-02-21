@@ -114,10 +114,11 @@ export default function SchedulesPage() {
     const cron = cronPreset === "custom" ? customCron : cronPreset;
 
     let config: any = {};
+    const fullConfigUrl = configUrl.startsWith("http") ? configUrl : `https://${configUrl}`;
     if (scheduleType === "crawl") {
-      config = { url: configUrl, max_pages: configMaxPages };
+      config = { url: fullConfigUrl, max_pages: configMaxPages };
     } else if (scheduleType === "scrape") {
-      config = { url: configUrl, formats: ["markdown"] };
+      config = { url: fullConfigUrl, formats: ["markdown"] };
     }
 
     try {
@@ -309,11 +310,15 @@ export default function SchedulesPage() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">URL</label>
-                  <Input
-                    placeholder="https://example.com"
-                    value={configUrl}
-                    onChange={(e) => setConfigUrl(e.target.value)}
-                  />
+                  <div className="flex items-center rounded-md border border-input bg-background px-3 h-9 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                    <span className="text-sm text-muted-foreground shrink-0 select-none font-mono">https://</span>
+                    <input
+                      placeholder="example.com"
+                      value={configUrl}
+                      onChange={(e) => setConfigUrl(e.target.value.replace(/^https?:\/\//, ""))}
+                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50 ml-1"
+                    />
+                  </div>
                 </div>
 
                 {scheduleType === "crawl" && (

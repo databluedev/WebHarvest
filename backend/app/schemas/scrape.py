@@ -1,6 +1,14 @@
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+
+def _normalize_url(url: str) -> str:
+    """Prepend https:// if no protocol is present."""
+    url = url.strip()
+    if url and not url.startswith(("http://", "https://", "//")):
+        url = f"https://{url}"
+    return url
 
 
 class ActionStep(BaseModel):
@@ -36,6 +44,11 @@ class ScrapeRequest(BaseModel):
     formats: list[str] = [
         "markdown"
     ]  # markdown, html, links, screenshot, structured_data, headings, images
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def _add_protocol(cls, v: str) -> str:
+        return _normalize_url(v)
     only_main_content: bool = True
     wait_for: int = 0  # ms to wait after page load
     timeout: int = 30000  # ms
@@ -71,6 +84,8 @@ class PageMetadata(BaseModel):
 
 
 class ScrapeData(BaseModel):
+    model_config = {"exclude_none": True}
+
     markdown: str | None = None
     html: str | None = None
     raw_html: str | None = None
@@ -85,6 +100,8 @@ class ScrapeData(BaseModel):
 
 
 class ScrapeResponse(BaseModel):
+    model_config = {"exclude_none": True}
+
     success: bool
     data: ScrapeData | None = None
     error: str | None = None

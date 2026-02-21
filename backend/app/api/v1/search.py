@@ -132,6 +132,7 @@ async def start_search(
 @router.get(
     "/{job_id}",
     response_model=SearchStatusResponse,
+    response_model_exclude_none=True,
     summary="Get search job status",
     description="Retrieve the current status and results of a search job. Completed and failed jobs are served from cache for faster response times. Returns per-result data including title, snippet, scraped content, and metadata.",
 )
@@ -162,6 +163,11 @@ async def get_search_status(
         )
         results = result.scalars().all()
 
+        # Determine which formats the user originally requested
+        requested_formats = set()
+        if job.config:
+            requested_formats = set(job.config.get("formats", []))
+
         data = []
         for r in results:
             meta = r.metadata_ or {}
@@ -190,6 +196,7 @@ async def get_search_status(
                         content_length=clean_meta.get("content_length", 0),
                     )
 
+            # Only include fields the user actually requested
             data.append(
                 SearchResultItem(
                     id=str(r.id),
@@ -197,14 +204,14 @@ async def get_search_status(
                     title=meta.get("title"),
                     snippet=meta.get("snippet"),
                     success="error" not in meta,
-                    markdown=r.markdown,
-                    html=r.html,
-                    links=r.links,
-                    links_detail=meta.get("links_detail"),
-                    screenshot=r.screenshot_url,
-                    structured_data=meta.get("structured_data"),
-                    headings=meta.get("headings"),
-                    images=meta.get("images"),
+                    markdown=r.markdown if not requested_formats or "markdown" in requested_formats else None,
+                    html=r.html if not requested_formats or "html" in requested_formats else None,
+                    links=r.links if not requested_formats or "links" in requested_formats else None,
+                    links_detail=meta.get("links_detail") if not requested_formats or "links" in requested_formats else None,
+                    screenshot=r.screenshot_url if not requested_formats or "screenshot" in requested_formats else None,
+                    structured_data=meta.get("structured_data") if not requested_formats or "structured_data" in requested_formats else None,
+                    headings=meta.get("headings") if not requested_formats or "headings" in requested_formats else None,
+                    images=meta.get("images") if not requested_formats or "images" in requested_formats else None,
                     extract=r.extract,
                     metadata=page_metadata,
                     error=meta.get("error"),

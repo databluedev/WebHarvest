@@ -165,7 +165,8 @@ export default function ExtractPage() {
             setLoading(false);
             return;
           }
-          params.url = url.trim();
+          const trimmedUrl = url.trim();
+          params.url = trimmedUrl.startsWith("http") ? trimmedUrl : `https://${trimmedUrl}`;
         }
       } else if (inputMode === "content") {
         if (!content.trim()) {
@@ -292,16 +293,19 @@ export default function ExtractPage() {
                         <label className="text-xs font-medium text-muted-foreground">
                           Single URL
                         </label>
-                        <Input
-                          placeholder="https://example.com/page"
-                          value={url}
-                          onChange={(e) => setUrl(e.target.value)}
-                          onKeyDown={(e) =>
-                            e.key === "Enter" && canSubmit && handleExtract()
-                          }
-                          className="h-10 font-mono text-sm"
-                          disabled={multiUrls.trim().length > 0}
-                        />
+                        <div className="flex items-center rounded-md border border-input bg-background px-3 h-10 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                          <span className="text-sm text-muted-foreground shrink-0 select-none font-mono">https://</span>
+                          <input
+                            placeholder="example.com/page"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value.replace(/^https?:\/\//, ""))}
+                            onKeyDown={(e) =>
+                              e.key === "Enter" && canSubmit && handleExtract()
+                            }
+                            className="flex-1 bg-transparent text-sm font-mono outline-none placeholder:text-muted-foreground/50 ml-1"
+                            disabled={multiUrls.trim().length > 0}
+                          />
+                        </div>
                       </div>
 
                       <div className="space-y-1.5">

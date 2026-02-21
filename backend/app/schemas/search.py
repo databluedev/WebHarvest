@@ -35,6 +35,8 @@ class SearchStartResponse(BaseModel):
 
 
 class SearchResultItem(BaseModel):
+    model_config = {"exclude_none": True}
+
     id: str | None = None
     url: str
     title: str | None = None
@@ -54,6 +56,8 @@ class SearchResultItem(BaseModel):
 
 
 class SearchStatusResponse(BaseModel):
+    model_config = {"exclude_none": True}
+
     success: bool
     job_id: UUID
     status: str

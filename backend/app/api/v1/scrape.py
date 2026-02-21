@@ -91,6 +91,7 @@ def _build_result_dicts(results) -> list[dict]:
 @router.post(
     "",
     response_model=ScrapeResponse,
+    response_model_exclude_none=True,
     summary="Scrape a single URL",
     description="Extract content from a URL using the 5-tier scraping pipeline. Returns markdown, HTML, links, screenshots, structured data, and more depending on requested formats. Supports LLM extraction, proxy routing, and browser actions.",
     response_description="Scraped content with metadata and job ID",
@@ -205,26 +206,27 @@ async def scrape(
             )
             result.extract = extract_result
 
-        # Persist the result
+        # Persist the result — only include data the user requested
+        _req_fmts = set(request.formats)
         metadata_dict = result.metadata.model_dump() if result.metadata else {}
-        if result.structured_data:
+        if result.structured_data and (not _req_fmts or "structured_data" in _req_fmts):
             metadata_dict["structured_data"] = result.structured_data
-        if result.headings:
+        if result.headings and (not _req_fmts or "headings" in _req_fmts):
             metadata_dict["headings"] = result.headings
-        if result.images:
+        if result.images and (not _req_fmts or "images" in _req_fmts):
             metadata_dict["images"] = result.images
-        if result.links_detail:
+        if result.links_detail and (not _req_fmts or "links" in _req_fmts):
             metadata_dict["links_detail"] = result.links_detail
 
         job_result = JobResult(
             job_id=job.id,
             url=request.url,
-            markdown=result.markdown,
-            html=result.html,
-            links=result.links,
+            markdown=result.markdown if not _req_fmts or "markdown" in _req_fmts else None,
+            html=result.html if not _req_fmts or "html" in _req_fmts else None,
+            links=result.links if not _req_fmts or "links" in _req_fmts else None,
             extract=result.extract,
             metadata_=metadata_dict,
-            screenshot_url=result.screenshot,
+            screenshot_url=result.screenshot if not _req_fmts or "screenshot" in _req_fmts else None,
         )
         db.add(job_result)
 
@@ -359,6 +361,11 @@ async def get_scrape_status(
     )
     results = result.scalars().all()
 
+    # Determine which formats the user originally requested
+    requested_formats = set()
+    if job.config:
+        requested_formats = set(job.config.get("formats", []))
+
     data = []
     for r in results:
         page_metadata = None
@@ -390,22 +397,33 @@ async def get_scrape_status(
                 response_headers=meta.get("response_headers"),
             )
 
-        data.append(
-            {
-                "id": str(r.id),
-                "url": r.url,
-                "markdown": r.markdown,
-                "html": r.html,
-                "links": r.links,
-                "links_detail": links_detail,
-                "screenshot": r.screenshot_url,
-                "structured_data": structured_data,
-                "headings": headings,
-                "images": images,
-                "extract": r.extract,
-                "metadata": page_metadata.model_dump() if page_metadata else None,
-            }
-        )
+        # Only include fields the user actually requested
+        page: dict = {"id": str(r.id), "url": r.url}
+        if not requested_formats or "markdown" in requested_formats:
+            page["markdown"] = r.markdown
+        if not requested_formats or "html" in requested_formats:
+            page["html"] = r.html
+        if not requested_formats or "links" in requested_formats:
+            page["links"] = r.links
+            if links_detail:
+                page["links_detail"] = links_detail
+        if not requested_formats or "screenshot" in requested_formats:
+            if r.screenshot_url:
+                page["screenshot"] = r.screenshot_url
+        if not requested_formats or "structured_data" in requested_formats:
+            if structured_data:
+                page["structured_data"] = structured_data
+        if not requested_formats or "headings" in requested_formats:
+            if headings:
+                page["headings"] = headings
+        if not requested_formats or "images" in requested_formats:
+            if images:
+                page["images"] = images
+        if r.extract:
+            page["extract"] = r.extract
+        if page_metadata:
+            page["metadata"] = page_metadata.model_dump(exclude_none=True)
+        data.append(page)
 
     response_data = {
         "success": True,
@@ -414,8 +432,9 @@ async def get_scrape_status(
         "total_pages": job.total_pages,
         "completed_pages": job.completed_pages,
         "data": data,
-        "error": job.error,
     }
+    if job.error:
+        response_data["error"] = job.error
 
     # Cache completed/failed jobs for instant subsequent loads
     if job.status in ("completed", "failed"):

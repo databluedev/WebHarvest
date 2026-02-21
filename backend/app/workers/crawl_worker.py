@@ -93,6 +93,13 @@ def process_crawl(self, job_id: str, config: dict):
         if request.scrape_options and request.scrape_options.extract:
             extract_config = request.scrape_options.extract
 
+        # User's originally requested formats — used to decide what to store
+        # (the crawler internally forces "links" for BFS, but we don't store
+        # them in DB unless the user actually asked for "links").
+        _user_formats = set()
+        if request.scrape_options:
+            _user_formats = set(request.scrape_options.formats)
+
         try:
             pages_crawled = 0
             semaphore = asyncio.Semaphore(concurrency)
@@ -334,19 +341,19 @@ def process_crawl(self, job_id: str, config: dict):
                                 )
                             continue
 
-                        # Build rich metadata
+                        # Build rich metadata — only include data the user requested
                         metadata = {}
                         if scrape_data.metadata:
                             metadata = scrape_data.metadata.model_dump(
                                 exclude_none=True
                             )
-                        if scrape_data.structured_data:
+                        if scrape_data.structured_data and (not _user_formats or "structured_data" in _user_formats):
                             metadata["structured_data"] = scrape_data.structured_data
-                        if scrape_data.headings:
+                        if scrape_data.headings and (not _user_formats or "headings" in _user_formats):
                             metadata["headings"] = scrape_data.headings
-                        if scrape_data.images:
+                        if scrape_data.images and (not _user_formats or "images" in _user_formats):
                             metadata["images"] = scrape_data.images
-                        if scrape_data.links_detail:
+                        if scrape_data.links_detail and (not _user_formats or "links" in _user_formats):
                             metadata["links_detail"] = scrape_data.links_detail
 
                         # LLM extraction if configured
@@ -367,11 +374,12 @@ def process_crawl(self, job_id: str, config: dict):
                             except Exception as e:
                                 logger.warning(f"LLM extraction failed for {url}: {e}")
 
-                        # Capture screenshot — only for pages that pass
-                        # the quality gate to avoid wasting browser time.
+                        # Capture screenshot — only if user requested it.
                         # Retry once if the browser was mid-reinitialisation.
-                        screenshot_val = scrape_data.screenshot
-                        if not screenshot_val:
+                        screenshot_val = None
+                        if _user_formats and "screenshot" not in _user_formats:
+                            pass  # User didn't request screenshots — skip entirely
+                        elif not (screenshot_val := scrape_data.screenshot):
                             _raw_for_ss = ""
                             if "fetch_result" in item:
                                 _raw_for_ss = item["fetch_result"].get(
@@ -428,17 +436,17 @@ def process_crawl(self, job_id: str, config: dict):
                                     if _ss_attempt == 0:
                                         await asyncio.sleep(2)
 
-                        # Store result
+                        # Store result — only include fields the user requested
                         async with session_factory() as db:
                             job_result = JobResult(
                                 job_id=UUID(job_id),
                                 url=url,
-                                markdown=scrape_data.markdown,
-                                html=scrape_data.html,
-                                links=scrape_data.links if scrape_data.links else None,
+                                markdown=scrape_data.markdown if not _user_formats or "markdown" in _user_formats else None,
+                                html=scrape_data.html if not _user_formats or "html" in _user_formats else None,
+                                links=scrape_data.links if scrape_data.links and (not _user_formats or "links" in _user_formats) else None,
                                 extract=extract_data,
                                 metadata_=metadata if metadata else None,
-                                screenshot_url=screenshot_val,
+                                screenshot_url=screenshot_val if not _user_formats or "screenshot" in _user_formats else None,
                             )
                             db.add(job_result)
 

@@ -775,7 +775,7 @@ function PlaygroundContent() {
                       value={activeEndpoint === "search" ? searchQuery : url}
                       onChange={(e) => {
                         if (activeEndpoint === "search") setSearchQuery(e.target.value);
-                        else setUrl(e.target.value);
+                        else setUrl(e.target.value.replace(/^https?:\/\//, ""));
                       }}
                       onKeyDown={(e) => e.key === "Enter" && !isDisabled && handleAction()}
                       placeholder={PLACEHOLDERS[activeEndpoint]}
