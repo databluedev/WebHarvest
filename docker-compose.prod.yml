@@ -69,7 +69,7 @@ services:
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
     command: celery -A app.workers.celery_app worker -l warning -c 4 -Q scrape
     restart: unless-stopped
-    stop_grace_period: 5m
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -103,7 +103,7 @@ services:
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
     command: celery -A app.workers.celery_app worker -l warning -c 2 -Q crawl
     restart: unless-stopped
-    stop_grace_period: 5m
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -135,7 +135,7 @@ services:
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
     command: celery -A app.workers.celery_app worker -l warning -c 2 -Q search,map
     restart: unless-stopped
-    stop_grace_period: 5m
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
