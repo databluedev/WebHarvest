@@ -8,7 +8,6 @@ from app.api.v1 import (
     map,
     settings,
     proxy,
-    batch,
     search,
     usage,
     schedule,
@@ -27,7 +26,6 @@ api_router.include_router(crawl.router, prefix="/crawl", tags=["Crawl"])
 api_router.include_router(map.router, prefix="/map", tags=["Map"])
 api_router.include_router(settings.router, prefix="/settings", tags=["Settings"])
 api_router.include_router(proxy.router, prefix="/settings", tags=["Proxy"])
-api_router.include_router(batch.router, prefix="/batch", tags=["Batch"])
 api_router.include_router(search.router, prefix="/search", tags=["Search"])
 api_router.include_router(usage.router, prefix="/usage", tags=["Usage"])
 api_router.include_router(schedule.router, prefix="/schedules", tags=["Schedules"])

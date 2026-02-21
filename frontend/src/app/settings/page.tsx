@@ -300,7 +300,7 @@ export default function SettingsPage() {
               </CardTitle>
               <CardDescription>
                 Add rotating proxies for anti-bot bypassing. Supports HTTP, HTTPS, and SOCKS5 proxies.
-                Enable &quot;Use Proxy&quot; on scrape/crawl/batch requests to route through these proxies.
+                Enable &quot;Use Proxy&quot; on scrape/crawl requests to route through these proxies.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

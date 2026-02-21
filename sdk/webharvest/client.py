@@ -17,8 +17,6 @@ from webharvest.exceptions import (
     WebHarvestError,
 )
 from webharvest.models import (
-    BatchJob,
-    BatchStatus,
     CrawlJob,
     CrawlStatus,
     MapResult,
@@ -459,145 +457,6 @@ class WebHarvest:
             time.sleep(poll_interval)
 
     # ------------------------------------------------------------------
-    # Batch
-    # ------------------------------------------------------------------
-
-    def start_batch(
-        self,
-        urls: list[str] | None = None,
-        *,
-        items: list[dict] | None = None,
-        formats: list[str] | None = None,
-        only_main_content: bool = True,
-        wait_for: int = 0,
-        timeout: int = 30000,
-        concurrency: int = 5,
-        use_proxy: bool = False,
-        webhook_url: str | None = None,
-        webhook_secret: str | None = None,
-    ) -> BatchJob:
-        """Start an asynchronous batch scrape job.
-
-        Provide either a simple list of *urls* or a list of *items* with
-        per-URL overrides (but not both).
-
-        Args:
-            urls: Simple list of URLs to scrape.
-            items: Per-URL configuration dicts.
-            formats: Content formats to return.
-            only_main_content: Strip boilerplate.
-            wait_for: Wait after page load (ms).
-            timeout: Page-load timeout (ms).
-            concurrency: Max concurrent scrapers.
-            use_proxy: Use a configured proxy.
-            webhook_url: Webhook notification URL.
-            webhook_secret: Webhook signing secret.
-
-        Returns:
-            A :class:`BatchJob` with the ``job_id`` and ``total_urls``.
-        """
-        payload: dict[str, Any] = {
-            "only_main_content": only_main_content,
-            "wait_for": wait_for,
-            "timeout": timeout,
-            "concurrency": concurrency,
-            "use_proxy": use_proxy,
-        }
-        if urls is not None:
-            payload["urls"] = urls
-        if items is not None:
-            payload["items"] = items
-        if formats is not None:
-            payload["formats"] = formats
-        if webhook_url is not None:
-            payload["webhook_url"] = webhook_url
-        if webhook_secret is not None:
-            payload["webhook_secret"] = webhook_secret
-
-        data = self._post("/v1/batch/scrape", json=payload)
-        return BatchJob(**data)
-
-    def get_batch_status(self, job_id: str) -> BatchStatus:
-        """Get the current status and results for a batch scrape job.
-
-        Args:
-            job_id: The job identifier returned by :meth:`start_batch`.
-
-        Returns:
-            A :class:`BatchStatus`.
-        """
-        data = self._get(f"/v1/batch/{job_id}")
-        return BatchStatus(**data)
-
-    def batch(
-        self,
-        urls: list[str] | None = None,
-        *,
-        items: list[dict] | None = None,
-        formats: list[str] | None = None,
-        only_main_content: bool = True,
-        wait_for: int = 0,
-        timeout: int = 30000,
-        concurrency: int = 5,
-        use_proxy: bool = False,
-        webhook_url: str | None = None,
-        webhook_secret: str | None = None,
-        poll_interval: float = 2,
-        poll_timeout: float = 300,
-    ) -> BatchStatus:
-        """Start a batch scrape and poll until it completes.
-
-        Convenience wrapper that blocks until the job reaches a terminal
-        status. All batch-related parameters are forwarded to
-        :meth:`start_batch`.
-
-        Args:
-            poll_interval: Seconds between status polls.
-            poll_timeout: Maximum seconds to wait.
-
-        Returns:
-            The final :class:`BatchStatus`.
-
-        Raises:
-            TimeoutError: If the job does not finish in time.
-            JobFailedError: If the job fails.
-        """
-        job = self.start_batch(
-            urls,
-            items=items,
-            formats=formats,
-            only_main_content=only_main_content,
-            wait_for=wait_for,
-            timeout=timeout,
-            concurrency=concurrency,
-            use_proxy=use_proxy,
-            webhook_url=webhook_url,
-            webhook_secret=webhook_secret,
-        )
-        return self._poll_batch(job.job_id, poll_interval=poll_interval, timeout=poll_timeout)
-
-    def _poll_batch(self, job_id: str, *, poll_interval: float, timeout: float) -> BatchStatus:
-        start = time.monotonic()
-        while True:
-            status = self.get_batch_status(job_id)
-            if status.status in _TERMINAL_STATUSES:
-                if status.status == "failed":
-                    raise JobFailedError(
-                        status.error or "Batch job failed",
-                        job_id=job_id,
-                        response_body=status.model_dump(),
-                    )
-                return status
-            elapsed = time.monotonic() - start
-            if elapsed + poll_interval > timeout:
-                raise TimeoutError(
-                    f"Batch job {job_id} did not complete within {timeout}s",
-                    job_id=job_id,
-                    elapsed=elapsed,
-                )
-            time.sleep(poll_interval)
-
-    # ------------------------------------------------------------------
     # Search
     # ------------------------------------------------------------------
 
@@ -801,7 +660,7 @@ class WebHarvest:
         Args:
             page: Page number (1-indexed).
             per_page: Results per page (max 100).
-            type: Filter by job type (``scrape``, ``crawl``, ``batch``, ``search``).
+            type: Filter by job type (``scrape``, ``crawl``, ``search``).
             status: Filter by status (``pending``, ``running``, ``completed``, ``failed``).
             search: Free-text search across job URLs/queries.
             sort_by: Column to sort by (``created_at``, ``completed_at``, ``status``, ``type``).
@@ -865,7 +724,7 @@ class WebHarvest:
 
         Args:
             name: Human-readable name for the schedule.
-            schedule_type: One of ``scrape``, ``crawl``, or ``batch``.
+            schedule_type: One of ``scrape`` or ``crawl``.
             config: Job configuration dict (the same payload you would pass
                 to the corresponding start endpoint).
             cron_expression: Cron expression defining the recurrence.
@@ -1393,105 +1252,6 @@ class AsyncWebHarvest:
             if elapsed + poll_interval > timeout:
                 raise TimeoutError(
                     f"Crawl job {job_id} did not complete within {timeout}s",
-                    job_id=job_id,
-                    elapsed=elapsed,
-                )
-            await asyncio.sleep(poll_interval)
-
-    # ------------------------------------------------------------------
-    # Batch
-    # ------------------------------------------------------------------
-
-    async def start_batch(
-        self,
-        urls: list[str] | None = None,
-        *,
-        items: list[dict] | None = None,
-        formats: list[str] | None = None,
-        only_main_content: bool = True,
-        wait_for: int = 0,
-        timeout: int = 30000,
-        concurrency: int = 5,
-        use_proxy: bool = False,
-        webhook_url: str | None = None,
-        webhook_secret: str | None = None,
-    ) -> BatchJob:
-        """Start an asynchronous batch scrape job."""
-        payload: dict[str, Any] = {
-            "only_main_content": only_main_content,
-            "wait_for": wait_for,
-            "timeout": timeout,
-            "concurrency": concurrency,
-            "use_proxy": use_proxy,
-        }
-        if urls is not None:
-            payload["urls"] = urls
-        if items is not None:
-            payload["items"] = items
-        if formats is not None:
-            payload["formats"] = formats
-        if webhook_url is not None:
-            payload["webhook_url"] = webhook_url
-        if webhook_secret is not None:
-            payload["webhook_secret"] = webhook_secret
-
-        data = await self._post("/v1/batch/scrape", json=payload)
-        return BatchJob(**data)
-
-    async def get_batch_status(self, job_id: str) -> BatchStatus:
-        """Get the current status and results for a batch scrape job."""
-        data = await self._get(f"/v1/batch/{job_id}")
-        return BatchStatus(**data)
-
-    async def batch(
-        self,
-        urls: list[str] | None = None,
-        *,
-        items: list[dict] | None = None,
-        formats: list[str] | None = None,
-        only_main_content: bool = True,
-        wait_for: int = 0,
-        timeout: int = 30000,
-        concurrency: int = 5,
-        use_proxy: bool = False,
-        webhook_url: str | None = None,
-        webhook_secret: str | None = None,
-        poll_interval: float = 2,
-        poll_timeout: float = 300,
-    ) -> BatchStatus:
-        """Start a batch scrape and poll until it completes."""
-        job = await self.start_batch(
-            urls,
-            items=items,
-            formats=formats,
-            only_main_content=only_main_content,
-            wait_for=wait_for,
-            timeout=timeout,
-            concurrency=concurrency,
-            use_proxy=use_proxy,
-            webhook_url=webhook_url,
-            webhook_secret=webhook_secret,
-        )
-        return await self._poll_batch(job.job_id, poll_interval=poll_interval, timeout=poll_timeout)
-
-    async def _poll_batch(self, job_id: str, *, poll_interval: float, timeout: float) -> BatchStatus:
-        import asyncio
-
-        start = time.monotonic()
-        while True:
-            status = await self.get_batch_status(job_id)
-            if status.status in _TERMINAL_STATUSES:
-                if status.status == "failed":
-                    raise JobFailedError(
-                        status.error or "Batch job failed",
-                        job_id=job_id,
-                        response_body=status.model_dump(),
-                    )
-                return status
-            elapsed = time.monotonic() - start
-            if elapsed + poll_interval > timeout:
-                raise TimeoutError(
-                    f"Batch job {job_id} did not complete within {timeout}s",
                     job_id=job_id,
                     elapsed=elapsed,
                 )

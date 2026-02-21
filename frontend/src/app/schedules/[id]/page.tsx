@@ -130,7 +130,6 @@ export default function ScheduleDetailPage() {
   const getJobLink = (run: any) => {
     const type = run.type;
     if (type === "crawl") return `/crawl/${run.id}`;
-    if (type === "batch") return `/batch/${run.id}`;
     if (type === "search") return `/search/${run.id}`;
     return `/jobs`;
   };

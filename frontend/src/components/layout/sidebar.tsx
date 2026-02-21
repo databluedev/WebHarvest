@@ -13,7 +13,6 @@ import {
   Settings,
   Home,
   LogOut,
-  Layers,
   Flame,
   Menu,
   X,
@@ -40,7 +39,6 @@ const navSections = [
     items: [
       { href: "/playground?endpoint=scrape", label: "Scrape", icon: Search },
       { href: "/playground?endpoint=crawl", label: "Crawl", icon: Globe },
-      { href: "/playground?endpoint=batch", label: "Batch", icon: Layers },
       { href: "/playground?endpoint=search", label: "Search", icon: Search },
       { href: "/playground?endpoint=map", label: "Map", icon: Map },
     ],

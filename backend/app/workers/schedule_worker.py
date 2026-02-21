@@ -73,10 +73,6 @@ def check_schedules():
                             from app.workers.crawl_worker import process_crawl
 
                             process_crawl.delay(str(job.id), config)
-                        elif schedule.schedule_type == "batch":
-                            from app.workers.batch_worker import process_batch
-
-                            process_batch.delay(str(job.id), config)
                         elif schedule.schedule_type == "scrape":
                             from app.workers.scrape_worker import process_scrape
 

@@ -20,7 +20,6 @@ import {
   AlertCircle,
   Search,
   Map,
-  Layers,
   Zap,
   BarChart3,
   ArrowRight,
@@ -151,7 +150,6 @@ function getJobDetailPath(job: Job): string {
   switch (job.type) {
     case "scrape": return `/scrape/${job.id}`;
     case "crawl": return `/crawl/${job.id}`;
-    case "batch": return `/batch/${job.id}`;
     case "search": return `/search/${job.id}`;
     case "map": return `/map/${job.id}`;
     default: return `/crawl/${job.id}`;
@@ -164,7 +162,6 @@ function getTypeIcon(type: string) {
     case "crawl": return Globe;
     case "map": return Map;
     case "search": return Search;
-    case "batch": return Layers;
     default: return FileText;
   }
 }

@@ -42,7 +42,6 @@ const JOB_TYPES = [
   { value: "all", label: "All Types" },
   { value: "scrape", label: "Scrape" },
   { value: "crawl", label: "Crawl" },
-  { value: "batch", label: "Batch" },
   { value: "search", label: "Search" },
   { value: "map", label: "Map" },
 ];
@@ -88,8 +87,6 @@ function getJobDetailPath(job: Job): string {
       return `/scrape/${job.id}`;
     case "crawl":
       return `/crawl/${job.id}`;
-    case "batch":
-      return `/batch/${job.id}`;
     case "search":
       return `/search/${job.id}`;
     case "map":
@@ -262,7 +259,6 @@ export default function JobsPage() {
     switch (job.type) {
       case "scrape": return "/scrape";
       case "crawl": return "/crawl";
-      case "batch": return "/batch";
       case "search": return "/search";
       case "map": return "/map";
       default: return "/";
@@ -284,7 +280,7 @@ export default function JobsPage() {
           <div className="mb-8 animate-float-in">
             <h1 className="text-3xl font-bold tracking-tight">Job History</h1>
             <p className="text-muted-foreground mt-1">
-              View all your past scrape, crawl, batch, search, and map jobs
+              View all your past scrape, crawl, search, and map jobs
             </p>
           </div>
 

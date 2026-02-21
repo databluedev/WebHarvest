@@ -304,14 +304,6 @@ export default function ExtractPage() {
                         />
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-px bg-border" />
-                        <span className="text-[10px] text-muted-foreground uppercase">
-                          or batch
-                        </span>
-                        <div className="flex-1 h-px bg-border" />
-                      </div>
-
                       <div className="space-y-1.5">
                         <label className="text-xs font-medium text-muted-foreground">
                           Multiple URLs{" "}
@@ -331,7 +323,7 @@ export default function ExtractPage() {
                         />
                         {multiUrlCount > 0 && (
                           <p className="text-[11px] text-muted-foreground">
-                            Batch mode: extraction runs asynchronously
+                            Multiple URLs: extraction runs asynchronously
                           </p>
                         )}
                       </div>

@@ -42,7 +42,6 @@ class UsageQuota(Base):
     extract_limit: Mapped[int] = mapped_column(Integer, default=5000)
     search_limit: Mapped[int] = mapped_column(Integer, default=2000)
     map_limit: Mapped[int] = mapped_column(Integer, default=5000)
-    batch_limit: Mapped[int] = mapped_column(Integer, default=5000)
     monitor_limit: Mapped[int] = mapped_column(Integer, default=100)
 
     # Actual usage counters
@@ -51,7 +50,6 @@ class UsageQuota(Base):
     extract_used: Mapped[int] = mapped_column(Integer, default=0)
     search_used: Mapped[int] = mapped_column(Integer, default=0)
     map_used: Mapped[int] = mapped_column(Integer, default=0)
-    batch_used: Mapped[int] = mapped_column(Integer, default=0)
     monitor_used: Mapped[int] = mapped_column(Integer, default=0)
 
     # Aggregate stats

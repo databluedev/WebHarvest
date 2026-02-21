@@ -62,23 +62,6 @@ class CrawlPageData(BaseModel):
     metadata: PageMetadata | None = None
 
 
-class BatchItemResult(BaseModel):
-    """Result for a single URL within a batch scrape job."""
-
-    url: str
-    success: bool = True
-    markdown: str | None = None
-    html: str | None = None
-    links: list[str] | None = None
-    links_detail: dict | None = None
-    screenshot: str | None = None
-    structured_data: dict | None = None
-    headings: list[dict] | None = None
-    images: list[dict] | None = None
-    metadata: PageMetadata | None = None
-    error: str | None = None
-
-
 class SearchResultItem(BaseModel):
     """Result for a single search result page."""
 
@@ -146,28 +129,6 @@ class CrawlStatus(BaseModel):
     total_pages: int = 0
     completed_pages: int = 0
     data: list[CrawlPageData] | None = None
-    error: str | None = None
-
-
-class BatchJob(BaseModel):
-    """Response from starting a new batch scrape via POST /v1/batch/scrape."""
-
-    success: bool
-    job_id: str
-    status: str = "started"
-    message: str | None = None
-    total_urls: int = 0
-
-
-class BatchStatus(BaseModel):
-    """Response from GET /v1/batch/{job_id}."""
-
-    success: bool
-    job_id: str
-    status: str
-    total_urls: int = 0
-    completed_urls: int = 0
-    data: list[BatchItemResult] | None = None
     error: str | None = None
 
 

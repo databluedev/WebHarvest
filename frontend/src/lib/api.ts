@@ -246,41 +246,6 @@ class ApiClient {
     await this.downloadFile(`/v1/map/${jobId}/export?format=${format}`, `map-${jobId.slice(0, 8)}.${ext}`);
   }
 
-  // ── Batch ─────────────────────────────────────────────────
-  async startBatch(params: {
-    urls?: string[];
-    formats?: string[];
-    only_main_content?: boolean;
-    concurrency?: number;
-    extract?: { prompt?: string; schema_?: object };
-    use_proxy?: boolean;
-    headers?: Record<string, string>;
-    cookies?: Record<string, string>;
-    mobile?: boolean;
-    mobile_device?: string;
-    webhook_url?: string;
-    webhook_secret?: string;
-  }) {
-    return this.request<{ success: boolean; job_id: string; status: string; total_urls: number }>("/v1/batch/scrape", {
-      method: "POST",
-      body: JSON.stringify(params),
-    });
-  }
-
-  async getBatchStatus(jobId: string) {
-    return this.request<{
-      success: boolean; job_id: string; status: string;
-      total_urls: number; completed_urls: number;
-      data?: Array<{ url: string; success: boolean; markdown?: string; html?: string; links?: string[]; screenshot?: string; extract?: any; metadata?: any; error?: string }>;
-      error?: string;
-    }>(`/v1/batch/${jobId}`);
-  }
-
-  async downloadBatchExport(jobId: string, format: "zip" | "json" | "csv") {
-    const ext = format === "zip" ? "zip" : format === "csv" ? "csv" : "json";
-    await this.downloadFile(`/v1/batch/${jobId}/export?format=${format}`, `batch-${jobId.slice(0, 8)}.${ext}`);
-  }
-
   // ── Search ────────────────────────────────────────────────
   async startSearch(params: {
     query: string;

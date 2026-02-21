@@ -66,8 +66,6 @@ const EVENT_TYPES = [
   { value: "crawl.completed", label: "crawl.completed" },
   { value: "crawl.failed", label: "crawl.failed" },
   { value: "crawl.page", label: "crawl.page" },
-  { value: "batch.completed", label: "batch.completed" },
-  { value: "batch.failed", label: "batch.failed" },
   { value: "search.completed", label: "search.completed" },
   { value: "search.failed", label: "search.failed" },
   { value: "monitor.change", label: "monitor.change" },

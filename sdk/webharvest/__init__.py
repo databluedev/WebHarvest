@@ -13,9 +13,6 @@ from webharvest.exceptions import (
     WebHarvestError,
 )
 from webharvest.models import (
-    BatchItemResult,
-    BatchJob,
-    BatchStatus,
     CrawlJob,
     CrawlPageData,
     CrawlStatus,
@@ -55,9 +52,6 @@ __all__ = [
     "JobFailedError",
     "TimeoutError",
     # Models
-    "BatchItemResult",
-    "BatchJob",
-    "BatchStatus",
     "CrawlJob",
     "CrawlPageData",
     "CrawlStatus",

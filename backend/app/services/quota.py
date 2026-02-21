@@ -23,7 +23,6 @@ DEFAULT_LIMITS = {
     "extract_limit": 5000,
     "search_limit": 2000,
     "map_limit": 5000,
-    "batch_limit": 5000,
     "monitor_limit": 100,
 }
 
@@ -79,7 +78,7 @@ async def check_quota(db: AsyncSession, user_id: UUID, operation: str) -> UsageQ
     Args:
         db: Database session
         user_id: User UUID
-        operation: One of: scrape, crawl, extract, search, map, batch, monitor
+        operation: One of: scrape, crawl, extract, search, map, monitor
 
     Returns:
         The UsageQuota record
@@ -124,7 +123,7 @@ async def increment_usage(
     Args:
         db: Database session
         user_id: User UUID
-        operation: One of: scrape, crawl, extract, search, map, batch, monitor
+        operation: One of: scrape, crawl, extract, search, map, monitor
         count: Number of operations to add
         pages: Number of pages scraped
         bytes_processed: Bytes of content processed
@@ -147,7 +146,7 @@ async def get_quota_summary(db: AsyncSession, user_id: UUID) -> dict:
     """Get a summary of the user's current quota usage."""
     quota = await get_or_create_quota(db, user_id)
 
-    operations = ["scrape", "crawl", "extract", "search", "map", "batch", "monitor"]
+    operations = ["scrape", "crawl", "extract", "search", "map", "monitor"]
     summary = {
         "period": quota.period,
         "total_pages_scraped": quota.total_pages_scraped,

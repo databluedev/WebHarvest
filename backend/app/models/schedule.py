@@ -20,7 +20,7 @@ class Schedule(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     schedule_type: Mapped[str] = mapped_column(
         String(20), nullable=False
-    )  # scrape, crawl, batch
+    )  # scrape, crawl
     config: Mapped[dict] = mapped_column(JSONB, nullable=False)
     cron_expression: Mapped[str] = mapped_column(
         String(100), nullable=False

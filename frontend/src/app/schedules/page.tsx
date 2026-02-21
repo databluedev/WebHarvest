@@ -118,8 +118,6 @@ export default function SchedulesPage() {
       config = { url: configUrl, max_pages: configMaxPages };
     } else if (scheduleType === "scrape") {
       config = { url: configUrl, formats: ["markdown"] };
-    } else if (scheduleType === "batch") {
-      config = { urls: configUrl.split("\n").filter(Boolean), formats: ["markdown"] };
     }
 
     try {
@@ -213,7 +211,7 @@ export default function SchedulesPage() {
                 Schedules
               </h1>
               <p className="text-muted-foreground mt-1">
-                Set up recurring scrapes, crawls, and batch jobs
+                Set up recurring scrapes and crawls
               </p>
             </div>
             <Button onClick={() => setShowCreate(!showCreate)} className="gap-2">
@@ -295,7 +293,7 @@ export default function SchedulesPage() {
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Type</label>
                     <div className="flex gap-2">
-                      {["crawl", "scrape", "batch"].map((t) => (
+                      {["crawl", "scrape"].map((t) => (
                         <Button
                           key={t}
                           variant={scheduleType === t ? "default" : "outline"}
@@ -310,23 +308,12 @@ export default function SchedulesPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    {scheduleType === "batch" ? "URLs (one per line)" : "URL"}
-                  </label>
-                  {scheduleType === "batch" ? (
-                    <textarea
-                      className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
-                      placeholder="https://example.com&#10;https://another.com"
-                      value={configUrl}
-                      onChange={(e) => setConfigUrl(e.target.value)}
-                    />
-                  ) : (
-                    <Input
-                      placeholder="https://example.com"
-                      value={configUrl}
-                      onChange={(e) => setConfigUrl(e.target.value)}
-                    />
-                  )}
+                  <label className="text-sm font-medium">URL</label>
+                  <Input
+                    placeholder="https://example.com"
+                    value={configUrl}
+                    onChange={(e) => setConfigUrl(e.target.value)}
+                  />
                 </div>
 
                 {scheduleType === "crawl" && (
@@ -435,7 +422,7 @@ export default function SchedulesPage() {
                     </div>
                     <p className="text-sm font-medium mb-1">No schedules yet</p>
                     <p className="text-xs text-muted-foreground max-w-sm">
-                      Create a schedule to automate your scraping, crawling, and batch jobs.
+                      Create a schedule to automate your scraping and crawling jobs.
                     </p>
                     <Button onClick={() => setShowCreate(true)} className="mt-6 gap-2" size="sm">
                       <Plus className="h-4 w-4" />

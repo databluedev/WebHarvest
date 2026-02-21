@@ -10,7 +10,6 @@ const footerLinks = [
       { text: "Scrape", href: "/playground?endpoint=scrape" },
       { text: "Crawl", href: "/playground?endpoint=crawl" },
       { text: "Map", href: "/playground?endpoint=map" },
-      { text: "Batch", href: "/playground?endpoint=batch" },
       { text: "Search", href: "/playground?endpoint=search" },
     ],
   },

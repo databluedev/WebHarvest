@@ -456,109 +456,6 @@ const API_SECTIONS: Section[] = [
     ],
   },
   {
-    id: "batch",
-    title: "Batch",
-    description:
-      "Scrape multiple URLs in a single batch job with shared configuration. Efficient for bulk extraction of known URL lists.",
-    endpoints: [
-      {
-        method: "POST",
-        path: "/v1/batch/scrape",
-        description:
-          "Submit a batch of URLs to scrape concurrently. All URLs share the same extraction settings.",
-        requestBody: JSON.stringify(
-          {
-            urls: [
-              "https://example.com/page-1",
-              "https://example.com/page-2",
-              "https://example.com/page-3",
-            ],
-            formats: ["markdown", "html"],
-            only_main_content: true,
-            concurrency: 5,
-          },
-          null,
-          2
-        ),
-        responseBody: JSON.stringify(
-          {
-            success: true,
-            id: "batch_w1x3y5z7",
-            status: "running",
-            total_urls: 3,
-            completed: 0,
-            failed: 0,
-            created_at: "2025-09-16T12:10:00Z",
-          },
-          null,
-          2
-        ),
-      },
-      {
-        method: "GET",
-        path: "/v1/batch/:id",
-        description:
-          "Retrieve the status and progress of a batch scrape job, including per-URL results.",
-        responseBody: JSON.stringify(
-          {
-            id: "batch_w1x3y5z7",
-            status: "completed",
-            total_urls: 3,
-            completed: 3,
-            failed: 0,
-            results: [
-              {
-                url: "https://example.com/page-1",
-                status: "completed",
-                markdown: "# Page 1 Content...",
-                duration_ms: 1230,
-              },
-              {
-                url: "https://example.com/page-2",
-                status: "completed",
-                markdown: "# Page 2 Content...",
-                duration_ms: 980,
-              },
-              {
-                url: "https://example.com/page-3",
-                status: "completed",
-                markdown: "# Page 3 Content...",
-                duration_ms: 1540,
-              },
-            ],
-            duration_ms: 3120,
-            created_at: "2025-09-16T12:10:00Z",
-            completed_at: "2025-09-16T12:10:03Z",
-          },
-          null,
-          2
-        ),
-      },
-      {
-        method: "GET",
-        path: "/v1/batch/:id/export",
-        description:
-          "Export all batch results as a bundled download in JSON or CSV format.",
-        responseBody: JSON.stringify(
-          {
-            format: "json",
-            filename: "batch_w1x3y5z7_export.json",
-            total_urls: 3,
-            data: [
-              {
-                url: "https://example.com/page-1",
-                markdown: "# Page 1 Content...",
-                metadata: { title: "Page 1" },
-              },
-            ],
-          },
-          null,
-          2
-        ),
-      },
-    ],
-  },
-  {
     id: "search",
     title: "Search",
     description:
@@ -1076,7 +973,6 @@ const API_SECTIONS: Section[] = [
               "monitor.change_detected": 820,
               "monitor.check_failed": 38,
               "crawl.completed": 312,
-              "batch.completed": 78,
             },
           },
           null,
@@ -1266,7 +1162,6 @@ const API_SECTIONS: Section[] = [
             jobs_by_type: {
               scrape: 892,
               crawl: 412,
-              batch: 283,
               search: 156,
               map: 104,
             },
@@ -1699,7 +1594,6 @@ function getPlaygroundLink(path: string): string | null {
     "/v1/crawl": "/playground?mode=crawl",
     "/v1/search": "/playground?mode=search",
     "/v1/map": "/playground?mode=map",
-    "/v1/batch/scrape": "/playground?mode=batch",
   };
   return map[path] || null;
 }

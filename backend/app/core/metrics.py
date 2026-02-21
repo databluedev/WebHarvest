@@ -7,7 +7,7 @@ from prometheus_client import (
 )
 
 # ---------------------------------------------------------------------------
-# Existing counters (scrape/crawl/batch/search job totals)
+# Existing counters (scrape/crawl/search job totals)
 # ---------------------------------------------------------------------------
 scrape_requests_total = Counter(
     "scrape_requests_total",
@@ -17,11 +17,6 @@ scrape_requests_total = Counter(
 crawl_jobs_total = Counter(
     "crawl_jobs_total",
     "Total number of crawl jobs started",
-    ["status"],
-)
-batch_jobs_total = Counter(
-    "batch_jobs_total",
-    "Total number of batch jobs started",
     ["status"],
 )
 search_jobs_total = Counter(

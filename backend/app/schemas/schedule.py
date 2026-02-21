@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 class ScheduleCreateRequest(BaseModel):
     name: str
-    schedule_type: str  # scrape, crawl, batch
+    schedule_type: str  # scrape, crawl
     config: dict[str, Any]
     cron_expression: str  # e.g., "0 */6 * * *"
     timezone: str = "UTC"

@@ -14,7 +14,6 @@ import {
   Globe,
   Search,
   Map,
-  Layers,
   Radar,
   Loader2,
   SlidersHorizontal,
@@ -42,21 +41,19 @@ import {
   Satellite,
   Network,
   Bug,
-  Boxes,
   RefreshCw,
   Square,
 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────
 
-type Endpoint = "scrape" | "crawl" | "search" | "map" | "batch";
+type Endpoint = "scrape" | "crawl" | "search" | "map";
 
 const ENDPOINTS: { id: Endpoint; label: string; icon: any }[] = [
   { id: "scrape", label: "Scrape", icon: Crosshair },
   { id: "search", label: "Search", icon: Satellite },
   { id: "map", label: "Map", icon: Network },
   { id: "crawl", label: "Crawl", icon: Bug },
-  { id: "batch", label: "Batch", icon: Boxes },
 ];
 
 const ACTION_LABELS: Record<Endpoint, string> = {
@@ -64,7 +61,6 @@ const ACTION_LABELS: Record<Endpoint, string> = {
   crawl: "Start crawling",
   search: "Start searching",
   map: "Start mapping",
-  batch: "Start batch",
 };
 
 const PLACEHOLDERS: Record<Endpoint, string> = {
@@ -72,7 +68,6 @@ const PLACEHOLDERS: Record<Endpoint, string> = {
   crawl: "example.com",
   map: "example.com",
   search: "python web scraping tutorial",
-  batch: "",
 };
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -81,7 +76,6 @@ function getJobDetailPath(job: any): string {
   switch (job.type) {
     case "scrape": return `/scrape/${job.id}`;
     case "crawl": return `/crawl/${job.id}`;
-    case "batch": return `/batch/${job.id}`;
     case "search": return `/search/${job.id}`;
     case "map": return `/map/${job.id}`;
     default: return `/crawl/${job.id}`;
@@ -116,7 +110,6 @@ function getTypeIcon(type: string) {
     case "crawl": return Bug;
     case "map": return Network;
     case "search": return Satellite;
-    case "batch": return Boxes;
     default: return FileText;
   }
 }
@@ -146,7 +139,6 @@ async function handleDownload(job: any) {
       case "crawl": await api.downloadCrawlExport(job.id, "json"); break;
       case "search": await api.downloadSearchExport(job.id, "json"); break;
       case "map": await api.downloadMapExport(job.id, "json"); break;
-      case "batch": await api.downloadBatchExport(job.id, "json"); break;
     }
   } catch {}
 }
@@ -484,10 +476,6 @@ function PlaygroundContent() {
   const [numResults, setNumResults] = useState(5);
   const [engine, setEngine] = useState("duckduckgo");
 
-  // ── Batch state ──
-  const [batchUrlText, setBatchUrlText] = useState("");
-  const [batchConcurrency, setBatchConcurrency] = useState(5);
-
   // ── Map state ──
   const [mapSearch, setMapSearch] = useState("");
   const [mapLimit, setMapLimit] = useState(100);
@@ -526,7 +514,6 @@ function PlaygroundContent() {
         case "crawl": res = await api.getCrawlStatus(jobId, 1, 20); break;
         case "search": res = await api.getSearchStatus(jobId); break;
         case "map": res = await api.getMapStatus(jobId); break;
-        case "batch": res = await api.getBatchStatus(jobId); break;
       }
       setActiveJob((prev) => {
         if (!prev || prev.id !== jobId) return prev;
@@ -650,11 +637,6 @@ function PlaygroundContent() {
       case "map":
         code = `curl -X POST /v1/map \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"url": "${fullUrl}", "limit": ${mapLimit}}'`;
         break;
-      case "batch": {
-        const urls = batchUrlText.split("\n").filter((l) => l.trim()).slice(0, 3);
-        code = `curl -X POST /v1/batch/scrape \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"urls": ${JSON.stringify(urls)}, "formats": ${JSON.stringify(formats)}}'`;
-        break;
-      }
     }
     navigator.clipboard.writeText(code);
   };
@@ -712,17 +694,6 @@ function PlaygroundContent() {
           else setError("Map failed");
           break;
         }
-        case "batch": {
-          const urls = batchUrlText.split("\n").map((l) => l.trim()).filter(Boolean);
-          if (urls.length === 0) return;
-          const params: any = { urls, formats, concurrency: batchConcurrency, only_main_content: onlyMainContent, wait_for: waitFor || undefined, use_proxy: useProxy || undefined, mobile: mobile || undefined, mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined, webhook_url: webhookUrl.trim() || undefined, webhook_secret: webhookSecret.trim() || undefined };
-          if (extractEnabled && extractPrompt.trim()) params.extract = { prompt: extractPrompt.trim() };
-          if (headersText.trim()) { try { params.headers = JSON.parse(headersText); } catch {} }
-          if (cookiesText.trim()) { try { params.cookies = JSON.parse(cookiesText); } catch {} }
-          const res = await api.startBatch(params);
-          if (res.success && res.job_id) setActiveJob({ id: res.job_id, type: "batch", status: "running", target: `${urls.length} URLs`, total: urls.length, completed: 0 });
-          break;
-        }
       }
     } catch (err: any) {
       setError(err.message);
@@ -733,11 +704,9 @@ function PlaygroundContent() {
 
   const isDisabled = loading || (
     activeEndpoint === "search" ? !searchQuery.trim() :
-    activeEndpoint === "batch" ? batchUrlText.split("\n").filter((l) => l.trim()).length === 0 :
     !url.trim()
   );
 
-  const batchUrlCount = batchUrlText.split("\n").filter((l) => l.trim()).length;
   const hasRuns = recentJobs.length > 0;
 
   const copyMapUrls = () => {
@@ -795,42 +764,28 @@ function PlaygroundContent() {
                 <div className="rounded-2xl border border-primary/15 bg-card/80 backdrop-blur-sm p-5 shadow-xl shadow-primary/5">
 
                   {/* Input */}
-                  {activeEndpoint === "batch" ? (
-                    <div className="mb-4">
-                      <textarea
-                        className="flex min-h-[140px] w-full rounded-xl border border-border/50 bg-background px-5 py-4 text-base font-mono placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/30 resize-none transition-all"
-                        placeholder={"https://example.com\nhttps://another-site.com\nhttps://docs.example.com"}
-                        value={batchUrlText}
-                        onChange={(e) => setBatchUrlText(e.target.value)}
-                      />
-                      <p className="text-[13px] text-muted-foreground mt-2 font-medium">
-                        {batchUrlCount} URL{batchUrlCount !== 1 ? "s" : ""} (one per line, max 100)
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-0 rounded-xl bg-background border border-border/50 px-5 h-14 mb-4 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/25 transition-all">
-                      {activeEndpoint !== "search" ? (
-                        <span className="text-base text-muted-foreground shrink-0 select-none font-mono">https://</span>
-                      ) : (
-                        <Search className="h-5 w-5 text-muted-foreground shrink-0 mr-2" />
+                  <div className="flex items-center gap-0 rounded-xl bg-background border border-border/50 px-5 h-14 mb-4 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/25 transition-all">
+                    {activeEndpoint !== "search" ? (
+                      <span className="text-base text-muted-foreground shrink-0 select-none font-mono">https://</span>
+                    ) : (
+                      <Search className="h-5 w-5 text-muted-foreground shrink-0 mr-2" />
+                    )}
+                    <input
+                      type="text"
+                      value={activeEndpoint === "search" ? searchQuery : url}
+                      onChange={(e) => {
+                        if (activeEndpoint === "search") setSearchQuery(e.target.value);
+                        else setUrl(e.target.value);
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && !isDisabled && handleAction()}
+                      placeholder={PLACEHOLDERS[activeEndpoint]}
+                      className={cn(
+                        "flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground/50",
+                        activeEndpoint !== "search" && "ml-1"
                       )}
-                      <input
-                        type="text"
-                        value={activeEndpoint === "search" ? searchQuery : url}
-                        onChange={(e) => {
-                          if (activeEndpoint === "search") setSearchQuery(e.target.value);
-                          else setUrl(e.target.value);
-                        }}
-                        onKeyDown={(e) => e.key === "Enter" && !isDisabled && handleAction()}
-                        placeholder={PLACEHOLDERS[activeEndpoint]}
-                        className={cn(
-                          "flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground/50",
-                          activeEndpoint !== "search" && "ml-1"
-                        )}
-                      />
-                      <ActiveIcon className="h-5 w-5 shrink-0 ml-2 text-primary/40" />
-                    </div>
-                  )}
+                    />
+                    <ActiveIcon className="h-5 w-5 shrink-0 ml-2 text-primary/40" />
+                  </div>
 
                   {/* No format warning */}
                   {formats.length === 0 && activeEndpoint !== "map" && (
@@ -855,12 +810,6 @@ function PlaygroundContent() {
                       >
                         <SlidersHorizontal className="h-[18px] w-[18px]" />
                       </button>
-
-                      {activeEndpoint !== "batch" && (
-                        <button onClick={() => switchEndpoint("batch")} className="h-10 w-10 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="Batch mode">
-                          <Boxes className="h-[18px] w-[18px]" />
-                        </button>
-                      )}
 
                       <button onClick={() => router.push("/docs")} className="h-10 w-10 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="API Docs">
                         <FileCode className="h-[18px] w-[18px]" />
@@ -972,17 +921,6 @@ function PlaygroundContent() {
                       </div>
                     )}
 
-                    {/* Batch-specific */}
-                    {activeEndpoint === "batch" && (
-                      <div className="space-y-2 pb-4 border-b border-border/30">
-                        <label className="text-[13px] font-semibold text-primary/70 uppercase tracking-widest">Concurrency: {batchConcurrency}</label>
-                        <input type="range" min={1} max={20} value={batchConcurrency} onChange={(e) => setBatchConcurrency(parseInt(e.target.value))} className="w-full mt-2" />
-                        <div className="flex justify-between text-[13px] text-muted-foreground mt-1 font-medium">
-                          <span>1 (gentle)</span><span>20 (aggressive)</span>
-                        </div>
-                      </div>
-                    )}
-
                     {/* Map-specific */}
                     {activeEndpoint === "map" && (
                       <div className="space-y-4 pb-4 border-b border-border/30">
@@ -1053,7 +991,7 @@ function PlaygroundContent() {
                     </div>
 
                     {/* Headers / Cookies */}
-                    {(activeEndpoint === "scrape" || activeEndpoint === "batch") && (
+                    {activeEndpoint === "scrape" && (
                       <div className="space-y-3 pt-3 border-t border-border/30">
                         <div className="space-y-2">
                           <label className="text-[15px] text-foreground">Custom Headers (JSON)</label>

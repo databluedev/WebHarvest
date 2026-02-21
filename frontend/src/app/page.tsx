@@ -10,7 +10,6 @@ import {
   Satellite,
   Network,
   Bug,
-  Boxes,
   Flame,
   ArrowRight,
   Code,
@@ -120,7 +119,6 @@ const MODES = [
   { icon: Bug, title: "Crawl", desc: "Recursively crawl entire websites. Follow links with depth control, concurrent workers, and automatic deduplication.", color: "from-emerald-500/20 to-teal-500/10" },
   { icon: Satellite, title: "Search", desc: "Search the web and scrape every result. Multi-engine support with DuckDuckGo, Brave, and Google integration.", color: "from-cyan-500/20 to-blue-500/10" },
   { icon: Network, title: "Map", desc: "Discover every URL on a website instantly. Sitemap parsing, subdomain discovery, and keyword-based filtering.", color: "from-teal-500/20 to-emerald-500/10" },
-  { icon: Boxes, title: "Batch", desc: "Process hundreds of URLs in parallel. Configurable concurrency with throttling to respect target servers.", color: "from-sky-500/20 to-teal-500/10" },
 ];
 
 const CAPABILITIES = [
@@ -153,7 +151,7 @@ const FAQS = [
   { q: "Can I use my own proxies?", a: "Absolutely. Configure your own proxy lists in settings, or use the built-in proxy rotation system. Supports HTTP, HTTPS, and SOCKS5 proxies." },
   { q: "What output formats are supported?", a: "Markdown, HTML (cleaned and raw), JSON structured data, screenshots (viewport and full-page), extracted links, images, and heading summaries. Request multiple formats in a single API call." },
   { q: "Does it handle JavaScript-rendered pages?", a: "Yes. WebHarvest uses Playwright for full browser rendering, so it handles SPAs, dynamic content, lazy loading, and any JavaScript-dependent pages." },
-  { q: "Is there an API?", a: "Yes, WebHarvest exposes a full REST API with endpoints for scrape, crawl, search, map, and batch operations. Use cURL, Python, Node.js, or any HTTP client." },
+  { q: "Is there an API?", a: "Yes, WebHarvest exposes a full REST API with endpoints for scrape, crawl, search, and map operations. Use cURL, Python, Node.js, or any HTTP client." },
 ];
 
 // ── Main Component ─────────────────────────────────────────
@@ -616,7 +614,6 @@ export default function LandingPage() {
                 { text: "Crawl", href: "/playground?endpoint=crawl" },
                 { text: "Search", href: "/playground?endpoint=search" },
                 { text: "Map", href: "/playground?endpoint=map" },
-                { text: "Batch", href: "/playground?endpoint=batch" },
               ]},
               { title: "Resources", links: [
                 { text: "API Docs", href: "/docs" },

@@ -212,24 +212,6 @@ export default function ApiKeysPage() {
               </div>
 
               <div>
-                <p className="text-sm font-medium mb-2">Batch scrape multiple URLs</p>
-                <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto font-mono">
-{`curl -X POST https://api-datablue.welocalhost.com/v1/batch/scrape \\
-  -H "Authorization: Bearer wh_your_api_key" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "urls": [
-      "https://example.com/page-1",
-      "https://example.com/page-2",
-      "https://example.com/page-3"
-    ],
-    "formats": ["markdown", "structured_data"],
-    "concurrency": 5
-  }'`}
-                </pre>
-              </div>
-
-              <div>
                 <p className="text-sm font-medium mb-2">Search & scrape results</p>
                 <pre className="rounded-md bg-muted p-4 text-sm overflow-x-auto font-mono">
 {`curl -X POST https://api-datablue.welocalhost.com/v1/search \\

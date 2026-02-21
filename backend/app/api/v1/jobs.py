@@ -124,10 +124,6 @@ async def retry_job(
         from app.workers.map_worker import process_map
 
         process_map.delay(new_job_id, config)
-    elif original_job.type == "batch":
-        from app.workers.batch_worker import process_batch
-
-        process_batch.delay(new_job_id, config)
     elif original_job.type == "search":
         from app.workers.search_worker import process_search
 

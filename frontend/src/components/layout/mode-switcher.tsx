@@ -13,7 +13,6 @@ import {
   Satellite,
   Network,
   Bug,
-  Boxes,
 } from "lucide-react";
 
 const modes = [
@@ -21,7 +20,6 @@ const modes = [
   { id: "search", label: "Search", icon: Satellite },
   { id: "map", label: "Map", icon: Network },
   { id: "crawl", label: "Crawl", icon: Bug },
-  { id: "batch", label: "Batch", icon: Boxes },
 ];
 
 function ModeSwitcherInner() {

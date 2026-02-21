@@ -79,25 +79,25 @@ def _schedule_to_response(schedule: Schedule) -> ScheduleResponse:
     "",
     response_model=ScheduleResponse,
     summary="Create schedule",
-    description="Create a new recurring schedule for automated scrape, crawl, or batch jobs. Requires a valid cron expression to define the run frequency. The first run is computed immediately based on the cron expression and timezone.",
+    description="Create a new recurring schedule for automated scrape or crawl jobs. Requires a valid cron expression to define the run frequency. The first run is computed immediately based on the cron expression and timezone.",
 )
 async def create_schedule(
     request: ScheduleCreateRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new scheduled scrape/crawl/batch."""
+    """Create a new scheduled scrape/crawl."""
     # Validate cron expression
     if not croniter.is_valid(request.cron_expression):
         from fastapi import HTTPException
 
         raise HTTPException(status_code=422, detail="Invalid cron expression")
 
-    if request.schedule_type not in ("scrape", "crawl", "batch"):
+    if request.schedule_type not in ("scrape", "crawl"):
         from fastapi import HTTPException
 
         raise HTTPException(
-            status_code=422, detail="schedule_type must be scrape, crawl, or batch"
+            status_code=422, detail="schedule_type must be scrape or crawl"
         )
 
     next_run = _compute_next_run(request.cron_expression, request.timezone)
@@ -314,10 +314,6 @@ async def trigger_schedule(
         from app.workers.crawl_worker import process_crawl
 
         process_crawl.delay(str(job.id), config)
-    elif schedule.schedule_type == "batch":
-        from app.workers.batch_worker import process_batch
-
-        process_batch.delay(str(job.id), config)
     elif schedule.schedule_type == "scrape":
         from app.workers.scrape_worker import process_scrape
 
