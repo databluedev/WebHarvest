@@ -19,6 +19,20 @@ class RequestIDFilter(logging.Filter):
         return True
 
 
+class PlaywrightPipeFilter(logging.Filter):
+    """Suppress Playwright's noisy 'pipe closed by peer' warnings.
+
+    When a browser context dies, Playwright logs this message for every
+    pending write — flooding logs with hundreds of identical warnings.
+    """
+
+    def filter(self, record):
+        msg = record.getMessage() if hasattr(record, "getMessage") else str(record.msg)
+        if "pipe closed by peer" in msg:
+            return False
+        return True
+
+
 def configure_logging(log_format: str = "json", log_level: str = "INFO"):
     """Configure root logger with the specified format.
 
@@ -31,6 +45,7 @@ def configure_logging(log_format: str = "json", log_level: str = "INFO"):
 
     handler = logging.StreamHandler(sys.stdout)
     handler.addFilter(RequestIDFilter())
+    handler.addFilter(PlaywrightPipeFilter())
 
     if log_format == "json":
         try:
@@ -57,3 +72,7 @@ def configure_logging(log_format: str = "json", log_level: str = "INFO"):
     handler.setFormatter(formatter)
     root.addHandler(handler)
     root.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+
+    # Suppress Playwright's noisy "pipe closed by peer" warnings —
+    # these flood logs when a browser context dies and are not actionable.
+    logging.getLogger("playwright").setLevel(logging.ERROR)

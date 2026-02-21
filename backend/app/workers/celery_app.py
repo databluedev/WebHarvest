@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import redis
 from celery import Celery
-from celery.signals import task_failure, worker_shutting_down
+from celery.signals import task_failure, worker_shutting_down, after_setup_logger, after_setup_task_logger
 
 from app.config import settings
 
@@ -121,6 +121,24 @@ def on_task_failure(sender=None, task_id=None, exception=None, args=None,
 # ---------------------------------------------------------------------------
 # Graceful shutdown logging
 # ---------------------------------------------------------------------------
+
+
+class _PipeClosedFilter(logging.Filter):
+    """Suppress Playwright's 'pipe closed by peer' warning spam."""
+    def filter(self, record):
+        return "pipe closed by peer" not in record.getMessage()
+
+
+@after_setup_logger.connect
+def _suppress_pipe_warnings(logger: logging.Logger, **kw):
+    """Install pipe-closed filter on the Celery root logger."""
+    logger.addFilter(_PipeClosedFilter())
+
+
+@after_setup_task_logger.connect
+def _suppress_pipe_warnings_task(logger: logging.Logger, **kw):
+    """Install pipe-closed filter on the Celery task logger."""
+    logger.addFilter(_PipeClosedFilter())
 
 
 @worker_shutting_down.connect
