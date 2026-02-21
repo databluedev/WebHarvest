@@ -91,6 +91,90 @@ WEBGL_RENDERERS = [
 COLOR_DEPTHS = [24, 24, 24, 30, 32]
 
 # ---------------------------------------------------------------------------
+# Request interception — ad blocking + media blocking (inspired by Firecrawl)
+# ---------------------------------------------------------------------------
+
+AD_SERVING_DOMAINS = frozenset(
+    {
+        "doubleclick.net",
+        "adservice.google.com",
+        "googlesyndication.com",
+        "googletagservices.com",
+        "googletagmanager.com",
+        "google-analytics.com",
+        "amazon-adsystem.com",
+        "adnxs.com",
+        "ads-twitter.com",
+        "facebook.net",
+        "fbcdn.net",
+        "criteo.com",
+        "criteo.net",
+        "outbrain.com",
+        "taboola.com",
+        "moatads.com",
+        "pubmatic.com",
+        "rubiconproject.com",
+        "openx.net",
+        "casalemedia.com",
+        "demdex.net",
+        "scorecardresearch.com",
+        "quantserve.com",
+        "hotjar.com",
+        "fullstory.com",
+        "mouseflow.com",
+        "newrelic.com",
+        "nr-data.net",
+        "adsystem.com",
+        "bidswitch.net",
+        "bluekai.com",
+        "krxd.net",
+        "advertising.com",
+        "rlcdn.com",
+        "smartadserver.com",
+    }
+)
+
+# Resource types to block in crawl mode (saves bandwidth, speeds up loads).
+# Images are NOT blocked — needed for screenshot rendering and lazy-load triggers.
+CRAWL_BLOCKED_RESOURCE_TYPES = frozenset({"media", "font"})
+
+
+async def _setup_route_blocking(
+    context: BrowserContext, block_media: bool = False
+):
+    """Set up request interception on a context to block ads and optionally media.
+
+    Args:
+        context: Playwright BrowserContext to apply routes to.
+        block_media: If True, also block video/audio/font resources (crawl mode).
+    """
+
+    async def _route_handler(route, request):
+        url = request.url
+        try:
+            # Fast hostname extraction without urllib
+            after_scheme = url.split("//", 1)[1]
+            hostname = after_scheme.split("/", 1)[0].split(":")[0].lower()
+        except (IndexError, ValueError):
+            await route.continue_()
+            return
+
+        # Block ad-serving / tracking domains
+        for domain in AD_SERVING_DOMAINS:
+            if domain in hostname:
+                await route.abort()
+                return
+
+        # Block heavy resource types in crawl mode
+        if block_media and request.resource_type in CRAWL_BLOCKED_RESOURCE_TYPES:
+            await route.abort()
+            return
+
+        await route.continue_()
+
+    await context.route("**/*", _route_handler)
+
+# ---------------------------------------------------------------------------
 # Chromium ULTRA-STEALTH script
 # Patches: navigator, chrome runtime, plugins, WebGL, canvas noise,
 # AudioContext, WebRTC, fonts, CDP detection, battery, sensors, etc.
@@ -1014,6 +1098,9 @@ class BrowserPool:
                     else:
                         raise
 
+                # Block ads (always) — saves bandwidth, speeds up loads
+                await _setup_route_blocking(context, block_media=False)
+
                 # Restore cookies from previous sessions for this domain
                 if target_url:
                     await self._restore_cookies(context, target_url)
@@ -1338,6 +1425,9 @@ class CrawlSession:
             else:
                 raise
 
+        # Block ads + heavy media (video/audio/fonts) for crawl speed
+        await _setup_route_blocking(self._context, block_media=True)
+
         # Restore cookies from pool's cookie jar
         if target_url:
             await self._pool._restore_cookies(self._context, target_url)
@@ -1432,6 +1522,9 @@ class CrawlSession:
             )
 
         self._context = await browser.new_context(**context_kwargs)
+
+        # Re-apply route blocking after context recreation
+        await _setup_route_blocking(self._context, block_media=True)
 
         # Re-inject stealth
         if is_firefox:
