@@ -733,7 +733,7 @@ export default function MonitorsPage() {
                             title={monitor.url}
                           >
                             <img
-                              src={`https://www.google.com/s2/favicons?domain=${new URL(monitor.url).hostname}&sz=16`}
+                              src={(() => { try { return `https://www.google.com/s2/favicons?domain=${new URL(monitor.url).hostname}&sz=16`; } catch { return ''; } })()}
                               alt=""
                               className="h-3.5 w-3.5 rounded-sm shrink-0"
                               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}

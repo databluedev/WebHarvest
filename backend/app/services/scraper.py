@@ -653,6 +653,7 @@ def _looks_blocked(html: str) -> bool:
     if len(body_text) < 800:
         for pattern in _BLOCK_PATTERNS:
             if pattern in body_text:
+                logger.warning(f"_looks_blocked: matched '{pattern}' (body_text={len(body_text)} chars)")
                 return True
 
     # Only check head for patterns that STRONGLY indicate a block page
@@ -672,9 +673,11 @@ def _looks_blocked(html: str) -> bool:
         "having trouble accessing google",
     ]:
         if pattern in head:
+            logger.warning(f"_looks_blocked: head matched '{pattern}' (body_text={len(body_text)} chars)")
             return True
 
     if len(body_text) < 300 and ("<noscript" in html.lower()):
+        logger.warning(f"_looks_blocked: noscript + short body ({len(body_text)} chars)")
         return True
 
     # Google redirect/interstitial page (from Google Cache attempts)
@@ -810,7 +813,7 @@ async def _race_strategies(
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            logger.debug(f"Race: {name} exception for {url}: {e}")
+            logger.warning(f"Race: {name} failed for {url}: {e}")
             raise
 
     # Suppress expected Playwright TargetClosedError during race cancellation
@@ -846,7 +849,7 @@ async def _race_strategies(
                 elapsed = time.time() - race_start
                 wait_timeout = max(0.1, timeout - elapsed)
                 if elapsed >= timeout:
-                    logger.debug(f"Race timeout ({timeout}s) for {url}")
+                    logger.warning(f"Race timeout ({timeout}s) for {url}, pending: {[t.get_name() for t in pending]}")
                     break
 
             done, pending = await asyncio.wait(
@@ -857,7 +860,7 @@ async def _race_strategies(
 
             if not done:
                 # Timeout on wait — no task completed in time
-                logger.debug(f"Race: wait timeout for {url}")
+                logger.warning(f"Race: wait timeout for {url}, pending: {[t.get_name() for t in pending]}")
                 break
 
             for task in done:
@@ -879,9 +882,11 @@ async def _race_strategies(
                         pending = set()
                         break
                     else:
-                        logger.debug(f"Race: {name} failed validation for {url}")
+                        html_len = len(result[0]) if isinstance(result, tuple) and result[0] else 0
+                        logger.warning(f"Race: {name} failed validation for {url} (html={html_len} chars)")
                 except (asyncio.CancelledError, Exception) as e:
-                    logger.debug(f"Race: strategy exception for {url}: {e}")
+                    if not isinstance(e, asyncio.CancelledError):
+                        logger.warning(f"Race: strategy exception for {url}: {e}")
     finally:
         for task in pending:
             task.cancel()
@@ -1220,6 +1225,11 @@ async def scrape_url(
         else:
             elapsed_ms = (time.time() - tier_start) * 1000
             await record_strategy_result(url, "tier1", 1, False, elapsed_ms)
+            logger.warning(
+                f"Tier 1 HTTP failed for {url} (hard={hard_site}, "
+                f"best_html={len(race.best_html) if race.best_html else 0} chars, "
+                f"elapsed={elapsed_ms:.0f}ms)"
+            )
 
     # === Tier 2: Browser race — race(chromium_stealth, firefox_stealth) ===
     # For hard sites with starting_tier <= 2, combine Tier 2 + Tier 3 into one big race
@@ -1363,6 +1373,11 @@ async def scrape_url(
         else:
             elapsed_ms = (time.time() - tier_start) * 1000
             await record_strategy_result(url, "tier2", 2, False, elapsed_ms)
+            logger.warning(
+                f"Tier 2 Browser failed for {url} (hard={hard_site}, "
+                f"best_html={len(race.best_html) if race.best_html else 0} chars, "
+                f"timeout={t2_timeout}s, elapsed={elapsed_ms:.0f}ms)"
+            )
 
     # === Tier 3: Heavy race (hard sites) — race(google_search, advanced_prewarm) ===
     if not fetched and hard_site and starting_tier <= 3 and not _skip_tier3:
@@ -1451,7 +1466,11 @@ async def scrape_url(
                 f"All tiers failed for {url}, using last result ({len(raw_html)} chars)"
             )
         else:
-            logger.error(f"All tiers failed for {url} — no content retrieved at all")
+            logger.error(
+                f"All tiers failed for {url} — no content retrieved at all "
+                f"(hard_site={hard_site}, starting_tier={starting_tier}, "
+                f"best_html={len(raw_html_best) if raw_html_best else 0} chars)"
+            )
             duration = time.time() - start_time
             scrape_duration_seconds.observe(duration)
             return ScrapeData(
@@ -2255,6 +2274,9 @@ async def _fetch_with_browser_stealth(
                 )
         elif stealth:
             await page.wait_for_timeout(random.randint(100, 250))
+        else:
+            # Light mode: still need a brief wait for SPAs to hydrate
+            await page.wait_for_timeout(500)
 
         if request.wait_for > 0:
             await page.wait_for_timeout(request.wait_for)

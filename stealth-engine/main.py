@@ -192,21 +192,31 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
             await page.set_extra_http_headers(req.headers)
 
         # Navigate
+        logger.info("Chromium navigating to %s (timeout=%dms)", req.url, req.timeout)
         response = await page.goto(
             req.url, wait_until="domcontentloaded", timeout=req.timeout,
         )
         status_code = response.status if response else 0
         resp_headers = dict(response.headers) if response else {}
+        logger.info("Chromium got status %d for %s", status_code, req.url)
 
-        # Best-effort networkidle
+        # Best-effort networkidle — let JS frameworks finish rendering
         try:
-            await page.wait_for_load_state("networkidle", timeout=5000)
+            await page.wait_for_load_state("networkidle", timeout=8000)
         except Exception:
             pass
 
-        # Extra wait
-        if req.wait_after_load > 0:
-            await page.wait_for_timeout(min(req.wait_after_load, 30000))
+        # Default JS render wait — SPAs need time to hydrate even after networkidle.
+        # Use explicit wait_after_load if provided, otherwise apply a 2s default.
+        wait_ms = req.wait_after_load if req.wait_after_load > 0 else 2000
+        await page.wait_for_timeout(min(wait_ms, 30000))
+
+        # Scroll to bottom to trigger lazy-loaded content
+        try:
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(1000)
+        except Exception:
+            pass
 
         # Execute actions
         action_screenshots = []
@@ -220,6 +230,7 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
             screenshot_b64 = base64.b64encode(ss).decode()
 
         html = await page.content()
+        logger.info("Chromium got %d chars HTML for %s (status=%d)", len(html), req.url, status_code)
 
         return ScrapeResponse(
             html=html,
@@ -261,21 +272,30 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
             await page.set_extra_http_headers(req.headers)
 
         # Navigate
+        logger.info("Firefox navigating to %s (timeout=%dms)", req.url, req.timeout)
         response = await page.goto(
             req.url, wait_until="domcontentloaded", timeout=req.timeout,
         )
         status_code = response.status if response else 0
         resp_headers = dict(response.headers) if response else {}
+        logger.info("Firefox got status %d for %s", status_code, req.url)
 
-        # Best-effort networkidle
+        # Best-effort networkidle — let JS frameworks finish rendering
         try:
-            await page.wait_for_load_state("networkidle", timeout=5000)
+            await page.wait_for_load_state("networkidle", timeout=8000)
         except Exception:
             pass
 
-        # Extra wait
-        if req.wait_after_load > 0:
-            await page.wait_for_timeout(min(req.wait_after_load, 30000))
+        # Default JS render wait — SPAs need time to hydrate even after networkidle.
+        wait_ms = req.wait_after_load if req.wait_after_load > 0 else 2000
+        await page.wait_for_timeout(min(wait_ms, 30000))
+
+        # Scroll to bottom to trigger lazy-loaded content
+        try:
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(1000)
+        except Exception:
+            pass
 
         # Execute actions
         action_screenshots = []
@@ -289,6 +309,7 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
             screenshot_b64 = base64.b64encode(ss).decode()
 
         html = await page.content()
+        logger.info("Firefox got %d chars HTML for %s (status=%d)", len(html), req.url, status_code)
 
         return ScrapeResponse(
             html=html,

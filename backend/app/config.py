@@ -91,6 +91,7 @@ class Settings(BaseSettings):
     # Cache
     CACHE_ENABLED: bool = True
     CACHE_TTL_SECONDS: int = 3600
+    CACHE_INFLIGHT_POLL_INTERVAL: float = 0.5  # seconds between polls while waiting
     STRATEGY_CACHE_TTL_SECONDS: int = 86400  # 24 hours
 
     # Go HTML-to-Markdown sidecar (empty = disabled, fallback to Python markdownify)

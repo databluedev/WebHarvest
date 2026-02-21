@@ -20,11 +20,12 @@ from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.rate_limiter import check_rate_limit_full
 from app.core.metrics import scrape_requests_total
 from app.core.job_cache import get_cached_response, set_cached_response
+from app.core.cache import get_cached_scrape, try_claim_inflight, release_inflight, wait_for_cached_result
 from app.config import settings
 from app.models.job import Job
 from app.models.job_result import JobResult
 from app.models.user import User
-from app.schemas.scrape import ScrapeRequest, ScrapeResponse, PageMetadata
+from app.schemas.scrape import ScrapeRequest, ScrapeResponse, ScrapeData, PageMetadata
 from app.services.scraper import scrape_url, classify_error
 from app.services.llm_extract import extract_with_llm
 from app.services.quota import check_quota, increment_usage
@@ -113,6 +114,29 @@ async def scrape(
 
         raise RateLimitError("Scrape rate limit exceeded. Try again in a minute.")
 
+    # API-level cache check — return instantly without job/quota/semaphore
+    use_cache = (
+        not request.actions
+        and "screenshot" not in request.formats
+        and not request.extract
+    )
+    if use_cache:
+        cached = await get_cached_scrape(request.url, request.formats)
+        if cached:
+            scrape_requests_total.labels(status="success").inc()
+            return ScrapeResponse(success=True, data=ScrapeData(**cached))
+
+        # Cache miss — check if another request is already scraping this URL
+        claimed = await try_claim_inflight(request.url, request.formats)
+        if not claimed:
+            cached = await wait_for_cached_result(
+                request.url, request.formats, timeout=settings.SCRAPE_API_TIMEOUT
+            )
+            if cached:
+                scrape_requests_total.labels(status="success").inc()
+                return ScrapeResponse(success=True, data=ScrapeData(**cached))
+            # Timed out waiting — fall through to scrape ourselves
+
     # Quota check
     await check_quota(db, user.id, "scrape")
 
@@ -145,6 +169,8 @@ async def scrape(
             job.error = "Server is at capacity. Please retry in a few seconds."
             job.completed_at = datetime.now(timezone.utc)
             scrape_requests_total.labels(status="error").inc()
+            if use_cache:
+                await release_inflight(request.url, request.formats)
             return ScrapeResponse(
                 success=False, error=job.error, error_code="TIMEOUT", job_id=str(job.id)
             )
@@ -160,6 +186,8 @@ async def scrape(
             job.error = f"Scrape timed out after {settings.SCRAPE_API_TIMEOUT}s. The site may be too slow or heavily protected."
             job.completed_at = datetime.now(timezone.utc)
             scrape_requests_total.labels(status="error").inc()
+            if use_cache:
+                await release_inflight(request.url, request.formats)
             return ScrapeResponse(
                 success=False, error=job.error, error_code="TIMEOUT", job_id=str(job.id)
             )
@@ -258,9 +286,13 @@ async def scrape(
             except Exception as wh_err:
                 logger.warning(f"Webhook delivery failed for scrape {job.id}: {wh_err}")
 
+        if use_cache:
+            await release_inflight(request.url, request.formats)
         return resp
 
     except BadRequestError:
+        if use_cache:
+            await release_inflight(request.url, request.formats)
         job.status = "failed"
         job.completed_at = datetime.now(timezone.utc)
         raise
@@ -292,6 +324,8 @@ async def scrape(
             except Exception:
                 pass
 
+        if use_cache:
+            await release_inflight(request.url, request.formats)
         return ScrapeResponse(
             success=False, error=str(e), error_code=error_code, job_id=str(job.id)
         )
