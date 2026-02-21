@@ -30,6 +30,7 @@ from app.services.strategy_cache import (
     get_starting_tier,
 )
 
+from app.config import settings
 from app.core.redis import redis_client as _redis
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,79 @@ def _get_curl_session(profile: str = "chrome124"):
     if profile not in _curl_sessions:
         _curl_sessions[profile] = CurlAsyncSession(impersonate=profile)
     return _curl_sessions[profile]
+
+
+# ---------------------------------------------------------------------------
+# Stealth Engine sidecar client (Patchright + Camoufox microservice)
+# ---------------------------------------------------------------------------
+_stealth_client: httpx.AsyncClient | None = None
+_stealth_loop_id: int | None = None
+
+
+async def _get_stealth_client() -> httpx.AsyncClient:
+    """Get or create a reusable httpx client for the stealth-engine sidecar."""
+    global _stealth_client, _stealth_loop_id
+    current_loop_id = id(asyncio.get_running_loop())
+    if (
+        _stealth_client is None
+        or _stealth_client.is_closed
+        or _stealth_loop_id != current_loop_id
+    ):
+        _stealth_client = httpx.AsyncClient(timeout=60)
+        _stealth_loop_id = current_loop_id
+    return _stealth_client
+
+
+async def _fetch_via_stealth_engine(
+    url: str,
+    request: "ScrapeRequest",
+    use_firefox: bool = False,
+    proxy: dict | None = None,
+) -> tuple[str, int, str | None, list[str], dict[str, str]]:
+    """Fetch a URL via the stealth-engine microservice.
+
+    Returns the same 5-tuple as _fetch_with_browser_stealth:
+    (html, status_code, screenshot_b64, action_screenshots, response_headers)
+
+    Raises on any failure so _race_strategies handles fallback.
+    """
+    stealth_url = settings.STEALTH_ENGINE_URL
+    if not stealth_url:
+        raise RuntimeError("STEALTH_ENGINE_URL not configured")
+
+    payload: dict = {
+        "url": url,
+        "timeout": request.timeout,
+        "wait_after_load": getattr(request, "wait_for", 0) or getattr(request, "wait_after_load", 0),
+        "use_firefox": use_firefox,
+        "screenshot": "screenshot" in getattr(request, "formats", []),
+        "mobile": getattr(request, "mobile", False),
+    }
+
+    if getattr(request, "headers", None):
+        payload["headers"] = request.headers
+    if getattr(request, "cookies", None):
+        payload["cookies"] = request.cookies
+    if getattr(request, "actions", None):
+        payload["actions"] = request.actions
+    if proxy:
+        payload["proxy"] = proxy
+
+    client = await _get_stealth_client()
+    resp = await client.post(f"{stealth_url}/scrape", json=payload)
+    resp.raise_for_status()
+    data = resp.json()
+
+    if not data.get("success"):
+        raise RuntimeError(f"stealth-engine error: {data.get('error', 'unknown')}")
+
+    return (
+        data.get("html", ""),
+        data.get("status_code", 0),
+        data.get("screenshot"),
+        data.get("action_screenshots", []),
+        data.get("response_headers", {}),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -926,6 +1000,8 @@ async def scrape_url(
             "firefox_stealth",
             "google_search_chain",
             "advanced_prewarm",
+            "stealth_chromium",
+            "stealth_firefox",
         )
 
     if (
@@ -1010,6 +1086,24 @@ async def scrape_url(
             elif last_strategy == "advanced_prewarm":
                 result = await _fetch_with_advanced_prewarm(
                     url, request, proxy=proxy_playwright
+                )
+                html = result[0]
+                if html and not _looks_blocked(html):
+                    (
+                        raw_html,
+                        status_code,
+                        screenshot_b64,
+                        action_screenshots,
+                        response_headers,
+                    ) = result
+                    fetched = True
+                    winning_strategy = last_strategy
+                    winning_tier = 0
+                    logger.info(f"Strategy cache hit for {url}: {last_strategy}")
+            elif last_strategy in ("stealth_chromium", "stealth_firefox"):
+                use_ff = last_strategy == "stealth_firefox"
+                result = await _fetch_via_stealth_engine(
+                    url, request, use_firefox=use_ff, proxy=proxy_playwright
                 )
                 html = result[0]
                 if html and not _looks_blocked(html):
@@ -1129,7 +1223,9 @@ async def scrape_url(
 
     # === Tier 2: Browser race — race(chromium_stealth, firefox_stealth) ===
     # For hard sites with starting_tier <= 2, combine Tier 2 + Tier 3 into one big race
+    # When stealth-engine is available, race it alongside local fallbacks.
     _skip_tier3 = False
+    _has_stealth_engine = bool(settings.STEALTH_ENGINE_URL)
     if not fetched and starting_tier <= 2:
         tier_start = time.time()
 
@@ -1150,8 +1246,24 @@ async def scrape_url(
                         _fetch_with_browser_stealth(url, request, proxy=proxy_playwright),
                     ),
                 )
+                # Add stealth-engine contestants for hard sites
+                if _has_stealth_engine:
+                    browser_coros.append((
+                        "stealth_chromium",
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                    ))
+                    browser_coros.append((
+                        "stealth_firefox",
+                        _fetch_via_stealth_engine(url, request, use_firefox=True, proxy=proxy_playwright),
+                    ))
                 t2_timeout = 35
             else:
+                # Non-hard crawl: add stealth-engine Chromium as extra racer
+                if _has_stealth_engine:
+                    browser_coros.append((
+                        "stealth_chromium",
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                    ))
                 t2_timeout = 20
         else:
             if hard_site:
@@ -1168,6 +1280,16 @@ async def scrape_url(
                         ),
                     ),
                 ]
+                # Add stealth-engine contestants (Patchright + Camoufox)
+                if _has_stealth_engine:
+                    browser_coros.append((
+                        "stealth_chromium",
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                    ))
+                    browser_coros.append((
+                        "stealth_firefox",
+                        _fetch_via_stealth_engine(url, request, use_firefox=True, proxy=proxy_playwright),
+                    ))
                 # Race Tier 2 AND Tier 3 concurrently for massive speed win
                 if starting_tier <= 3:
                     heavy_coros = [
@@ -1191,18 +1313,28 @@ async def scrape_url(
                     t2_timeout = 30
             else:
                 # Non-hard sites: light mode — no stealth scripts, no warm-up
-                browser_coros = [
+                browser_coros = []
+                # Stealth-engine first (preferred — no JS overhead)
+                if _has_stealth_engine:
+                    browser_coros.append((
+                        "stealth_chromium",
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                    ))
+                # Local fallbacks
+                browser_coros.append(
                     (
                         "chromium_light",
                         _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, stealth=False),
                     ),
+                )
+                browser_coros.append(
                     (
                         "firefox_light",
                         _fetch_with_browser_stealth(
                             url, request, proxy=proxy_playwright, use_firefox=True, stealth=False
                         ),
                     ),
-                ]
+                )
                 t2_timeout = 20
 
         race = await _race_strategies(
@@ -2860,7 +2992,8 @@ async def scrape_url_fetch_only(
     # === Pinned strategy fast-path (crawl mode) ===
     # When a previous crawl page succeeded with a specific strategy,
     # try it first before the full tier cascade.
-    if pinned_strategy and not needs_browser:
+    _is_stealth_pinned = pinned_strategy in ("stealth_chromium", "stealth_firefox")
+    if pinned_strategy and (not needs_browser or _is_stealth_pinned):
         tier_start = time.time()
         try:
             if pinned_strategy.startswith("curl_cffi:"):
@@ -2905,6 +3038,17 @@ async def scrape_url_fetch_only(
                         fetched = True
                         winning_strategy = pinned_strategy
                         winning_tier = pinned_tier
+            elif _is_stealth_pinned and settings.STEALTH_ENGINE_URL:
+                use_ff = pinned_strategy == "stealth_firefox"
+                result = await _fetch_via_stealth_engine(
+                    url, request, use_firefox=use_ff, proxy=proxy_playwright
+                )
+                html = result[0]
+                if html and not _looks_blocked(html):
+                    raw_html, status_code, screenshot_b64, action_screenshots, response_headers = result
+                    fetched = True
+                    winning_strategy = pinned_strategy
+                    winning_tier = pinned_tier
             if fetched:
                 logger.debug(f"Pinned strategy hit for {url}: {pinned_strategy}")
         except Exception as e:
@@ -3032,7 +3176,9 @@ async def scrape_url_fetch_only(
 
     # === Tier 2: Browser ===
     # For hard sites with starting_tier <= 2, combine Tier 2 + Tier 3 into one big race
+    # When stealth-engine is available, race it alongside local fallbacks.
     _skip_tier3_fetch = False
+    _has_stealth_engine_fetch = bool(settings.STEALTH_ENGINE_URL)
     if not fetched and starting_tier <= 2:
         tier_start = time.time()
 
@@ -3055,8 +3201,22 @@ async def scrape_url_fetch_only(
                         _fetch_with_browser_stealth(url, request, proxy=proxy_playwright),
                     ),
                 )
+                if _has_stealth_engine_fetch:
+                    browser_coros.append((
+                        "stealth_chromium",
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                    ))
+                    browser_coros.append((
+                        "stealth_firefox",
+                        _fetch_via_stealth_engine(url, request, use_firefox=True, proxy=proxy_playwright),
+                    ))
                 t2_timeout = 35
             else:
+                if _has_stealth_engine_fetch:
+                    browser_coros.append((
+                        "stealth_chromium",
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                    ))
                 t2_timeout = 20
         else:
             if hard_site:
@@ -3072,6 +3232,15 @@ async def scrape_url_fetch_only(
                         ),
                     ),
                 ]
+                if _has_stealth_engine_fetch:
+                    browser_coros.append((
+                        "stealth_chromium",
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                    ))
+                    browser_coros.append((
+                        "stealth_firefox",
+                        _fetch_via_stealth_engine(url, request, use_firefox=True, proxy=proxy_playwright),
+                    ))
                 # Race Tier 2 AND Tier 3 concurrently for massive speed win
                 if starting_tier <= 3:
                     heavy_coros = [
@@ -3095,18 +3264,26 @@ async def scrape_url_fetch_only(
                     t2_timeout = 30
             else:
                 # Non-hard sites: light mode — no stealth scripts, no warm-up
-                browser_coros = [
+                browser_coros = []
+                if _has_stealth_engine_fetch:
+                    browser_coros.append((
+                        "stealth_chromium",
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                    ))
+                browser_coros.append(
                     (
                         "chromium_light",
                         _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, stealth=False),
                     ),
+                )
+                browser_coros.append(
                     (
                         "firefox_light",
                         _fetch_with_browser_stealth(
                             url, request, proxy=proxy_playwright, use_firefox=True, stealth=False
                         ),
                     ),
-                ]
+                )
                 t2_timeout = 20
 
         race = await _race_strategies(

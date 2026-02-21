@@ -28,6 +28,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
+      - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - LOG_FORMAT=json
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 120"
     restart: unless-stopped
@@ -63,6 +64,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
+      - STEALTH_ENGINE_URL=http://stealth-engine:8888
     command: celery -A app.workers.celery_app worker -l warning -c 4 -Q scrape
     restart: unless-stopped
     stop_grace_period: 5m
@@ -95,6 +97,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
+      - STEALTH_ENGINE_URL=http://stealth-engine:8888
     command: celery -A app.workers.celery_app worker -l warning -c 2 -Q crawl
     restart: unless-stopped
     stop_grace_period: 5m
@@ -127,6 +130,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
+      - STEALTH_ENGINE_URL=http://stealth-engine:8888
     command: celery -A app.workers.celery_app worker -l warning -c 4 -Q batch
     restart: unless-stopped
     stop_grace_period: 5m
@@ -275,6 +279,27 @@ services:
         limits:
           cpus: "0.5"
           memory: 128M
+
+  stealth-engine:
+    build:
+      context: ./stealth-engine
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - STEALTH_CHROMIUM_POOL_SIZE=4
+      - STEALTH_FIREFOX_POOL_SIZE=2
+      - STEALTH_HEADLESS=true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
 
   # --- Optional monitoring stack (enable with --profile monitoring) ---
 

@@ -20,6 +20,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
+      - STEALTH_ENGINE_URL=http://stealth-engine:8888
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -47,6 +48,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
+      - STEALTH_ENGINE_URL=http://stealth-engine:8888
     command: celery -A app.workers.celery_app worker -l info -c 4 -Q scrape,crawl,map,batch,search
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
@@ -129,6 +131,22 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+
+  stealth-engine:
+    build:
+      context: ./stealth-engine
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - STEALTH_CHROMIUM_POOL_SIZE=4
+      - STEALTH_FIREFOX_POOL_SIZE=2
+      - STEALTH_HEADLESS=true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   pgdata:

@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     # Go HTML-to-Markdown sidecar (empty = disabled, fallback to Python markdownify)
     GO_HTML_TO_MD_URL: str = ""
 
+    # Stealth Engine sidecar (empty = disabled, fallback to local browser_pool)
+    STEALTH_ENGINE_URL: str = ""
+
     # Logging
     LOG_FORMAT: str = "json"  # "json" for production, "text" for development
     LOG_LEVEL: str = "INFO"
