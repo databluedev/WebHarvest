@@ -197,59 +197,60 @@ def _is_inside_main_content(el: Tag) -> bool:
     return False
 
 
-def extract_main_content(html: str, url: str = "") -> str:
-    """
-    Multi-pass content extraction that produces clean, high-quality output.
-
-    Strategy:
-    1. Clean junk tags (script, style, video, audio, etc.)
-    2. Aggressively remove ALL boilerplate (nav, modals, cookie banners, etc.)
-    3. Remove hidden/invisible elements
-    4. Try to find explicit main content container
-    5. If no container found, use aggressive body extraction
-    6. Compare trafilatura result - use whichever is more complete
-    """
+def _clean_soup(html: str) -> BeautifulSoup:
+    """Parse HTML once and clean junk/boilerplate. Returns the cleaned soup."""
     soup = BeautifulSoup(html, "lxml")
 
-    # Step 1: Remove definite junk tags
+    # Remove definite junk tags
     for tag in soup.find_all(list(JUNK_TAGS)):
         tag.decompose()
 
-    # Step 2: Remove ALL boilerplate — no text-length mercy
+    # Remove ALL boilerplate — no text-length mercy
     for selector in BOILERPLATE_SELECTORS:
         try:
             for el in soup.select(selector):
-                # Protect elements inside main/article content containers
                 if _is_inside_main_content(el):
                     continue
                 el.decompose()
         except Exception:
             pass
 
-    # Step 3: Remove hidden/invisible elements
+    # Remove hidden/invisible elements
     _remove_hidden_elements(soup)
 
-    # Step 4: Remove form elements (search bars, dropdowns, inputs)
+    # Remove form elements (search bars, dropdowns, inputs)
     for form in soup.find_all("form"):
-        # Keep forms that contain substantial text (contact forms, etc.)
         form_text = form.get_text(strip=True)
         if len(form_text) < 300:
             form.decompose()
 
-    # Step 5: Try to find main content container
+    return soup
+
+
+def _extract_main_tag(html: str, url: str = "") -> Tag | BeautifulSoup:
+    """
+    Internal extraction that returns a BS4 Tag (not a serialized string).
+    Avoids redundant re-parsing by working with soup objects throughout.
+    """
+    soup = _clean_soup(html)
+
+    # Try to find main content container
     main_content = _find_main_container(soup)
 
-    # Step 6: Aggressive body extraction as fallback
+    # Aggressive body extraction as fallback
     if not main_content:
         main_content = _smart_body_extract(soup)
 
-    # Step 7: Compare with trafilatura and pick the more complete result
-    bs4_html = str(main_content) if main_content else ""
-    bs4_text_len = (
-        len(BeautifulSoup(bs4_html, "lxml").get_text(strip=True)) if bs4_html else 0
-    )
+    # Get text length directly from the tag — no re-parse needed
+    bs4_text_len = len(main_content.get_text(strip=True)) if main_content else 0
 
-    traf_html = ""
+    # Skip trafilatura when BS4 found sufficient content (saves 150-250ms)
+    if bs4_text_len > 500:
+        logger.debug(f"BS4 extraction sufficient ({bs4_text_len} chars), skipping trafilatura")
+        return main_content or soup.body or soup
+
+    # Only call trafilatura for weak BS4 results
+    traf_tag = None
     try:
         import trafilatura
 
@@ -263,25 +264,32 @@ def extract_main_content(html: str, url: str = "") -> str:
             output_format="html",
         )
         if traf_result:
-            traf_html = traf_result
+            traf_tag = BeautifulSoup(traf_result, "lxml")
     except Exception as e:
         logger.debug(f"Trafilatura extraction failed: {e}")
 
-    traf_text_len = (
-        len(BeautifulSoup(traf_html, "lxml").get_text(strip=True)) if traf_html else 0
-    )
+    traf_text_len = len(traf_tag.get_text(strip=True)) if traf_tag else 0
 
     # Pick whichever captured MORE content
     if bs4_text_len > traf_text_len * 1.2:
         logger.debug(
             f"Using BS4 extraction ({bs4_text_len} chars > trafilatura {traf_text_len} chars)"
         )
-        return bs4_html
+        return main_content or soup.body or soup
     elif traf_text_len > 100:
         logger.debug(f"Using trafilatura extraction ({traf_text_len} chars)")
-        return traf_html
+        return traf_tag
     else:
-        return bs4_html or str(soup.body) if soup.body else str(soup)
+        return main_content or soup.body or soup
+
+
+def extract_main_content(html: str, url: str = "") -> str:
+    """
+    Multi-pass content extraction that produces clean, high-quality output.
+    Returns cleaned HTML string.
+    """
+    tag = _extract_main_tag(html, url)
+    return str(tag) if tag else ""
 
 
 def _remove_hidden_elements(soup: BeautifulSoup) -> None:
@@ -391,22 +399,8 @@ def apply_tag_filters(
     return str(soup)
 
 
-def html_to_markdown(html: str) -> str:
-    """
-    Convert HTML to clean GitHub Flavored Markdown.
-    Uses custom converter that preserves links, images, code blocks, and structure.
-    Includes aggressive post-processing for clean, production-quality output.
-    """
-    converter = WebHarvestConverter(
-        heading_style="ATX",
-        bullets="-",
-        newline_style="backslash",
-        strip=["script", "style", "noscript"],
-    )
-    markdown = converter.convert(html)
-
-    # === Post-processing pipeline for clean output ===
-
+def _postprocess_markdown(markdown: str) -> str:
+    """Post-processing pipeline for clean markdown output."""
     # 1. Collapse 3+ newlines into 2
     markdown = re.sub(r"\n{3,}", "\n\n", markdown)
     # 2. Remove trailing whitespace on lines
@@ -427,9 +421,79 @@ def html_to_markdown(html: str) -> str:
 
     # 7. Final collapse of excessive newlines
     markdown = re.sub(r"\n{3,}", "\n\n", markdown)
-    markdown = markdown.strip()
+    return markdown.strip()
 
-    return markdown
+
+_CONVERTER = WebHarvestConverter(
+    heading_style="ATX",
+    bullets="-",
+    newline_style="backslash",
+    strip=["script", "style", "noscript"],
+)
+
+
+def html_to_markdown(html: str) -> str:
+    """
+    Convert HTML to clean GitHub Flavored Markdown.
+    Uses custom converter that preserves links, images, code blocks, and structure.
+    """
+    markdown = _CONVERTER.convert(html)
+    return _postprocess_markdown(markdown)
+
+
+def html_to_markdown_from_tag(tag: Tag | BeautifulSoup) -> str:
+    """
+    Fast path: convert a pre-parsed BS4 tag to markdown without re-parsing HTML.
+    Saves ~50-100ms by skipping BeautifulSoup(html) inside markdownify.
+    """
+    markdown = _CONVERTER.convert_soup(tag)
+    return _postprocess_markdown(markdown)
+
+
+def extract_and_convert(
+    raw_html: str,
+    url: str,
+    only_main_content: bool = True,
+    include_tags: list[str] | None = None,
+    exclude_tags: list[str] | None = None,
+) -> tuple[str, str]:
+    """
+    Combined extraction + markdown conversion in minimal parses.
+
+    Returns (clean_html_string, markdown_string).
+
+    Performance: 1 BS4 parse for common case (vs 3 before).
+    - Skips trafilatura when BS4 finds >500 chars (saves 150-250ms)
+    - Passes soup tag directly to markdownify (saves 50-100ms re-parse)
+    """
+    if only_main_content:
+        tag = _extract_main_tag(raw_html, url)
+    else:
+        tag = BeautifulSoup(raw_html, "lxml")
+
+    if include_tags or exclude_tags:
+        # Tag filters need to work on the soup — apply in-place
+        if exclude_tags:
+            for selector in exclude_tags:
+                for el in tag.select(selector):
+                    el.decompose()
+        if include_tags:
+            parts = []
+            for selector in include_tags:
+                for el in tag.select(selector):
+                    parts.append(el)
+            if parts:
+                # Build a new soup from matched elements
+                new_soup = BeautifulSoup("", "lxml")
+                body = new_soup.new_tag("body")
+                new_soup.append(body)
+                for part in parts:
+                    body.append(part)
+                tag = new_soup
+
+    clean_html = str(tag) if tag else ""
+    markdown = html_to_markdown_from_tag(tag) if tag else ""
+    return clean_html, markdown
 
 
 def _remove_link_clusters(markdown: str) -> str:

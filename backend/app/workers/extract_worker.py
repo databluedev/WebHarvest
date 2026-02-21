@@ -44,7 +44,7 @@ def process_extract(self, job_id: str, config: dict):
         from app.schemas.scrape import ScrapeRequest
         from app.services.scraper import scrape_url
         from app.services.llm_extract import extract_with_llm
-        from app.services.content import html_to_markdown, extract_main_content
+        from app.services.content import extract_and_convert
 
         session_factory, db_engine = create_worker_session_factory()
 
@@ -103,10 +103,8 @@ def process_extract(self, job_id: str, config: dict):
 
                     content = result.markdown or ""
                     if not content and result.html:
-                        content = html_to_markdown(
-                            extract_main_content(result.html, url)
-                            if only_main_content
-                            else result.html
+                        _, content = extract_and_convert(
+                            result.html, url, only_main_content=only_main_content
                         )
 
                     if not content:

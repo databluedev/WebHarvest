@@ -84,12 +84,11 @@ async def extract(
 
     # If HTML provided, convert to markdown
     if not content and request.html:
-        from app.services.content import html_to_markdown, extract_main_content
+        from app.services.content import extract_and_convert
 
-        html = request.html
-        if request.only_main_content:
-            html = extract_main_content(html, "")
-        content = html_to_markdown(html)
+        _, content = extract_and_convert(
+            request.html, "", only_main_content=request.only_main_content
+        )
 
     # If URL provided, scrape first
     source_url = request.url
@@ -124,12 +123,10 @@ async def extract(
             )
             content = result.markdown or ""
             if not content and result.html:
-                from app.services.content import html_to_markdown, extract_main_content
+                from app.services.content import extract_and_convert
 
-                content = html_to_markdown(
-                    extract_main_content(result.html, url)
-                    if request.only_main_content
-                    else result.html
+                _, content = extract_and_convert(
+                    result.html, url, only_main_content=request.only_main_content
                 )
         except asyncio.TimeoutError:
             return ExtractResponse(
