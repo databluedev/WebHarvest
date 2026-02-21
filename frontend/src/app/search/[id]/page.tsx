@@ -31,6 +31,10 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Sparkles,
+  LayoutGrid,
+  Table2,
+  Copy,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -367,6 +371,8 @@ export default function SearchStatusPage() {
   const [polling, setPolling] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "error">("all");
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [tsvCopied, setTsvCopied] = useState(false);
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -613,6 +619,30 @@ export default function SearchStatusPage() {
                       </button>
                     ))}
                   </div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setViewMode("cards")}
+                      className={`p-1.5 rounded-md transition-colors ${
+                        viewMode === "cards"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      }`}
+                      title="Card view"
+                    >
+                      <LayoutGrid className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("table")}
+                      className={`p-1.5 rounded-md transition-colors ${
+                        viewMode === "table"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      }`}
+                      title="Table view"
+                    >
+                      <Table2 className="h-4 w-4" />
+                    </button>
+                  </div>
                   <span className="text-xs text-muted-foreground">
                     {filteredData.length} of {status.data.length} results
                   </span>
@@ -625,9 +655,104 @@ export default function SearchStatusPage() {
                     <Globe className="h-5 w-5" />
                     Search Results
                   </h2>
-                  {filteredData.map((item: any) => (
-                    <SearchResultCard key={item._index} item={item} index={item._index} jobId={jobId} />
-                  ))}
+
+                  {viewMode === "table" ? (
+                    <div>
+                      <div className="flex justify-end mb-2">
+                        <button
+                          onClick={() => {
+                            const header = ["#", "URL", "Title", "Status", "Snippet", "Words", "Status Code"].join("\t");
+                            const rows = filteredData.map((d: any) => [
+                              d._index + 1,
+                              d.url || "",
+                              d.title || "",
+                              d.success ? "Success" : "Error",
+                              (d.snippet || "").replace(/[\t\n]/g, " "),
+                              d.metadata?.word_count || 0,
+                              d.metadata?.status_code || "",
+                            ].join("\t"));
+                            navigator.clipboard.writeText([header, ...rows].join("\n"));
+                            setTsvCopied(true);
+                            setTimeout(() => setTsvCopied(false), 2000);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        >
+                          {tsvCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          {tsvCopied ? "Copied!" : "Copy Table"}
+                        </button>
+                      </div>
+                      <div className="rounded-md border border-border overflow-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border bg-muted/50">
+                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-10">#</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">URL</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Title</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-16">Status</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground max-w-[200px]">Snippet</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-20">Words</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-20">Code</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredData.map((item: any) => (
+                              <tr key={item._index} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                                <td className="px-3 py-2 text-xs text-muted-foreground font-mono">{item._index + 1}</td>
+                                <td className="px-3 py-2 max-w-xs">
+                                  <a
+                                    href={item.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary hover:underline truncate block"
+                                  >
+                                    {item.url}
+                                  </a>
+                                </td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[200px]">
+                                  {item.title || "—"}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {item.success ? (
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+                                  ) : (
+                                    <XCircle className="h-3.5 w-3.5 text-red-400" />
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[200px]">
+                                  {item.snippet || "—"}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
+                                  {item.metadata?.word_count > 0 ? item.metadata.word_count.toLocaleString() : "—"}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {item.metadata?.status_code && (
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[10px] ${
+                                        item.metadata.status_code >= 200 && item.metadata.status_code < 400
+                                          ? "border-green-500/50 text-green-400"
+                                          : item.metadata.status_code >= 400
+                                          ? "border-red-500/50 text-red-400"
+                                          : ""
+                                      }`}
+                                    >
+                                      {item.metadata.status_code}
+                                    </Badge>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {filteredData.map((item: any) => (
+                        <SearchResultCard key={item._index} item={item} index={item._index} jobId={jobId} />
+                      ))}
+                    </>
+                  )}
                 </div>
               ) : isRunning ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">

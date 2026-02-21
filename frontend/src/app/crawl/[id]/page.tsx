@@ -30,6 +30,10 @@ import {
   ArrowDownLeft,
   Sparkles,
   Search,
+  LayoutGrid,
+  Table2,
+  Copy,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -439,6 +443,8 @@ export default function CrawlStatusPage() {
   const [searchFilter, setSearchFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "error">("all");
   const [sortBy, setSortBy] = useState<"index" | "url" | "words">("index");
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [tsvCopied, setTsvCopied] = useState(false);
   const PER_PAGE = 20;
 
   useEffect(() => {
@@ -741,6 +747,30 @@ export default function CrawlStatusPage() {
                     <option value="url">Sort: URL</option>
                     <option value="words">Sort: Words</option>
                   </select>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setViewMode("cards")}
+                      className={`p-1.5 rounded-md transition-colors ${
+                        viewMode === "cards"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      }`}
+                      title="Card view"
+                    >
+                      <LayoutGrid className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("table")}
+                      className={`p-1.5 rounded-md transition-colors ${
+                        viewMode === "table"
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      }`}
+                      title="Table view"
+                    >
+                      <Table2 className="h-4 w-4" />
+                    </button>
+                  </div>
                   <span className="text-xs text-muted-foreground">
                     {filteredData.length} of {totalResults} pages
                     {allData.length < totalResults && ` (${allData.length} loaded)`}
@@ -755,9 +785,125 @@ export default function CrawlStatusPage() {
                     <Globe className="h-5 w-5" />
                     Crawled Pages
                   </h2>
-                  {filteredData.map((page: any) => (
-                    <PageResultCard key={page._index} page={page} index={page._index} jobId={jobId} />
-                  ))}
+
+                  {viewMode === "table" ? (
+                    <div>
+                      <div className="flex justify-end mb-2">
+                        <button
+                          onClick={() => {
+                            const header = ["#", "URL", "Title", "Status Code", "Words", "Reading Time", "Links", "Images"].join("\t");
+                            const rows = filteredData.map((p: any) => [
+                              p._index + 1,
+                              p.url || "",
+                              p.metadata?.title || "",
+                              p.metadata?.status_code || "",
+                              p.metadata?.word_count || 0,
+                              p.metadata?.reading_time_seconds ? `${Math.ceil(p.metadata.reading_time_seconds / 60)}m` : "",
+                              p.links_detail?.total || p.links?.length || 0,
+                              p.images?.length || 0,
+                            ].join("\t"));
+                            navigator.clipboard.writeText([header, ...rows].join("\n"));
+                            setTsvCopied(true);
+                            setTimeout(() => setTsvCopied(false), 2000);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        >
+                          {tsvCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          {tsvCopied ? "Copied!" : "Copy Table"}
+                        </button>
+                      </div>
+                      <div className="rounded-md border border-border overflow-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border bg-muted/50">
+                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-10">#</th>
+                              <th
+                                className="px-3 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground"
+                                onClick={() => setSortBy(sortBy === "url" ? "index" : "url")}
+                              >
+                                URL {sortBy === "url" && "↑"}
+                              </th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Title</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-20">Status</th>
+                              <th
+                                className="px-3 py-2 text-right text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground w-20"
+                                onClick={() => setSortBy(sortBy === "words" ? "index" : "words")}
+                              >
+                                Words {sortBy === "words" && "↓"}
+                              </th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-16">Time</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-16">Links</th>
+                              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-16">Images</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredData.map((page: any) => {
+                              const wordCount = page.metadata?.word_count || 0;
+                              const readingTime = page.metadata?.reading_time_seconds
+                                ? Math.ceil(page.metadata.reading_time_seconds / 60)
+                                : 0;
+                              const statusCode = page.metadata?.status_code;
+                              const linksCount = page.links_detail?.total || page.links?.length || 0;
+                              const imagesCount = page.images?.length || 0;
+                              return (
+                                <tr key={page._index} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                                  <td className="px-3 py-2 text-xs text-muted-foreground font-mono">{page._index + 1}</td>
+                                  <td className="px-3 py-2 max-w-xs">
+                                    <a
+                                      href={page.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-primary hover:underline truncate block"
+                                    >
+                                      {page.url}
+                                    </a>
+                                  </td>
+                                  <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[200px]">
+                                    {page.metadata?.title || "—"}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {statusCode && (
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-[10px] ${
+                                          statusCode >= 200 && statusCode < 400
+                                            ? "border-green-500/50 text-green-400"
+                                            : statusCode >= 400
+                                            ? "border-red-500/50 text-red-400"
+                                            : ""
+                                        }`}
+                                      >
+                                        {statusCode}
+                                      </Badge>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
+                                    {wordCount > 0 ? wordCount.toLocaleString() : "—"}
+                                  </td>
+                                  <td className="px-3 py-2 text-xs text-muted-foreground text-right">
+                                    {readingTime > 0 ? `${readingTime}m` : "—"}
+                                  </td>
+                                  <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
+                                    {linksCount > 0 ? linksCount : "—"}
+                                  </td>
+                                  <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
+                                    {imagesCount > 0 ? imagesCount : "—"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {filteredData.map((page: any) => (
+                        <PageResultCard key={page._index} page={page} index={page._index} jobId={jobId} />
+                      ))}
+                    </>
+                  )}
+
                   {hasMore && (
                     <div className="flex justify-center pt-4">
                       <Button

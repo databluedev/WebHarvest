@@ -26,10 +26,11 @@ import {
   Copy,
   Check,
   Sparkles,
+  Table2,
 } from "lucide-react";
 import Link from "next/link";
 
-type TabId = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract";
+type TabId = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "table";
 
 export default function ScrapeDetailPage() {
   const router = useRouter();
@@ -39,6 +40,7 @@ export default function ScrapeDetailPage() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("markdown");
   const [copied, setCopied] = useState(false);
+  const [tsvCopied, setTsvCopied] = useState(false);
   const [polling, setPolling] = useState(true);
   const [screenshotData, setScreenshotData] = useState<Record<string, string>>({});
   const [screenshotLoading, setScreenshotLoading] = useState<Record<string, boolean>>({});
@@ -150,6 +152,7 @@ export default function ScrapeDetailPage() {
         { id: "headings", label: `Headings${result.headings ? ` (${result.headings.length})` : ""}`, icon: List, available: !!result.headings?.length },
         { id: "images", label: `Images${result.images ? ` (${result.images.length})` : ""}`, icon: ImageIcon, available: !!result.images?.length },
         { id: "extract", label: "AI Extract", icon: Sparkles, available: !!result.extract },
+        { id: "table", label: "Table", icon: Table2, available: true },
       ]
     : [];
 
@@ -174,6 +177,7 @@ export default function ScrapeDetailPage() {
       case "structured": return JSON.stringify(result.structured_data, null, 2);
       case "headings": return JSON.stringify(result.headings, null, 2);
       case "images": return JSON.stringify(result.images, null, 2);
+      case "table": return "";
       default: return "";
     }
   };
@@ -550,6 +554,70 @@ export default function ScrapeDetailPage() {
                           {JSON.stringify(result.extract, null, 2)}
                         </pre>
                       )}
+
+                      {activeTab === "table" && (() => {
+                        const meta = result.metadata || {};
+                        const tableRows: [string, string][] = [
+                          ["URL", result.url || "—"],
+                          ["Title", meta.title || "—"],
+                          ["Status Code", meta.status_code ? String(meta.status_code) : "—"],
+                          ["Word Count", meta.word_count ? meta.word_count.toLocaleString() : "—"],
+                          ["Reading Time", meta.reading_time_seconds ? `${Math.ceil(meta.reading_time_seconds / 60)} min` : "—"],
+                          ["Language", meta.language || "—"],
+                          ["Content Length", meta.content_length ? meta.content_length.toLocaleString() : "—"],
+                          ["Canonical URL", meta.canonical_url || "—"],
+                          ["Robots", meta.robots || "—"],
+                          ["Internal Links", result.links_detail?.internal?.count != null ? String(result.links_detail.internal.count) : "—"],
+                          ["External Links", result.links_detail?.external?.count != null ? String(result.links_detail.external.count) : "—"],
+                          ["Images", result.images?.length != null ? String(result.images.length) : "—"],
+                          ["Headings", result.headings?.length != null ? String(result.headings.length) : "—"],
+                        ];
+                        return (
+                          <div>
+                            <div className="flex justify-end mb-2">
+                              <button
+                                onClick={() => {
+                                  const tsv = tableRows.map(([k, v]) => `${k}\t${v}`).join("\n");
+                                  navigator.clipboard.writeText(tsv);
+                                  setTsvCopied(true);
+                                  setTimeout(() => setTsvCopied(false), 2000);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              >
+                                {tsvCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                {tsvCopied ? "Copied!" : "Copy Table"}
+                              </button>
+                            </div>
+                            <div className="rounded-md border border-border overflow-hidden">
+                              <table className="w-full text-sm">
+                                <tbody>
+                                  {tableRows.map(([label, value]) => (
+                                    <tr key={label} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
+                                      <td className="px-4 py-2.5 text-xs font-medium text-muted-foreground w-40 bg-muted/30">
+                                        {label}
+                                      </td>
+                                      <td className="px-4 py-2.5 text-xs font-mono">
+                                        {label === "URL" || label === "Canonical URL" ? (
+                                          value !== "—" ? (
+                                            <a
+                                              href={value}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-primary hover:underline"
+                                            >
+                                              {value}
+                                            </a>
+                                          ) : "—"
+                                        ) : value}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                     </div>
                   </CardContent>
