@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     MAX_CRAWL_PAGES: int = 1000
     MAX_CRAWL_DEPTH: int = 10
     MAX_CONCURRENT_SCRAPES: int = (
-        3  # Per-worker API concurrency (4 workers × 3 = 12 max)
+        5  # Per-worker API concurrency (4 workers × 5 = 20 max)
     )
     SCRAPE_API_TIMEOUT: int = 90  # Max seconds for a single scrape API call
 

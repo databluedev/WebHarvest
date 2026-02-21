@@ -197,7 +197,7 @@ def process_crawl(self, job_id: str, config: dict):
                 nonlocal pages_crawled, cancelled, _pinned_strategy, _pinned_tier
 
                 empty_retries = 0
-                max_empty_retries = 8  # Wait up to 8 times for consumer to add links
+                max_empty_retries = 5  # Wait up to 5 times for consumer to add links
 
                 while pages_crawled < request.max_pages and not cancelled:
                     batch_items = []
@@ -229,7 +229,7 @@ def process_crawl(self, job_id: str, config: dict):
                             continue  # Retry — consumer may have added new links
                         elif empty_retries < max_empty_retries:
                             empty_retries += 1
-                            await asyncio.sleep(2)
+                            await asyncio.sleep(1)
                             continue  # Brief wait for consumer to finish
                         else:
                             break  # Truly no more URLs
@@ -246,7 +246,7 @@ def process_crawl(self, job_id: str, config: dict):
 
                                 _domain = _urlparse(url).netloc
                                 if _domain:
-                                    await domain_throttle(_domain, delay=0.2)
+                                    await domain_throttle(_domain, delay=0.1)
 
                                 fetch_result = await asyncio.wait_for(
                                     crawler.fetch_page_only(
@@ -359,7 +359,7 @@ def process_crawl(self, job_id: str, config: dict):
                         _skip = False
 
                         if md_text:
-                            _fp = md_text[:300]
+                            _fp = md_text[:500]
                             if _fp in _content_fingerprints:
                                 _skip = True
                                 logger.warning(

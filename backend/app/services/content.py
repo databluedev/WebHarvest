@@ -27,7 +27,7 @@ def _get_sidecar_client() -> httpx.Client | None:
     if _sidecar_client is None or _sidecar_client.is_closed:
         _sidecar_client = httpx.Client(
             base_url=settings.GO_HTML_TO_MD_URL,
-            timeout=10.0,
+            timeout=30.0,
         )
     return _sidecar_client
 
@@ -329,10 +329,10 @@ def _clean_soup(html: str) -> BeautifulSoup:
     # Remove hidden/invisible elements
     _remove_hidden_elements(soup)
 
-    # Remove form elements (search bars, dropdowns, inputs)
+    # Remove form elements only if they have very little text (search bars, dropdowns)
     for form in soup.find_all("form"):
         form_text = form.get_text(strip=True)
-        if len(form_text) < 300:
+        if len(form_text) < 1000:
             form.decompose()
 
     return soup
@@ -434,11 +434,11 @@ def _remove_hidden_elements(soup: BeautifulSoup) -> None:
         except Exception:
             pass
 
-    # aria-hidden elements (usually decorative)
+    # aria-hidden elements (usually decorative) — only remove truly empty ones
     aria_hidden = list(soup.find_all(attrs={"aria-hidden": "true"}))
     for el in aria_hidden:
         try:
-            if len(el.get_text(strip=True)) < 100:
+            if len(el.get_text(strip=True)) < 30:
                 el.decompose()
         except Exception:
             pass
@@ -742,8 +742,8 @@ def _deduplicate_content(markdown: str) -> str:
     for block in blocks:
         # Normalize for comparison: lowercase, collapse whitespace
         normalized = re.sub(r"\s+", " ", block.strip().lower())
-        # Skip very short blocks (empty lines, single words)
-        if len(normalized) < 20:
+        # Skip short blocks — only dedup substantial repeated paragraphs
+        if len(normalized) < 80:
             unique_blocks.append(block)
             continue
         if normalized not in seen:

@@ -141,7 +141,7 @@ def process_extract(self, job_id: str, config: dict):
                         job_result = JobResult(
                             job_id=UUID(job_id),
                             url=url,
-                            markdown=content[:50000] if content else None,
+                            markdown=content[:200000] if content else None,
                             extract=extract_result,
                             metadata_={
                                 "content_length": len(content),

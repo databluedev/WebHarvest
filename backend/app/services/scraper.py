@@ -37,7 +37,7 @@ from app.core.redis import redis_client as _redis
 logger = logging.getLogger(__name__)
 
 
-async def domain_throttle(domain: str, delay: float = 0.5) -> None:
+async def domain_throttle(domain: str, delay: float = 0.3) -> None:
     """Redis-backed per-domain rate limiter. Ensures at least `delay` seconds between requests to the same domain."""
     key = f"throttle:{domain}"
     last = await _redis.get(key)
@@ -49,7 +49,7 @@ async def domain_throttle(domain: str, delay: float = 0.5) -> None:
 
 
 # Thread pool for CPU-bound content extraction
-_extraction_executor = ThreadPoolExecutor(max_workers=4)
+_extraction_executor = ThreadPoolExecutor(max_workers=8)
 
 # ---------------------------------------------------------------------------
 # HTTP session pools — reuse connections across requests (saves TLS handshake)
