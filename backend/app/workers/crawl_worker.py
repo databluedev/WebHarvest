@@ -171,8 +171,18 @@ def process_crawl(self, job_id: str, config: dict):
             extract_done = asyncio.Event()
             # Strategy pinning: after first page succeeds, pin that strategy
             # for all remaining pages to skip the full tier cascade.
+            # For JS-rendered doc sites (detected during frontier seeding),
+            # pre-pin to browser strategy so we never waste time on HTTP
+            # fetches that return empty shell HTML.
             _pinned_strategy: str | None = None
             _pinned_tier: int | None = None
+            if crawler.detected_doc_framework:
+                _pinned_strategy = "crawl_session"
+                _pinned_tier = 2
+                logger.warning(
+                    f"Doc framework '{crawler.detected_doc_framework}' detected — "
+                    f"pre-pinned to crawl_session (tier {_pinned_tier})"
+                )
 
             async def fetch_producer():
                 """BFS loop: fetch pages, put raw results on extract_queue."""

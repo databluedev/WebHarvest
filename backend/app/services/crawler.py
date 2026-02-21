@@ -31,6 +31,7 @@ class WebCrawler:
         self._redis: aioredis.Redis | None = None
         self._proxy_manager = proxy_manager
         self._crawl_session = None
+        self.detected_doc_framework: str | None = None
 
         # Redis keys for this crawl
         self._frontier_key = f"crawl:{job_id}:frontier"
@@ -59,8 +60,8 @@ class WebCrawler:
         for key in [self._frontier_key, self._visited_key, self._depth_key, self._queued_key]:
             await self._redis.expire(key, 86400)
 
-        # Pre-seed frontier from sitemaps (Firecrawl-style)
-        await self._seed_from_sitemaps()
+        # Pre-seed frontier: sitemap first, JS discovery fallback
+        await self._seed_frontier()
 
         # Create persistent browser session for this crawl
         from app.services.browser import CrawlSession, browser_pool
@@ -73,13 +74,19 @@ class WebCrawler:
                 proxy = self._proxy_manager.to_playwright(proxy_obj)
         await self._crawl_session.start(proxy=proxy, target_url=self.base_url)
 
-    async def _seed_from_sitemaps(self):
-        """Pre-seed the crawl frontier from sitemap.xml (Firecrawl-style).
+    async def _seed_frontier(self):
+        """Pre-seed the crawl frontier.  Tries sitemap first, then JS discovery.
 
-        Fetches sitemap URLs and adds them to the FIFO frontier so BFS has
-        a rich initial set of pages to visit.  Falls back gracefully if no
-        sitemap is found — BFS still works via normal link extraction.
+        1. Sitemap (fast, no browser needed) — works for most production sites.
+        2. JS nav discovery (headless browser) — fallback for JS-rendered doc
+           sites whose sitemaps are missing or incomplete.
         """
+        added = await self._seed_from_sitemaps()
+        if added == 0:
+            await self._seed_from_js_discovery()
+
+    async def _seed_from_sitemaps(self) -> int:
+        """Try sitemap.xml / sitemap index. Returns number of URLs added."""
         try:
             from app.services.mapper import _parse_sitemaps
             from app.services.dedup import normalize_url
@@ -87,7 +94,7 @@ class WebCrawler:
             sitemap_links = await _parse_sitemaps(self.base_url)
             if not sitemap_links:
                 logger.debug(f"No sitemap URLs found for {self.base_url}")
-                return
+                return 0
 
             logger.info(f"Sitemap discovery found {len(sitemap_links)} URLs for {self.base_url}")
 
@@ -98,7 +105,6 @@ class WebCrawler:
                 link_url = link.url
                 norm = normalize_url(link_url)
 
-                # Skip if already queued
                 if await self._redis.sismember(self._queued_key, norm):
                     continue
                 if not self._should_crawl(link_url, depth=1):
@@ -110,8 +116,61 @@ class WebCrawler:
                 added += 1
 
             logger.info(f"Pre-seeded crawl frontier with {added} URLs from sitemaps")
+            return added
         except Exception as e:
             logger.warning(f"Sitemap discovery during crawl init failed: {e}")
+            return 0
+
+    async def _seed_from_js_discovery(self):
+        """Fallback: headless browser JS nav discovery for doc/SPA sites."""
+        try:
+            from app.services.mapper import (
+                _deep_discover_via_stealth_engine,
+                _deep_discover_via_local_browser,
+            )
+            from app.services.dedup import normalize_url
+
+            html, discovered_links, doc_framework = await _deep_discover_via_stealth_engine(
+                self.base_url
+            )
+            if not discovered_links:
+                html, discovered_links = await _deep_discover_via_local_browser(
+                    self.base_url
+                )
+
+            if not discovered_links:
+                logger.debug(f"No JS nav links discovered for {self.base_url}")
+                return
+
+            if doc_framework:
+                self.detected_doc_framework = doc_framework
+
+            logger.info(
+                f"JS discovery found {len(discovered_links)} URLs for {self.base_url}"
+                f"{f' (framework: {doc_framework})' if doc_framework else ''}"
+            )
+
+            added = 0
+            for link_url in discovered_links:
+                if added >= self.config.max_pages * 5:
+                    break
+                norm = normalize_url(link_url)
+
+                if await self._redis.sismember(self._queued_key, norm):
+                    continue
+                if await self.is_visited(norm):
+                    continue
+                if not self._should_crawl(link_url, depth=1):
+                    continue
+
+                await self._redis.rpush(self._frontier_key, link_url)
+                await self._redis.sadd(self._queued_key, norm)
+                await self._redis.hset(self._depth_key, link_url, 1)
+                added += 1
+
+            logger.info(f"Pre-seeded crawl frontier with {added} URLs from JS discovery")
+        except Exception as e:
+            logger.warning(f"JS nav discovery during crawl init failed: {e}")
             # Non-fatal — BFS will still work via normal link extraction
 
     async def get_next_url(self) -> tuple[str, int] | None:
