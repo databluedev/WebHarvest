@@ -1,3 +1,4 @@
+import asyncio
 import gzip
 import logging
 import random
@@ -99,7 +100,7 @@ async def _fetch_bytes(url: str, timeout: int = 15) -> tuple[bytes, int]:
 
 
 async def _fetch_with_browser(url: str) -> str:
-    """Fetch page content using browser for sites that block HTTP requests."""
+    """Fetch page content using browser with scrolling to load lazy content."""
     try:
         from app.services.browser import browser_pool
 
@@ -114,10 +115,44 @@ async def _fetch_with_browser(url: str) -> str:
             except Exception:
                 pass
             await page.wait_for_timeout(random.randint(1000, 2500))
+
+            # Scroll to bottom in increments to trigger lazy-loaded content
+            for _ in range(3):
+                await page.mouse.wheel(0, 3000)
+                await page.wait_for_timeout(1000)
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=3000)
+                except Exception:
+                    pass
+
+            # Scroll back to top (some sites load nav elements on scroll-up)
+            await page.mouse.wheel(0, -10000)
+            await page.wait_for_timeout(500)
+
             return await page.content()
     except Exception as e:
         logger.warning(f"Browser fetch failed for {url}: {e}")
         return ""
+
+
+async def _fetch_with_stealth_engine(url: str) -> str:
+    """Fetch via stealth-engine sidecar. Returns HTML or empty string."""
+    from app.config import settings
+
+    if not settings.STEALTH_ENGINE_URL:
+        return ""
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            resp = await client.post(
+                f"{settings.STEALTH_ENGINE_URL}/scrape",
+                json={"url": url, "timeout": 30000},
+            )
+            data = resp.json()
+            if data.get("success"):
+                return data.get("html", "")
+    except Exception as e:
+        logger.debug(f"Stealth engine failed for {url}: {e}")
+    return ""
 
 
 async def map_website(request: MapRequest) -> list[LinkResult]:
@@ -143,7 +178,7 @@ async def map_website(request: MapRequest) -> list[LinkResult]:
         if link.url not in all_links:
             all_links[link.url] = link
 
-    # Strategy 3: If we got very few links, try browser fallback
+    # Strategy 3: If we got very few links, try browser fallback (with scrolling + stealth)
     if len(all_links) < 5:
         logger.info(f"Few links found for {url}, trying browser fallback")
         browser_links = await _crawl_homepage_browser(url, request.include_subdomains)
@@ -151,7 +186,28 @@ async def map_website(request: MapRequest) -> list[LinkResult]:
             if link.url not in all_links:
                 all_links[link.url] = link
 
-    # Strategy 4: Filter by search term
+    # Strategy 4: Deep BFS crawl if we still have room under the limit
+    if len(all_links) < request.limit:
+        parsed_base = urlparse(url)
+        base_domain = parsed_base.netloc
+        seed_urls = [u for u in all_links if u != url][:20]  # seed with best URLs so far
+        if seed_urls:
+            remaining = request.limit - len(all_links)
+            logger.info(
+                f"Starting deep crawl for {url}: {len(seed_urls)} seeds, "
+                f"need {remaining} more URLs"
+            )
+            deep_links = await _deep_crawl(
+                seed_urls=seed_urls,
+                base_domain=base_domain,
+                include_subdomains=request.include_subdomains,
+                limit=remaining,
+            )
+            for link in deep_links:
+                if link.url not in all_links:
+                    all_links[link.url] = link
+
+    # Strategy 5: Filter by search term
     if request.search:
         search_lower = request.search.lower()
         filtered = {}
@@ -350,12 +406,15 @@ async def _crawl_homepage(base_url: str, include_subdomains: bool) -> list[LinkR
 async def _crawl_homepage_browser(
     base_url: str, include_subdomains: bool
 ) -> list[LinkResult]:
-    """Crawl homepage using browser for sites that block HTTP requests."""
+    """Crawl homepage using stealth-engine (preferred) or local browser with scrolling."""
     parsed_base = urlparse(base_url)
     base_domain = parsed_base.netloc
 
     try:
-        html = await _fetch_with_browser(base_url)
+        # Try stealth-engine first, fall back to local browser
+        html = await _fetch_with_stealth_engine(base_url)
+        if not html:
+            html = await _fetch_with_browser(base_url)
         if not html:
             return []
 
@@ -364,6 +423,87 @@ async def _crawl_homepage_browser(
     except Exception as e:
         logger.warning(f"Browser homepage crawl failed for {base_url}: {e}")
         return []
+
+
+async def _fetch_page_html(url: str) -> str:
+    """Fetch a page's HTML using stealth-engine → browser → HTTP cascade."""
+    # 1. Stealth engine (best anti-detection)
+    html = await _fetch_with_stealth_engine(url)
+    if html:
+        return html
+    # 2. Local browser with scrolling
+    html = await _fetch_with_browser(url)
+    if html:
+        return html
+    # 3. HTTP fallback
+    text, status = await _fetch_url(url, timeout=15)
+    if status and text:
+        return text
+    return ""
+
+
+async def _deep_crawl(
+    seed_urls: list[str],
+    base_domain: str,
+    include_subdomains: bool,
+    limit: int,
+    max_depth: int = 2,
+) -> list[LinkResult]:
+    """BFS crawl following internal links up to max_depth to discover more URLs."""
+    discovered: dict[str, LinkResult] = {}
+    visited: set[str] = set()
+    sem = asyncio.Semaphore(5)
+
+    # Normalize base_domain for comparison
+    clean_base = base_domain
+    if clean_base.startswith("www."):
+        clean_base = clean_base[4:]
+
+    # Initialize queue with seeds: (url, depth)
+    queue: list[tuple[str, int]] = [(u, 1) for u in seed_urls if u not in visited]
+
+    async def _process_url(url: str, depth: int) -> list[tuple[str, int]]:
+        """Fetch a URL, extract links, return new (url, depth) pairs to enqueue."""
+        async with sem:
+            html = await _fetch_page_html(url)
+        if not html:
+            return []
+        links = _extract_links_from_html(html, url, base_domain, include_subdomains)
+        new_pairs = []
+        for link in links:
+            if link.url not in discovered and link.url not in visited:
+                discovered[link.url] = link
+                if len(discovered) >= limit:
+                    return new_pairs
+                if depth < max_depth:
+                    new_pairs.append((link.url, depth + 1))
+        return new_pairs
+
+    # BFS by depth level
+    while queue and len(discovered) < limit:
+        # Deduplicate and filter already-visited
+        batch = []
+        for url, depth in queue:
+            if url not in visited:
+                visited.add(url)
+                batch.append((url, depth))
+
+        if not batch:
+            break
+
+        # Process current level in parallel (bounded by semaphore)
+        tasks = [_process_url(url, depth) for url, depth in batch]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        queue = []
+        for result in results:
+            if isinstance(result, list):
+                queue.extend(result)
+            if len(discovered) >= limit:
+                break
+
+    logger.info(f"Deep crawl discovered {len(discovered)} URLs (limit={limit})")
+    return list(discovered.values())[:limit]
 
 
 def _extract_links_from_html(

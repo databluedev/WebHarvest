@@ -330,6 +330,10 @@ app = FastAPI(title="Stealth Engine", lifespan=lifespan)
 @app.post("/scrape", response_model=ScrapeResponse)
 async def scrape(req: ScrapeRequest):
     """Scrape a URL using stealth Chromium or Camoufox Firefox."""
+    # Ensure URL has a scheme (browsers require it)
+    if not req.url.startswith(("http://", "https://")):
+        req.url = f"https://{req.url}"
+
     sem = stealth_pool._firefox_sem if req.use_firefox else stealth_pool._chromium_sem
     engine = "Firefox" if req.use_firefox else "Chromium"
 
