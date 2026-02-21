@@ -135,7 +135,7 @@ def process_crawl(self, job_id: str, config: dict):
                 nonlocal pages_crawled, cancelled, _pinned_strategy, _pinned_tier
 
                 empty_retries = 0
-                max_empty_retries = 3  # Wait up to 3 times for consumer to add links
+                max_empty_retries = 8  # Wait up to 8 times for consumer to add links
 
                 while pages_crawled < request.max_pages and not cancelled:
                     batch_items = []
@@ -308,20 +308,15 @@ def process_crawl(self, job_id: str, config: dict):
                         # (nav pages, footer-only pages) have very high ratio.
                         _link_density = _link_count / max(_word_count, 1)
 
-                        # Decision: skip if the page is structurally empty.
-                        # Real content pages have multiple headings (sections,
-                        # product specs, article parts).  Shell/nav pages have
-                        # 0-1 headings even at moderate word counts because the
-                        # "content" is just boilerplate links.
+                        # Decision: skip only truly empty / broken pages.
+                        # Previous thresholds were too aggressive and rejected
+                        # most real pages (needed 800+ words with 2+ headings).
+                        # Now we only skip pages with almost zero content.
                         _skip = False
-                        if _word_count < 50:
-                            _skip = True  # almost no text at all
-                        elif _word_count < 800 and _heading_count <= 1:
-                            _skip = True  # thin page with no structure
-                        elif _word_count < 300 and _content_ratio < 0.15:
-                            _skip = True  # very little survived extraction
-                        elif _link_density > 2.0 and _heading_count <= 2:
-                            _skip = True  # page is almost entirely links
+                        if _word_count < 20:
+                            _skip = True  # virtually empty page
+                        elif _word_count < 50 and _content_ratio < 0.05:
+                            _skip = True  # near-empty with almost no extraction
 
                         # Duplicate content detection — identical login walls,
                         # interstitials, etc. share the same text.  Hash the
