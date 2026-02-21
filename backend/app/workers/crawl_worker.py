@@ -193,14 +193,18 @@ def process_crawl(self, job_id: str, config: dict):
                                     timeout=120,
                                 )
                                 if fetch_result:
+                                    html_len = len(fetch_result.get("raw_html", ""))
+                                    ws = fetch_result.get("winning_strategy", "?")
+                                    logger.warning(
+                                        f"Fetched {url} via {ws} ({html_len} chars)"
+                                    )
                                     # Pin strategy from first success
                                     if _pinned_strategy is None:
-                                        ws = fetch_result.get("winning_strategy")
                                         wt = fetch_result.get("winning_tier")
                                         if ws and wt is not None:
                                             _pinned_strategy = ws
                                             _pinned_tier = wt
-                                            logger.info(
+                                            logger.warning(
                                                 f"Pinned strategy: {ws} (tier {wt}) for crawl {job_id}"
                                             )
                                     return {
@@ -208,6 +212,7 @@ def process_crawl(self, job_id: str, config: dict):
                                         "depth": depth,
                                         "fetch_result": fetch_result,
                                     }
+                                logger.warning(f"fetch_page_only returned None for {url}, trying scrape_page")
                                 # Fallback to full scrape — shorter timeout since
                                 # the fast path already spent time trying.
                                 result = await asyncio.wait_for(
@@ -237,6 +242,10 @@ def process_crawl(self, job_id: str, config: dict):
                             break
                         await extract_queue.put(result)
 
+                logger.warning(
+                    f"Producer done for {job_id}: pages_crawled={pages_crawled}, "
+                    f"cancelled={cancelled}"
+                )
                 extract_done.set()
 
             async def extract_consumer():
@@ -277,67 +286,30 @@ def process_crawl(self, job_id: str, config: dict):
                             )
                             discovered_links = scrape_data.links or []
 
-                        # --- Content quality gate (signal-based, zero hardcoded strings) ---
-                        # Uses structural extraction signals to detect pages
-                        # with no real content.  Completely site-agnostic.
-                        import re as _re
-
+                        # --- Duplicate content detection ---
+                        # Skip exact-duplicate pages (e.g. login walls served
+                        # at multiple URLs).  We no longer gate on "quality" —
+                        # the user asked for N pages and should get N pages.
                         md_text = (scrape_data.markdown or "").strip()
                         _word_count = len(md_text.split())
-                        _heading_count = len(scrape_data.headings or [])
-                        _link_count = len(scrape_data.links or [])
-
-                        # Signal 1: Content ratio — how much of the raw page
-                        # survived main-content extraction?  Login walls and
-                        # nav-only pages lose 90%+ when boilerplate is stripped.
-                        _raw_html = ""
-                        if "fetch_result" in item:
-                            _raw_html = item["fetch_result"].get("raw_html", "")
-                        elif scrape_data.html:
-                            _raw_html = scrape_data.html
-                        _raw_text_len = len(
-                            _re.sub(r"<[^>]+>", " ", _raw_html).split()
-                        ) if _raw_html else 0
-                        _content_ratio = (
-                            _word_count / _raw_text_len
-                            if _raw_text_len > 100
-                            else 1.0
-                        )
-
-                        # Signal 2: Link density — pages that are mostly links
-                        # (nav pages, footer-only pages) have very high ratio.
-                        _link_density = _link_count / max(_word_count, 1)
-
-                        # Decision: skip only truly empty / broken pages.
-                        # Previous thresholds were too aggressive and rejected
-                        # most real pages (needed 800+ words with 2+ headings).
-                        # Now we only skip pages with almost zero content.
                         _skip = False
-                        if _word_count < 20:
-                            _skip = True  # virtually empty page
-                        elif _word_count < 50 and _content_ratio < 0.05:
-                            _skip = True  # near-empty with almost no extraction
 
-                        # Duplicate content detection — identical login walls,
-                        # interstitials, etc. share the same text.  Hash the
-                        # first 300 chars of markdown to detect near-dupes.
-                        if not _skip and md_text:
+                        if md_text:
                             _fp = md_text[:300]
                             if _fp in _content_fingerprints:
                                 _skip = True
-                                logger.info(
+                                logger.warning(
                                     f"Skipping duplicate content "
                                     f"({_word_count}w): {url}"
                                 )
                             _content_fingerprints.add(_fp)
 
+                        # Only skip pages that are completely empty (no text at all)
+                        if not _skip and _word_count == 0:
+                            _skip = True
+                            logger.warning(f"Skipping empty page (0 words): {url}")
+
                         if _skip:
-                            logger.info(
-                                f"Skipping low-quality page "
-                                f"({_word_count}w, {_heading_count}h, "
-                                f"ratio={_content_ratio:.2f}, "
-                                f"ld={_link_density:.2f}): {url}"
-                            )
                             # Still harvest links for frontier expansion
                             if discovered_links:
                                 await crawler.add_to_frontier(
@@ -464,6 +436,10 @@ def process_crawl(self, job_id: str, config: dict):
                             db.add(job_result)
 
                             pages_crawled += 1
+                            logger.warning(
+                                f"Saved page {pages_crawled}/{request.max_pages}: {url} "
+                                f"({_word_count}w)"
+                            )
 
                             job = await db.get(Job, UUID(job_id))
                             if job:
