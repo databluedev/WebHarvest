@@ -169,19 +169,27 @@ def process_crawl(self, job_id: str, config: dict):
             # Producer-consumer pipeline queue
             extract_queue = asyncio.Queue(maxsize=concurrency * 2)
             extract_done = asyncio.Event()
+            # Track content fingerprints to skip duplicate pages
+            # (catches identical login walls / interstitials)
+            _content_fingerprints: set[str] = set()
+
             # Strategy pinning: after first page succeeds, pin that strategy
             # for all remaining pages to skip the full tier cascade.
+            #
             # For JS-rendered doc sites (detected during frontier seeding),
             # pre-pin to browser strategy so we never waste time on HTTP
             # fetches that return empty shell HTML.
             _pinned_strategy: str | None = None
             _pinned_tier: int | None = None
             if crawler.detected_doc_framework:
+                # Use the persistent crawl session browser — it's already open
+                # and reuses tabs, much faster than stealth engine (which creates
+                # a new browser context per page).
                 _pinned_strategy = "crawl_session"
                 _pinned_tier = 2
                 logger.warning(
                     f"Doc framework '{crawler.detected_doc_framework}' detected — "
-                    f"pre-pinned to crawl_session (tier {_pinned_tier})"
+                    f"pre-pinned to crawl_session (tier {_pinned_tier}) for full JS rendering"
                 )
 
             async def fetch_producer():
@@ -342,12 +350,26 @@ def process_crawl(self, job_id: str, config: dict):
                             )
                             discovered_links = scrape_data.links or []
 
-                        # Skip pages that are completely empty (no text at all)
+                        # --- Duplicate content detection ---
+                        # Skip exact-duplicate pages (e.g. login walls served
+                        # at multiple URLs).  We no longer gate on "quality" —
+                        # the user asked for N pages and should get N pages.
                         md_text = (scrape_data.markdown or "").strip()
                         _word_count = len(md_text.split())
                         _skip = False
 
-                        if _word_count == 0:
+                        if md_text:
+                            _fp = md_text[:500]
+                            if _fp in _content_fingerprints:
+                                _skip = True
+                                logger.warning(
+                                    f"Skipping duplicate content "
+                                    f"({_word_count}w): {url}"
+                                )
+                            _content_fingerprints.add(_fp)
+
+                        # Only skip pages that are completely empty (no text at all)
+                        if not _skip and _word_count == 0:
                             _skip = True
                             logger.warning(f"Skipping empty page (0 words): {url}")
 
