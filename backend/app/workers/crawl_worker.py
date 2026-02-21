@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 _WORKER_NAME = "crawl"
 
 # Shared thread pool for CPU-bound content extraction in crawl pipeline
-_extraction_executor = ThreadPoolExecutor(max_workers=4)
+_extraction_executor = ThreadPoolExecutor(max_workers=8)
 
 
 def _run_async(coro):
@@ -125,9 +125,14 @@ def process_crawl(self, job_id: str, config: dict):
             # (catches identical login walls / interstitials)
             _content_fingerprints: set[str] = set()
 
+            # Strategy pinning: after first page succeeds, pin that strategy
+            # for all remaining pages to skip the full tier cascade.
+            _pinned_strategy: str | None = None
+            _pinned_tier: int | None = None
+
             async def fetch_producer():
                 """BFS loop: fetch pages, put raw results on extract_queue."""
-                nonlocal pages_crawled, cancelled
+                nonlocal pages_crawled, cancelled, _pinned_strategy, _pinned_tier
 
                 empty_retries = 0
                 max_empty_retries = 3  # Wait up to 3 times for consumer to add links
@@ -176,13 +181,27 @@ def process_crawl(self, job_id: str, config: dict):
 
                                 _domain = _urlparse(url).netloc
                                 if _domain:
-                                    await domain_throttle(_domain)
+                                    await domain_throttle(_domain, delay=0.2)
 
                                 fetch_result = await asyncio.wait_for(
-                                    crawler.fetch_page_only(url),
+                                    crawler.fetch_page_only(
+                                        url,
+                                        pinned_strategy=_pinned_strategy,
+                                        pinned_tier=_pinned_tier,
+                                    ),
                                     timeout=120,
                                 )
                                 if fetch_result:
+                                    # Pin strategy from first success
+                                    if _pinned_strategy is None:
+                                        ws = fetch_result.get("winning_strategy")
+                                        wt = fetch_result.get("winning_tier")
+                                        if ws and wt is not None:
+                                            _pinned_strategy = ws
+                                            _pinned_tier = wt
+                                            logger.info(
+                                                f"Pinned strategy: {ws} (tier {wt}) for crawl {job_id}"
+                                            )
                                     return {
                                         "url": url,
                                         "depth": depth,

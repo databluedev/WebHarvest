@@ -362,7 +362,12 @@ class WebCrawler:
                 except Exception:
                     pass
 
-    async def fetch_page_only(self, url: str) -> dict | None:
+    async def fetch_page_only(
+        self,
+        url: str,
+        pinned_strategy: str | None = None,
+        pinned_tier: int | None = None,
+    ) -> dict | None:
         """Fetch-only phase for pipeline mode — returns raw data without extraction."""
         opts = self.config.scrape_options or ScrapeOptions()
         # Exclude "screenshot" so needs_browser=False → fast HTTP tiers can run.
@@ -386,6 +391,8 @@ class WebCrawler:
             request,
             proxy_manager=self._proxy_manager,
             crawl_session=self._crawl_session,
+            pinned_strategy=pinned_strategy,
+            pinned_tier=pinned_tier,
         )
         if fetch_result:
             fetch_result["request"] = request

@@ -1154,41 +1154,56 @@ async def scrape_url(
             else:
                 t2_timeout = 20
         else:
-            browser_coros = [
-                (
-                    "chromium_stealth",
-                    _fetch_with_browser_stealth(url, request, proxy=proxy_playwright),
-                ),
-                (
-                    "firefox_stealth",
-                    _fetch_with_browser_stealth(
-                        url, request, proxy=proxy_playwright, use_firefox=True
-                    ),
-                ),
-            ]
-
-            # For hard sites, race Tier 2 AND Tier 3 concurrently for massive speed win
-            # Only safe in single-scrape mode (no crawl_session)
-            if hard_site and starting_tier <= 3:
-                heavy_coros = [
+            if hard_site:
+                # Hard sites: full stealth with all anti-detection
+                browser_coros = [
                     (
-                        "google_search_chain",
-                        _fetch_with_google_search_chain(
-                            url, request, proxy=proxy_playwright
-                        ),
+                        "chromium_stealth",
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, stealth=True),
                     ),
                     (
-                        "advanced_prewarm",
-                        _fetch_with_advanced_prewarm(
-                            url, request, proxy=proxy_playwright
+                        "firefox_stealth",
+                        _fetch_with_browser_stealth(
+                            url, request, proxy=proxy_playwright, use_firefox=True, stealth=True
                         ),
                     ),
                 ]
-                browser_coros.extend(heavy_coros)
-                _skip_tier3 = True
-                t2_timeout = 35  # Combined race timeout
+                # Race Tier 2 AND Tier 3 concurrently for massive speed win
+                if starting_tier <= 3:
+                    heavy_coros = [
+                        (
+                            "google_search_chain",
+                            _fetch_with_google_search_chain(
+                                url, request, proxy=proxy_playwright
+                            ),
+                        ),
+                        (
+                            "advanced_prewarm",
+                            _fetch_with_advanced_prewarm(
+                                url, request, proxy=proxy_playwright
+                            ),
+                        ),
+                    ]
+                    browser_coros.extend(heavy_coros)
+                    _skip_tier3 = True
+                    t2_timeout = 35  # Combined race timeout
+                else:
+                    t2_timeout = 30
             else:
-                t2_timeout = 30 if hard_site else 20
+                # Non-hard sites: light mode — no stealth scripts, no warm-up
+                browser_coros = [
+                    (
+                        "chromium_light",
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, stealth=False),
+                    ),
+                    (
+                        "firefox_light",
+                        _fetch_with_browser_stealth(
+                            url, request, proxy=proxy_playwright, use_firefox=True, stealth=False
+                        ),
+                    ),
+                ]
+                t2_timeout = 20
 
         race = await _race_strategies(
             browser_coros, url, validate_fn=_validate_browser, timeout=t2_timeout
@@ -1971,15 +1986,20 @@ async def _fetch_with_browser_stealth(
     request: ScrapeRequest,
     proxy: dict | None = None,
     use_firefox: bool = False,
+    stealth: bool = True,
 ) -> tuple[str, int, str | None, list[str], dict[str, str]]:
-    """Fast browser fetch: domcontentloaded + short networkidle + request interception."""
+    """Fast browser fetch: domcontentloaded + short networkidle + request interception.
+
+    When stealth=False (light mode), skips stealth scripts, warm-up navigation,
+    and human-like interactions for faster page loads on non-hard sites.
+    """
     screenshot_b64 = None
     action_screenshots = []
     status_code = 0
     response_headers: dict[str, str] = {}
 
     async with browser_pool.get_page(
-        proxy=proxy, use_firefox=use_firefox, target_url=url
+        proxy=proxy, use_firefox=use_firefox, target_url=url, stealth=stealth
     ) as page:
         # Mobile viewport emulation (device preset or default iPhone 14)
         if getattr(request, "mobile", False) or getattr(request, "mobile_device", None):
@@ -2014,14 +2034,16 @@ async def _fetch_with_browser_stealth(
             await page.set_extra_http_headers(request.headers)
 
         # Set up request interception (blocks third-party bot detection on hard sites)
-        await _setup_request_interception(page, url)
+        if stealth:
+            await _setup_request_interception(page, url)
 
-        referrer = random.choice(_GOOGLE_REFERRERS)
+        referrer = random.choice(_GOOGLE_REFERRERS) if stealth else None
         hard_site = _is_hard_site(url)
 
         # Warm-up navigation for hard sites: visit homepage first to build session
         # Skip if we already have cookies for this domain (saves 1.5-3s)
-        if hard_site:
+        # Also skip entirely in light mode (stealth=False)
+        if hard_site and stealth:
             domain = browser_pool._get_domain(url)
             has_cookies = domain in browser_pool._cookie_jar
             homepage = _get_homepage(url)
@@ -2049,25 +2071,28 @@ async def _fetch_with_browser_stealth(
                     pass  # Best-effort warm-up
 
         # Fast navigation: domcontentloaded first (doesn't hang on analytics)
-        response = await page.goto(
-            url,
-            wait_until="domcontentloaded",
-            timeout=15000,
-            referer=referrer,
-        )
+        goto_kwargs = {
+            "wait_until": "domcontentloaded",
+            "timeout": 15000,
+        }
+        if referrer:
+            goto_kwargs["referer"] = referrer
+        response = await page.goto(url, **goto_kwargs)
         status_code = response.status if response else 0
         if response:
             response_headers = {k.lower(): v for k, v in response.headers.items()}
 
-        # Networkidle — give JS time to render; hard sites need more
+        # Networkidle — give JS time to render
+        # Light mode: 3s, hard sites: 6s, normal stealth: 3s
+        _idle_timeout = 3000
+        if hard_site and stealth:
+            _idle_timeout = 6000
         try:
-            await page.wait_for_load_state(
-                "networkidle", timeout=6000 if hard_site else 3000
-            )
+            await page.wait_for_load_state("networkidle", timeout=_idle_timeout)
         except Exception:
             pass
 
-        if hard_site:
+        if hard_site and stealth:
             # Human-like interaction after page load
             await page.wait_for_timeout(random.randint(500, 1000))
             vp = page.viewport_size or {"width": 1920, "height": 1080}
@@ -2096,7 +2121,7 @@ async def _fetch_with_browser_stealth(
                     random.randint(150, vp["height"] - 200),
                     steps=random.randint(8, 15),
                 )
-        else:
+        elif stealth:
             await page.wait_for_timeout(random.randint(100, 250))
 
         if request.wait_for > 0:
@@ -2780,11 +2805,16 @@ async def scrape_url_fetch_only(
     request: ScrapeRequest,
     proxy_manager=None,
     crawl_session=None,
+    pinned_strategy: str | None = None,
+    pinned_tier: int | None = None,
 ) -> dict | None:
     """Fetch phase only — returns raw HTML + metadata without content extraction.
 
     Returns dict with keys: raw_html, status_code, response_headers, screenshot_b64,
     action_screenshots, winning_strategy, winning_tier. Returns None on total failure.
+
+    When pinned_strategy/pinned_tier are set (from a previous crawl page success),
+    tries the pinned strategy first before falling through to the normal tier cascade.
     """
     from app.services.document import detect_document_type
 
@@ -2827,8 +2857,61 @@ async def scrape_url_fetch_only(
     _custom_h = getattr(request, "headers", None)
     _custom_c = getattr(request, "cookies", None)
 
+    # === Pinned strategy fast-path (crawl mode) ===
+    # When a previous crawl page succeeded with a specific strategy,
+    # try it first before the full tier cascade.
+    if pinned_strategy and not needs_browser:
+        tier_start = time.time()
+        try:
+            if pinned_strategy.startswith("curl_cffi:"):
+                profile = pinned_strategy.split(":", 1)[1]
+                result = await _fetch_with_curl_cffi_single(
+                    url,
+                    request.timeout,
+                    profile=profile,
+                    proxy_url=proxy_url,
+                    custom_headers=_custom_h,
+                    custom_cookies=_custom_c,
+                )
+                html, sc, hdrs = result
+                if html and sc < 400 and not _looks_blocked(html):
+                    raw_html, status_code, response_headers = html, sc, hdrs
+                    fetched = True
+                    winning_strategy = pinned_strategy
+                    winning_tier = pinned_tier
+            elif pinned_strategy == "httpx":
+                result = await _fetch_with_httpx(
+                    url,
+                    request.timeout,
+                    proxy_url=proxy_url,
+                    custom_headers=_custom_h,
+                    custom_cookies=_custom_c,
+                )
+                html, sc, hdrs = result
+                if html and sc < 400 and not _looks_blocked(html):
+                    raw_html, status_code, response_headers = html, sc, hdrs
+                    fetched = True
+                    winning_strategy = pinned_strategy
+                    winning_tier = pinned_tier
+            elif pinned_strategy == "cookie_http" and crawl_session:
+                cookies = await crawl_session.get_cookies_for_http()
+                if cookies:
+                    result = await _fetch_with_cookie_http(
+                        url, request.timeout, cookies, proxy_url=proxy_url
+                    )
+                    html, sc, hdrs = result
+                    if html and sc < 400 and not _looks_blocked(html):
+                        raw_html, status_code, response_headers = html, sc, hdrs
+                        fetched = True
+                        winning_strategy = pinned_strategy
+                        winning_tier = pinned_tier
+            if fetched:
+                logger.debug(f"Pinned strategy hit for {url}: {pinned_strategy}")
+        except Exception as e:
+            logger.debug(f"Pinned strategy {pinned_strategy} failed for {url}: {e}")
+
     # === Tier 0: Strategy cache hit ===
-    if starting_tier == 0 and strategy_data and not needs_browser:
+    if not fetched and starting_tier == 0 and strategy_data and not needs_browser:
         last_strategy = strategy_data.get("last_success_strategy", "")
         tier_start = time.time()
         try:
@@ -2976,40 +3059,55 @@ async def scrape_url_fetch_only(
             else:
                 t2_timeout = 20
         else:
-            browser_coros = [
-                (
-                    "chromium_stealth",
-                    _fetch_with_browser_stealth(url, request, proxy=proxy_playwright),
-                ),
-                (
-                    "firefox_stealth",
-                    _fetch_with_browser_stealth(
-                        url, request, proxy=proxy_playwright, use_firefox=True
-                    ),
-                ),
-            ]
-
-            # For hard sites, race Tier 2 AND Tier 3 concurrently for massive speed win
-            if hard_site and starting_tier <= 3:
-                heavy_coros = [
+            if hard_site:
+                browser_coros = [
                     (
-                        "google_search_chain",
-                        _fetch_with_google_search_chain(
-                            url, request, proxy=proxy_playwright
-                        ),
+                        "chromium_stealth",
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, stealth=True),
                     ),
                     (
-                        "advanced_prewarm",
-                        _fetch_with_advanced_prewarm(
-                            url, request, proxy=proxy_playwright
+                        "firefox_stealth",
+                        _fetch_with_browser_stealth(
+                            url, request, proxy=proxy_playwright, use_firefox=True, stealth=True
                         ),
                     ),
                 ]
-                browser_coros.extend(heavy_coros)
-                _skip_tier3_fetch = True
-                t2_timeout = 35  # Combined race timeout
+                # Race Tier 2 AND Tier 3 concurrently for massive speed win
+                if starting_tier <= 3:
+                    heavy_coros = [
+                        (
+                            "google_search_chain",
+                            _fetch_with_google_search_chain(
+                                url, request, proxy=proxy_playwright
+                            ),
+                        ),
+                        (
+                            "advanced_prewarm",
+                            _fetch_with_advanced_prewarm(
+                                url, request, proxy=proxy_playwright
+                            ),
+                        ),
+                    ]
+                    browser_coros.extend(heavy_coros)
+                    _skip_tier3_fetch = True
+                    t2_timeout = 35
+                else:
+                    t2_timeout = 30
             else:
-                t2_timeout = 30 if hard_site else 20
+                # Non-hard sites: light mode — no stealth scripts, no warm-up
+                browser_coros = [
+                    (
+                        "chromium_light",
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, stealth=False),
+                    ),
+                    (
+                        "firefox_light",
+                        _fetch_with_browser_stealth(
+                            url, request, proxy=proxy_playwright, use_firefox=True, stealth=False
+                        ),
+                    ),
+                ]
+                t2_timeout = 20
 
         race = await _race_strategies(
             browser_coros, url, validate_fn=_validate_browser, timeout=t2_timeout

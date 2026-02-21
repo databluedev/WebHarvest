@@ -27,6 +27,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - LOG_FORMAT=json
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 120"
     restart: unless-stopped
@@ -61,6 +62,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
     command: celery -A app.workers.celery_app worker -l warning -c 4 -Q scrape
     restart: unless-stopped
     stop_grace_period: 5m
@@ -92,6 +94,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
     command: celery -A app.workers.celery_app worker -l warning -c 2 -Q crawl
     restart: unless-stopped
     stop_grace_period: 5m
@@ -123,6 +126,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
     command: celery -A app.workers.celery_app worker -l warning -c 4 -Q batch
     restart: unless-stopped
     stop_grace_period: 5m
@@ -256,6 +260,21 @@ services:
           cpus: "1.0"
           memory: 512M
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  go-html-to-md:
+    image: ghcr.io/firecrawl/go-html-to-md-service:latest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   # --- Optional monitoring stack (enable with --profile monitoring) ---
 

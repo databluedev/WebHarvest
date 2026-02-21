@@ -93,6 +93,9 @@ class Settings(BaseSettings):
     CACHE_TTL_SECONDS: int = 3600
     STRATEGY_CACHE_TTL_SECONDS: int = 86400  # 24 hours
 
+    # Go HTML-to-Markdown sidecar (empty = disabled, fallback to Python markdownify)
+    GO_HTML_TO_MD_URL: str = ""
+
     # Logging
     LOG_FORMAT: str = "json"  # "json" for production, "text" for development
     LOG_LEVEL: str = "INFO"

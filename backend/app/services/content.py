@@ -4,10 +4,47 @@ import math
 import re
 from urllib.parse import urljoin, urlparse
 
+import httpx
 from bs4 import BeautifulSoup, Tag
 from markdownify import MarkdownConverter
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Go HTML-to-Markdown sidecar client (sync — runs inside ThreadPoolExecutor)
+# ---------------------------------------------------------------------------
+
+_sidecar_client: httpx.Client | None = None
+
+
+def _get_sidecar_client() -> httpx.Client | None:
+    """Return a reusable sync httpx client for the Go sidecar, or None if disabled."""
+    global _sidecar_client
+    if not settings.GO_HTML_TO_MD_URL:
+        return None
+    if _sidecar_client is None or _sidecar_client.is_closed:
+        _sidecar_client = httpx.Client(
+            base_url=settings.GO_HTML_TO_MD_URL,
+            timeout=10.0,
+        )
+    return _sidecar_client
+
+
+def _convert_via_sidecar(html: str) -> str | None:
+    """Convert HTML to markdown via the Go sidecar. Returns None on failure."""
+    client = _get_sidecar_client()
+    if client is None:
+        return None
+    try:
+        resp = client.post("/convert", json={"html": html})
+        if resp.status_code == 200:
+            return resp.json().get("markdown", None)
+        logger.debug(f"Go sidecar returned status {resp.status_code}")
+    except Exception as e:
+        logger.debug(f"Go sidecar conversion failed: {e}")
+    return None
 
 # Tags that are always junk — can't be rendered as meaningful markdown
 JUNK_TAGS = {
@@ -435,8 +472,11 @@ _CONVERTER = WebHarvestConverter(
 def html_to_markdown(html: str) -> str:
     """
     Convert HTML to clean GitHub Flavored Markdown.
-    Uses custom converter that preserves links, images, code blocks, and structure.
+    Tries Go sidecar first for speed, falls back to Python markdownify.
     """
+    result = _convert_via_sidecar(html)
+    if result is not None:
+        return _postprocess_markdown(result)
     markdown = _CONVERTER.convert(html)
     return _postprocess_markdown(markdown)
 
@@ -492,7 +532,16 @@ def extract_and_convert(
                 tag = new_soup
 
     clean_html = str(tag) if tag else ""
-    markdown = html_to_markdown_from_tag(tag) if tag else ""
+
+    # Try Go sidecar first (6-40x faster), fallback to Python markdownify
+    markdown = None
+    if clean_html:
+        markdown = _convert_via_sidecar(clean_html)
+        if markdown is not None:
+            markdown = _postprocess_markdown(markdown)
+    if markdown is None:
+        markdown = html_to_markdown_from_tag(tag) if tag else ""
+
     return clean_html, markdown
 
 
