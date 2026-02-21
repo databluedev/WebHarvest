@@ -49,7 +49,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
-    command: celery -A app.workers.celery_app worker -l info -c 4 -Q scrape,crawl,map,search
+    command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 4 -Q scrape,crawl,map,search' /app/app
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
