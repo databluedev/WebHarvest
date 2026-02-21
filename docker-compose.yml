@@ -137,10 +137,13 @@ services:
       context: ./stealth-engine
       dockerfile: Dockerfile
     restart: unless-stopped
+    volumes:
+      - ./stealth-engine:/app
     environment:
       - STEALTH_CHROMIUM_POOL_SIZE=4
       - STEALTH_FIREFOX_POOL_SIZE=2
       - STEALTH_HEADLESS=true
+    command: uvicorn main:app --host 0.0.0.0 --port 8888 --workers 1 --reload
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health')"]
       interval: 15s
