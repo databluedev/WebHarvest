@@ -2,7 +2,6 @@ import csv
 import io
 import json
 import logging
-from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -20,7 +19,7 @@ from app.models.job import Job
 from app.models.job_result import JobResult
 from app.models.user import User
 from app.schemas.map import MapRequest, MapResponse
-from app.services.mapper import map_website
+from app.workers.map_worker import process_map
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -51,49 +50,22 @@ async def map_site(
     job = Job(
         user_id=user.id,
         type="map",
-        status="running",
+        status="pending",
         config=request.model_dump(),
         total_pages=0,
-        started_at=datetime.now(timezone.utc),
     )
     db.add(job)
     await db.flush()
 
-    try:
-        links = await map_website(request)
+    # Dispatch to Celery worker (non-blocking)
+    process_map.delay(str(job.id), request.model_dump())
 
-        # Store all discovered links as a single JobResult
-        links_data = [link.model_dump() for link in links]
-        job_result = JobResult(
-            job_id=job.id,
-            url=request.url,
-            links=links_data,
-        )
-        db.add(job_result)
-
-        job.status = "completed"
-        job.total_pages = len(links)
-        job.completed_pages = len(links)
-        job.completed_at = datetime.now(timezone.utc)
-
-        return MapResponse(
-            success=True,
-            total=len(links),
-            links=links,
-            job_id=str(job.id),
-        )
-    except Exception as e:
-        logger.error(f"Map failed for {request.url}: {e}")
-        job.status = "failed"
-        job.error = str(e)
-        job.completed_at = datetime.now(timezone.utc)
-        return MapResponse(
-            success=False,
-            total=0,
-            links=[],
-            error=str(e),
-            job_id=str(job.id),
-        )
+    return MapResponse(
+        success=True,
+        total=0,
+        links=[],
+        job_id=str(job.id),
+    )
 
 
 @router.get(

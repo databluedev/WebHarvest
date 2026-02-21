@@ -62,17 +62,14 @@ def process_map(self, job_id: str, config: dict):
             links = await map_website(request)
 
             async with session_factory() as db:
-                # Store results
-                for link in links:
-                    job_result = JobResult(
-                        job_id=UUID(job_id),
-                        url=link.url,
-                        metadata_={
-                            "title": link.title,
-                            "description": link.description,
-                        },
-                    )
-                    db.add(job_result)
+                # Store all links as a single JobResult (matches GET endpoint format)
+                links_data = [link.model_dump() for link in links]
+                job_result = JobResult(
+                    job_id=UUID(job_id),
+                    url=request.url,
+                    links=links_data,
+                )
+                db.add(job_result)
 
                 job = await db.get(Job, UUID(job_id))
                 if job:
