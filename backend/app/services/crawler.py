@@ -128,7 +128,14 @@ class WebCrawler:
         self._depth_key = f"crawl:{job_id}:depth"
 
     async def initialize(self):
-        """Set up Redis connection, initial frontier, and persistent browser session."""
+        """Set up Redis connection, initial frontier, and persistent browser session.
+
+        For documentation sites (GitBook, Docusaurus, MkDocs, etc.), the frontier
+        is pre-seeded with URLs discovered via deep JS navigation discovery. This
+        is critical because doc sites render their navigation via JavaScript — a
+        normal HTTP fetch of the start page yields almost no internal links, so BFS
+        stalls after 1-2 pages.
+        """
         # Create a fresh Redis connection for this crawl task
         self._redis = aioredis.from_url(
             settings.REDIS_URL,
@@ -144,6 +151,11 @@ class WebCrawler:
         for key in [self._frontier_key, self._visited_key, self._depth_key]:
             await self._redis.expire(key, 86400)
 
+        # Deep JS Navigation Discovery: pre-seed frontier for doc sites
+        # Uses headless browser to render the start page, detect the doc framework,
+        # expand all sidebar nav sections, and extract every navigation link.
+        await self._seed_frontier_with_js_discovery()
+
         # Create persistent browser session for this crawl
         from app.services.browser import CrawlSession, browser_pool
 
@@ -154,6 +166,65 @@ class WebCrawler:
             if proxy_obj:
                 proxy = self._proxy_manager.to_playwright(proxy_obj)
         await self._crawl_session.start(proxy=proxy, target_url=self.base_url)
+
+    async def _seed_frontier_with_js_discovery(self):
+        """Pre-seed the crawl frontier using deep JS navigation discovery.
+
+        This runs a headless browser against the start URL, detects if it's a
+        documentation site, expands all collapsible sidebar sections, and extracts
+        every navigation link. The discovered URLs are added to the frontier so
+        the BFS crawler has a rich set of pages to visit — even if individual page
+        scrapes (via HTTP) don't find sidebar links.
+        """
+        try:
+            from app.services.mapper import (
+                _deep_discover_via_stealth_engine,
+                _deep_discover_via_local_browser,
+            )
+
+            # Try stealth engine first (best anti-detection)
+            html, discovered_links, doc_framework = await _deep_discover_via_stealth_engine(
+                self.base_url
+            )
+            if not discovered_links:
+                # Fallback to local browser
+                html, discovered_links = await _deep_discover_via_local_browser(
+                    self.base_url
+                )
+
+            if not discovered_links:
+                logger.debug(f"No JS nav links discovered for {self.base_url}")
+                return
+
+            logger.info(
+                f"Deep JS discovery found {len(discovered_links)} URLs for {self.base_url}"
+                f"{f' (framework: {doc_framework})' if doc_framework else ''}"
+            )
+
+            # Filter and add to frontier
+            from app.services.dedup import normalize_url
+
+            added = 0
+            for link_url in discovered_links:
+                if added >= self.config.max_pages * 5:
+                    break
+                norm = normalize_url(link_url)
+                if await self.is_visited(norm):
+                    continue
+                if not self._should_crawl(link_url, depth=1):
+                    continue
+
+                url_score = score_url(link_url)
+                await self._redis.zadd(self._frontier_key, {link_url: max(0, url_score)})
+                await self._redis.hset(self._depth_key, link_url, 1)
+                added += 1
+
+            logger.info(
+                f"Pre-seeded crawl frontier with {added} URLs from JS discovery"
+            )
+        except Exception as e:
+            logger.warning(f"JS nav discovery during crawl init failed: {e}")
+            # Non-fatal — BFS will still work via normal link extraction
 
     async def get_next_url(self) -> tuple[str, int] | None:
         """Pop the highest-scored URL from the frontier. Returns (url, depth) or None."""
