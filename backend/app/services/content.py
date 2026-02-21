@@ -163,6 +163,68 @@ PRESERVE_SELECTORS = [
     ".product-detail",
 ]
 
+# ---------------------------------------------------------------------------
+# Documentation framework content selectors — used for precise extraction
+# on doc sites where generic <main>/<article> selectors may miss content
+# or include sidebar/nav boilerplate.
+# ---------------------------------------------------------------------------
+
+# Maps framework → (main_content_selectors, extra_boilerplate_to_remove)
+DOC_FRAMEWORK_EXTRACTION: dict[str, tuple[list[str], list[str]]] = {
+    "gitbook": (
+        [".gitbook-root main", ".page-inner .markdown-section", ".page-inner section", ".page-wrapper .page-inner"],
+        [".gitbook-root nav", ".gitbook-root aside", ".book-summary", ".book-header", ".page-footer"],
+    ),
+    "honkit": (
+        [".book-body .page-inner", ".book-body .markdown-section", ".body-inner .page-inner"],
+        [".book-summary", ".book-header", ".book-footer", ".page-footer", ".navigation"],
+    ),
+    "docusaurus": (
+        [".theme-doc-markdown", "article[class*='docItemCol']", ".docMainContainer article", "main article"],
+        [".theme-doc-sidebar-container", ".theme-doc-footer", ".pagination-nav", ".docSidebarContainer", "[class*='tableOfContents']"],
+    ),
+    "mkdocs": (
+        [".md-content article", ".md-content", "[data-md-component='content'] article"],
+        [".md-sidebar", ".md-header", ".md-footer", ".md-tabs", "[data-md-component='sidebar']"],
+    ),
+    "readthedocs": (
+        [".rst-content", ".wy-nav-content .section", ".document .section"],
+        [".wy-nav-side", ".wy-breadcrumbs", ".wy-nav-top", ".rst-footer-buttons", ".footer"],
+    ),
+    "sphinx": (
+        [".body", ".document .body", ".documentwrapper .body"],
+        [".sphinxsidebar", ".related", ".footer", ".clearer"],
+    ),
+    "vuepress": (
+        [".theme-default-content", ".page .content__default", ".page main"],
+        [".sidebar", ".navbar", ".page-edit", ".page-nav"],
+    ),
+    "vitepress": (
+        [".VPDoc .vp-doc", ".VPContent main", ".vp-doc"],
+        [".VPSidebar", ".VPNav", ".VPFooter", ".VPDocFooter", "[class*='aside']"],
+    ),
+    "nextra": (
+        ["article.nextra-content", "main article", ".nextra-body main article"],
+        [".nextra-sidebar-container", "nav.nextra-sidebar", ".nextra-toc"],
+    ),
+    "hugo": (
+        [".book-page article", "main article", ".prose", ".markdown"],
+        [".book-menu", ".book-footer", "#TableOfContents"],
+    ),
+    "mdbook": (
+        ["#content main", "#content .content", "main"],
+        ["#sidebar", ".sidebar-scrollbox", "#menu-bar"],
+    ),
+    "starlight": (
+        ["main article", "[data-pagefind-body]", "main [data-has-sidebar] article"],
+        ["aside nav", "header", ".pagination-links"],
+    ),
+    "mintlify": (
+        ["main article", "article.prose"],
+        ["nav", "aside", "footer"],
+    ),
+}
+
 
 class WebHarvestConverter(MarkdownConverter):
     """Custom markdown converter that preserves links, structure, and all content."""
@@ -370,8 +432,64 @@ def _remove_hidden_elements(soup: BeautifulSoup) -> None:
             pass
 
 
+def _detect_doc_framework(soup: BeautifulSoup) -> str | None:
+    """Detect documentation framework from parsed HTML."""
+    _detect_map = {
+        "gitbook": ['[class*="gitbook"]', ".gitbook-root", ".book-summary"],
+        "honkit": [".book.with-summary", ".book-summary", ".book-header .btn-group"],
+        "docusaurus": ["#__docusaurus", '[class*="docusaurus"]'],
+        "mkdocs": [".md-sidebar", ".md-content", '[data-md-component="sidebar"]'],
+        "readthedocs": [".wy-nav-side", ".rst-content"],
+        "sphinx": [".sphinxsidebar", ".sphinxsidebarwrapper"],
+        "vuepress": [".theme-default-content", ".theme-container"],
+        "vitepress": [".VPSidebar", ".VPDoc", "#VPContent"],
+        "nextra": ['[class*="nextra"]', ".nextra-sidebar-container"],
+        "hugo": [".book-menu", ".book-page"],
+        "mdbook": [".sidebar-scrollbox", "#sidebar"],
+        "starlight": ["[data-has-sidebar]"],
+        "mintlify": ['[class*="mintlify"]'],
+    }
+    for fw_name, selectors in _detect_map.items():
+        for sel in selectors:
+            try:
+                if soup.select_one(sel):
+                    return fw_name
+            except Exception:
+                pass
+    # Check meta generator tags
+    gen_tag = soup.select_one('meta[name="generator"]')
+    if gen_tag:
+        gen_content = (gen_tag.get("content") or "").lower()
+        for fw in ["sphinx", "mkdocs", "hugo", "docusaurus", "vuepress", "vitepress", "nextra", "honkit", "mdbook", "antora", "starlight", "astro", "mintlify"]:
+            if fw in gen_content:
+                return fw
+    return None
+
+
 def _find_main_container(soup: BeautifulSoup) -> Tag | None:
-    """Find the main content container using semantic HTML and heuristics."""
+    """Find the main content container using semantic HTML and heuristics.
+
+    For documentation sites, uses framework-specific selectors for precise extraction
+    and removes framework-specific boilerplate (sidebar, nav, footer).
+    """
+    # First: detect doc framework and use framework-specific extraction
+    fw = _detect_doc_framework(soup)
+    if fw and fw in DOC_FRAMEWORK_EXTRACTION:
+        content_selectors, boilerplate_selectors = DOC_FRAMEWORK_EXTRACTION[fw]
+
+        # Remove framework-specific boilerplate first
+        for sel in boilerplate_selectors:
+            for el in soup.select(sel):
+                el.decompose()
+
+        # Then find the content container
+        for sel in content_selectors:
+            el = soup.select_one(sel)
+            if el and len(el.get_text(strip=True)) > 100:
+                logger.debug(f"Doc framework '{fw}' content found via '{sel}'")
+                return el
+
+    # Standard semantic selectors
     for selector in [
         "main",
         "article",

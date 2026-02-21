@@ -30,6 +30,7 @@ class ScrapeRequest(BaseModel):
     screenshot: bool = False
     mobile: bool = False
     proxy: dict | None = None
+    discover_links: bool = Field(default=False, description="Deep JS navigation discovery — detect doc frameworks, expand sidebars, extract all nav links")
 
 
 class ScrapeResponse(BaseModel):
@@ -40,6 +41,8 @@ class ScrapeResponse(BaseModel):
     response_headers: dict[str, str] = {}
     success: bool = True
     error: str | None = None
+    discovered_links: list[str] = Field(default_factory=list, description="URLs discovered via deep JS nav extraction")
+    doc_framework: str | None = Field(default=None, description="Detected documentation framework")
 
 
 class HealthResponse(BaseModel):
@@ -408,6 +411,288 @@ async def _solve_cloudflare_challenge(page, timeout_ms: int = 20000) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Deep JS Navigation Discovery — detect doc frameworks, expand sidebars,
+# extract every navigation link from fully-rendered SPA documentation sites.
+#
+# Supports: GitBook (v1/v2/Honkit), Docusaurus, MkDocs (Material), ReadTheDocs,
+# Sphinx, VuePress, VitePress, Nextra, Hugo (Book/Docsy), mdBook, Wiki.js,
+# Confluence, Docsy, Antora, Starlight/Astro, Mintlify, and generic fallback.
+# ---------------------------------------------------------------------------
+
+# This JS runs inside the browser page. It detects the doc framework, expands
+# all collapsible nav sections, and extracts every navigation link.
+_DEEP_NAV_DISCOVERY_JS = """
+async () => {
+    const result = { framework: null, links: [], allLinks: [] };
+
+    // ── Framework signatures: selectors to detect + nav + expand ──────────
+    const frameworks = {
+        gitbook_modern: {
+            detect: ['[class*="gitbook"]', '.gitbook-root', '[data-testid="page.desktopTableOfContents"]'],
+            nav: ['.gitbook-root nav a[href]', '[data-testid="page.desktopTableOfContents"] a[href]', 'aside nav a[href]'],
+            expand: ['details:not([open]) > summary', '[data-testid="page.desktopTableOfContents"] button[aria-expanded="false"]'],
+        },
+        gitbook_legacy: {
+            detect: ['.book-summary', '.book', '#book-search-input', '.gitbook-link'],
+            nav: ['.book-summary a[href]', '.summary a[href]', '.book-summary li a[href]'],
+            expand: ['.articles .chapter-toggle', '.chapter > .articles-toggle', '.summary .articles li.chapter'],
+        },
+        honkit: {
+            detect: ['.book.with-summary', 'meta[name="generator"][content*="HonKit"]', '.book-header .btn-group'],
+            nav: ['.book-summary a[href]', '.summary a[href]', '.book-summary nav a[href]', '.summary li a[href]'],
+            expand: ['.chapter .articles-toggle', '.summary .chapter.active', 'details:not([open]) > summary'],
+        },
+        docusaurus: {
+            detect: ['#__docusaurus', '[class*="docusaurus"]', 'meta[name="generator"][content*="Docusaurus"]'],
+            nav: ['.menu__link[href]', '.theme-doc-sidebar-menu a[href]', 'nav.menu a[href]', '.sidebar-nav a[href]'],
+            expand: ['.menu__list-item--collapsed > .menu__link--sublist', 'button.menu__caret', '.menu__list-item-collapsible button[aria-expanded="false"]'],
+        },
+        mkdocs_material: {
+            detect: ['.md-sidebar', '.md-content', 'meta[name="generator"][content*="mkdocs"]', '[data-md-component="sidebar"]'],
+            nav: ['.md-nav a[href]', '.md-sidebar a[href]', '.md-tabs a[href]', '.md-nav__link[href]'],
+            expand: ['label.md-nav__link[for]', '.md-toggle:not(:checked) + label', 'input.md-toggle:not(:checked)'],
+        },
+        readthedocs: {
+            detect: ['.wy-nav-side', '.rst-content', '.wy-side-nav-search', '.wy-breadcrumbs'],
+            nav: ['.wy-menu a[href]', '.wy-nav-side a[href]', '.toctree-l1 a[href]', '.toctree-l2 a[href]', '.toctree-l3 a[href]', '.toctree-l4 a[href]'],
+            expand: ['.toctree-expand', 'li.toctree-l1:not(.current) > a'],
+        },
+        sphinx: {
+            detect: ['.sphinxsidebar', '.sphinx-tabs', 'meta[name="generator"][content*="Sphinx"]', '.sphinxsidebarwrapper'],
+            nav: ['.sphinxsidebarwrapper a[href]', '.sphinxsidebar a[href]', '.toctree-wrapper a[href]', '.wy-menu a[href]'],
+            expand: [],
+        },
+        vuepress: {
+            detect: ['.theme-default-content', '.theme-container', '#app .sidebar', 'meta[name="generator"][content*="VuePress"]'],
+            nav: ['.sidebar a[href]', '.sidebar-links a[href]', '.sidebar-group a[href]', '.sidebar-link[href]'],
+            expand: ['.sidebar-group:not(.is-open) > .sidebar-heading', '.sidebar-group > .sidebar-heading:not(.open)'],
+        },
+        vitepress: {
+            detect: ['.VPSidebar', '.VPDoc', '#VPContent', '.vp-doc'],
+            nav: ['.VPSidebar a[href]', '.VPSidebarItem a[href]', '.VPSidebarNav a[href]'],
+            expand: ['.VPSidebarItem.collapsed > .item > .indicator', '.VPSidebarItem.collapsed .caret'],
+        },
+        nextra: {
+            detect: ['[class*="nextra"]', '.nextra-sidebar-container', 'meta[name="generator"][content*="Nextra"]'],
+            nav: ['.nextra-sidebar-container a[href]', 'nav.nextra-sidebar a[href]', 'aside nav a[href]'],
+            expand: ['button[class*="nextra"][aria-expanded="false"]', 'details:not([open]) > summary'],
+        },
+        hugo_book: {
+            detect: ['meta[name="generator"][content*="Hugo"]', '.book-menu', '.book-page'],
+            nav: ['.book-menu a[href]', '.book-menu nav a[href]', '#TableOfContents a[href]', 'aside nav a[href]'],
+            expand: ['details:not([open]) > summary', '.book-menu input[type="checkbox"]:not(:checked)'],
+        },
+        docsy: {
+            detect: ['.td-sidebar', '.td-content', 'meta[name="generator"][content*="Hugo"]'],
+            nav: ['.td-sidebar a[href]', '.td-sidebar-nav a[href]', '#td-section-nav a[href]'],
+            expand: ['.td-sidebar .foldable:not(.open) > a', '.td-sidebar details:not([open]) > summary'],
+        },
+        mdbook: {
+            detect: ['#sidebar', '.sidebar-scrollbox', 'meta[name="generator"][content*="mdBook"]', '#menu-bar'],
+            nav: ['.sidebar-scrollbox a[href]', '#sidebar a[href]', '.chapter a[href]', 'ol.chapter a[href]'],
+            expand: ['.toggle > input:not(:checked) + label', 'details:not([open]) > summary'],
+        },
+        antora: {
+            detect: ['.nav-panel-explore', '.doc', 'meta[name="generator"][content*="Antora"]'],
+            nav: ['.nav-panel-explore a[href]', '.nav-menu a[href]', '.nav-list a[href]'],
+            expand: ['.nav-item:not(.is-active) > .nav-toggle', '.nav-item-toggle[aria-expanded="false"]'],
+        },
+        starlight: {
+            detect: ['[data-has-sidebar]', 'meta[name="generator"][content*="starlight"]', 'meta[name="generator"][content*="Astro"]'],
+            nav: ['nav[aria-label="Main"] a[href]', '[data-has-sidebar] nav a[href]', 'aside nav a[href]', '.sidebar-content a[href]'],
+            expand: ['details:not([open]) > summary', 'button[aria-expanded="false"]'],
+        },
+        mintlify: {
+            detect: ['[class*="mintlify"]', '#mintlify', 'meta[name="generator"][content*="Mintlify"]'],
+            nav: ['nav a[href]', '.sidebar a[href]', '[role="navigation"] a[href]'],
+            expand: ['button[aria-expanded="false"]', 'details:not([open]) > summary'],
+        },
+        wikijs: {
+            detect: ['.wiki-js', '#root.v-application', '[class*="wiki"]'],
+            nav: ['.v-navigation-drawer a[href]', '.sidebar a[href]', 'nav a[href]'],
+            expand: [],
+        },
+        confluence: {
+            detect: ['#com-atlassian-confluence', '.ia-fixed-sidebar', '[name="ajs-page-id"]'],
+            nav: ['.ia-fixed-sidebar a[href]', '.plugin_pagetree a[href]', '.acs-side-bar a[href]'],
+            expand: ['.plugin_pagetree_childtoggle_container .expand-control-icon', '.expand-control[aria-expanded="false"]'],
+        },
+    };
+
+    // ── Detect framework ──────────────────────────────────────────────────
+    for (const [name, fw] of Object.entries(frameworks)) {
+        for (const sel of fw.detect) {
+            try {
+                if (sel.startsWith('meta[')) {
+                    const el = document.querySelector(sel);
+                    if (el) { result.framework = name; break; }
+                } else if (document.querySelector(sel)) {
+                    result.framework = name;
+                    break;
+                }
+            } catch {}
+        }
+        if (result.framework) break;
+    }
+
+    // ── Wait for sidebar/nav to render (up to 5s) ────────────────────────
+    const fw = frameworks[result.framework];
+    if (fw) {
+        const navSels = fw.nav.join(', ');
+        for (let i = 0; i < 10; i++) {
+            const found = document.querySelectorAll(navSels);
+            if (found.length >= 3) break;
+            await new Promise(r => setTimeout(r, 500));
+        }
+    }
+
+    // ── Expand ALL collapsible sections (3 rounds) ───────────────────────
+    for (let round = 0; round < 4; round++) {
+        // Universal: open all <details> elements
+        document.querySelectorAll('details:not([open])').forEach(d => {
+            try { d.setAttribute('open', ''); d.open = true; } catch {}
+        });
+
+        // Universal: check unchecked toggles (MkDocs, mdBook pattern)
+        document.querySelectorAll('input[type="checkbox"].md-toggle:not(:checked), .toggle > input:not(:checked)').forEach(cb => {
+            try { cb.checked = true; cb.dispatchEvent(new Event('change', {bubbles: true})); } catch {}
+        });
+
+        // Framework-specific expand actions
+        if (fw) {
+            for (const sel of fw.expand) {
+                document.querySelectorAll(sel).forEach(el => {
+                    try {
+                        el.click();
+                    } catch {}
+                    try {
+                        // Also try setting aria-expanded for React components
+                        if (el.getAttribute('aria-expanded') === 'false') {
+                            el.click();
+                        }
+                    } catch {}
+                });
+            }
+        }
+
+        // Wait for DOM to update after expansion
+        await new Promise(r => setTimeout(r, 600));
+    }
+
+    // ── Extract navigation links ─────────────────────────────────────────
+    const linkSet = new Set();
+    const origin = window.location.origin;
+
+    function addLinks(selector) {
+        try {
+            document.querySelectorAll(selector).forEach(a => {
+                const href = a.href || a.getAttribute('href');
+                if (!href || href === '#' || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+                try {
+                    const url = new URL(href, origin);
+                    url.hash = '';
+                    // Only same-origin or relative links
+                    if (url.origin === origin) {
+                        linkSet.add(url.href);
+                    }
+                } catch {}
+            });
+        } catch {}
+    }
+
+    // Framework-specific nav selectors
+    if (fw) {
+        for (const sel of fw.nav) {
+            addLinks(sel);
+        }
+    }
+
+    // Generic nav selectors (always run as supplement)
+    const genericNavSelectors = [
+        'nav a[href]',
+        '[role="navigation"] a[href]',
+        '.sidebar a[href]',
+        'aside a[href]',
+        '.toc a[href]',
+        '#toc a[href]',
+        '.menu a[href]',
+        '.navigation a[href]',
+        '.nav-panel a[href]',
+        '.left-sidebar a[href]',
+        '.docs-sidebar a[href]',
+    ];
+    for (const sel of genericNavSelectors) {
+        addLinks(sel);
+    }
+
+    // If still very few links, grab ALL page anchors as last resort
+    if (linkSet.size < 10) {
+        document.querySelectorAll('a[href]').forEach(a => {
+            const href = a.href || a.getAttribute('href');
+            if (!href || href === '#' || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+            try {
+                const url = new URL(href, origin);
+                url.hash = '';
+                if (url.origin === origin) {
+                    linkSet.add(url.href);
+                }
+            } catch {}
+        });
+    }
+
+    result.links = Array.from(linkSet);
+
+    // Also collect ALL links (including external) for comprehensive mapping
+    const allLinkSet = new Set();
+    document.querySelectorAll('a[href]').forEach(a => {
+        const href = a.href || a.getAttribute('href');
+        if (!href || href === '#' || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+        try {
+            const url = new URL(href, origin);
+            url.hash = '';
+            allLinkSet.add(url.href);
+        } catch {}
+    });
+    result.allLinks = Array.from(allLinkSet);
+
+    return result;
+}
+"""
+
+
+async def _deep_discover_nav_links(page) -> tuple[str | None, list[str]]:
+    """Run deep JS navigation discovery on a loaded page.
+
+    Detects the documentation framework, expands all collapsible sidebar sections,
+    and extracts every navigation link from the fully-rendered DOM.
+
+    Returns (framework_name, list_of_discovered_urls).
+    """
+    try:
+        result = await page.evaluate(_DEEP_NAV_DISCOVERY_JS)
+        framework = result.get("framework")
+        links = result.get("links", [])
+        logger.info(
+            "Deep nav discovery: framework=%s, nav_links=%d, all_links=%d",
+            framework or "none",
+            len(links),
+            len(result.get("allLinks", [])),
+        )
+        # If framework-specific nav found very few, supplement with allLinks
+        if len(links) < 10:
+            all_links = result.get("allLinks", [])
+            link_set = set(links)
+            for link in all_links:
+                link_set.add(link)
+            links = list(link_set)
+            logger.info("Supplemented with allLinks, total=%d", len(links))
+        return framework, links
+    except Exception as e:
+        logger.warning("Deep nav discovery JS failed: %s", e)
+        return None, []
+
+
+# ---------------------------------------------------------------------------
 # Core scrape logic
 # ---------------------------------------------------------------------------
 
@@ -467,6 +752,12 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
         except Exception:
             pass
 
+        # Deep JS navigation discovery (doc sites: expand sidebar, extract all links)
+        discovered_links: list[str] = []
+        doc_framework: str | None = None
+        if req.discover_links:
+            doc_framework, discovered_links = await _deep_discover_nav_links(page)
+
         # Execute actions
         action_screenshots = []
         if req.actions:
@@ -488,6 +779,8 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
             action_screenshots=action_screenshots,
             response_headers=resp_headers,
             success=True,
+            discovered_links=discovered_links,
+            doc_framework=doc_framework,
         )
     except Exception as e:
         logger.error("Chromium scrape failed for %s: %s", req.url, e)
@@ -554,6 +847,12 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
         except Exception:
             pass
 
+        # Deep JS navigation discovery (doc sites: expand sidebar, extract all links)
+        discovered_links: list[str] = []
+        doc_framework: str | None = None
+        if req.discover_links:
+            doc_framework, discovered_links = await _deep_discover_nav_links(page)
+
         # Execute actions
         action_screenshots = []
         if req.actions:
@@ -575,6 +874,8 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
             action_screenshots=action_screenshots,
             response_headers=resp_headers,
             success=True,
+            discovered_links=discovered_links,
+            doc_framework=doc_framework,
         )
     except Exception as e:
         logger.error("Firefox scrape failed for %s: %s", req.url, e)

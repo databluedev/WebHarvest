@@ -155,6 +155,179 @@ async def _fetch_with_stealth_engine(url: str) -> str:
     return ""
 
 
+async def _deep_discover_via_stealth_engine(url: str) -> tuple[str, list[str], str | None]:
+    """Deep JS navigation discovery via stealth-engine.
+
+    Returns (html, discovered_links, doc_framework).
+    This is the god-tier strategy for documentation sites — it:
+    1. Renders the page with full JS execution
+    2. Auto-detects the doc framework (GitBook, Docusaurus, MkDocs, etc.)
+    3. Waits for the sidebar/navigation to fully render
+    4. Expands ALL collapsible nav sections (clicks toggles, opens details)
+    5. Extracts every navigation link from the fully-rendered DOM
+    """
+    from app.config import settings
+
+    if not settings.STEALTH_ENGINE_URL:
+        return "", [], None
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{settings.STEALTH_ENGINE_URL}/scrape",
+                json={
+                    "url": url,
+                    "timeout": 45000,
+                    "discover_links": True,
+                },
+            )
+            data = resp.json()
+            if data.get("success"):
+                html = data.get("html", "")
+                links = data.get("discovered_links", [])
+                framework = data.get("doc_framework")
+                logger.info(
+                    f"Deep discovery for {url}: framework={framework}, "
+                    f"links={len(links)}, html={len(html)} chars"
+                )
+                return html, links, framework
+    except Exception as e:
+        logger.warning(f"Deep discovery via stealth engine failed for {url}: {e}")
+    return "", [], None
+
+
+async def _deep_discover_via_local_browser(url: str) -> tuple[str, list[str]]:
+    """Deep JS navigation discovery via local browser (fallback when stealth engine unavailable).
+
+    Uses the same sidebar expansion logic but via Playwright's evaluate().
+    """
+    try:
+        from app.services.browser import browser_pool
+
+        async with browser_pool.get_page(target_url=url) as page:
+            referrer = "https://www.google.com/"
+            await page.goto(
+                url, wait_until="domcontentloaded", timeout=45000, referer=referrer
+            )
+            try:
+                await page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                pass
+            await page.wait_for_timeout(random.randint(2000, 3500))
+
+            # Scroll to trigger lazy-loaded nav elements
+            for _ in range(3):
+                await page.mouse.wheel(0, 3000)
+                await page.wait_for_timeout(800)
+            await page.mouse.wheel(0, -10000)
+            await page.wait_for_timeout(500)
+
+            # Run the deep nav discovery JS (same as stealth engine)
+            _DEEP_NAV_JS = """
+            async () => {
+                const result = { framework: null, links: [] };
+                const frameworks = {
+                    gitbook_modern: {
+                        detect: ['[class*="gitbook"]', '.gitbook-root'],
+                        nav: ['.gitbook-root nav a[href]', 'aside nav a[href]'],
+                        expand: ['details:not([open]) > summary'],
+                    },
+                    gitbook_legacy: {
+                        detect: ['.book-summary', '.book', '#book-search-input'],
+                        nav: ['.book-summary a[href]', '.summary a[href]'],
+                        expand: ['.articles .chapter-toggle'],
+                    },
+                    honkit: {
+                        detect: ['.book.with-summary', 'meta[name="generator"][content*="HonKit"]'],
+                        nav: ['.book-summary a[href]', '.summary a[href]', '.summary li a[href]'],
+                        expand: ['details:not([open]) > summary'],
+                    },
+                    docusaurus: {
+                        detect: ['#__docusaurus', '[class*="docusaurus"]'],
+                        nav: ['.menu__link[href]', '.theme-doc-sidebar-menu a[href]'],
+                        expand: ['.menu__list-item--collapsed > .menu__link--sublist'],
+                    },
+                    mkdocs_material: {
+                        detect: ['.md-sidebar', 'meta[name="generator"][content*="mkdocs"]'],
+                        nav: ['.md-nav a[href]', '.md-sidebar a[href]'],
+                        expand: ['label.md-nav__link[for]'],
+                    },
+                    readthedocs: {
+                        detect: ['.wy-nav-side', '.rst-content'],
+                        nav: ['.wy-menu a[href]', '.toctree-l1 a[href]', '.toctree-l2 a[href]'],
+                        expand: ['.toctree-expand'],
+                    },
+                    sphinx: {
+                        detect: ['.sphinxsidebar', 'meta[name="generator"][content*="Sphinx"]'],
+                        nav: ['.sphinxsidebarwrapper a[href]', '.toctree-wrapper a[href]'],
+                        expand: [],
+                    },
+                    mdbook: {
+                        detect: ['#sidebar', '.sidebar-scrollbox', 'meta[name="generator"][content*="mdBook"]'],
+                        nav: ['.sidebar-scrollbox a[href]', '#sidebar a[href]'],
+                        expand: ['details:not([open]) > summary'],
+                    },
+                };
+                for (const [name, fw] of Object.entries(frameworks)) {
+                    for (const sel of fw.detect) {
+                        try { if (document.querySelector(sel)) { result.framework = name; break; } } catch {}
+                    }
+                    if (result.framework) break;
+                }
+                const fw = frameworks[result.framework];
+                if (fw) {
+                    const navSels = fw.nav.join(', ');
+                    for (let i = 0; i < 10; i++) {
+                        if (document.querySelectorAll(navSels).length >= 3) break;
+                        await new Promise(r => setTimeout(r, 500));
+                    }
+                }
+                for (let round = 0; round < 3; round++) {
+                    document.querySelectorAll('details:not([open])').forEach(d => {
+                        try { d.setAttribute('open', ''); d.open = true; } catch {}
+                    });
+                    if (fw) {
+                        for (const sel of fw.expand) {
+                            document.querySelectorAll(sel).forEach(el => { try { el.click(); } catch {} });
+                        }
+                    }
+                    await new Promise(r => setTimeout(r, 500));
+                }
+                const linkSet = new Set();
+                const origin = window.location.origin;
+                function addLinks(sel) {
+                    try {
+                        document.querySelectorAll(sel).forEach(a => {
+                            const href = a.href || a.getAttribute('href');
+                            if (!href || href === '#' || href.startsWith('javascript:') || href.startsWith('mailto:')) return;
+                            try { const u = new URL(href, origin); u.hash = ''; if (u.origin === origin) linkSet.add(u.href); } catch {}
+                        });
+                    } catch {}
+                }
+                if (fw) { for (const sel of fw.nav) addLinks(sel); }
+                ['nav a[href]', '.sidebar a[href]', 'aside a[href]', '[role="navigation"] a[href]'].forEach(addLinks);
+                if (linkSet.size < 10) {
+                    document.querySelectorAll('a[href]').forEach(a => {
+                        const href = a.href; if (!href || href === '#' || href.startsWith('javascript:') || href.startsWith('mailto:')) return;
+                        try { const u = new URL(href, origin); u.hash = ''; if (u.origin === origin) linkSet.add(u.href); } catch {}
+                    });
+                }
+                result.links = Array.from(linkSet);
+                return result;
+            }
+            """
+            result = await page.evaluate(_DEEP_NAV_JS)
+            links = result.get("links", [])
+            html = await page.content()
+            logger.info(
+                f"Local browser deep discovery for {url}: "
+                f"framework={result.get('framework')}, links={len(links)}"
+            )
+            return html, links
+    except Exception as e:
+        logger.warning(f"Local browser deep discovery failed for {url}: {e}")
+        return "", []
+
+
 async def map_website(request: MapRequest) -> list[LinkResult]:
     """
     Discover all URLs on a website using multiple strategies:
@@ -178,7 +351,56 @@ async def map_website(request: MapRequest) -> list[LinkResult]:
         if link.url not in all_links:
             all_links[link.url] = link
 
-    # Strategy 3: If we got very few links, try browser fallback (with scrolling + stealth)
+    # Strategy 3: Deep JS Navigation Discovery — the god-tier strategy for doc sites.
+    # Renders the page with a real browser, detects the doc framework (GitBook,
+    # Docusaurus, MkDocs, ReadTheDocs, etc.), waits for sidebar to render,
+    # expands all collapsible nav trees, and extracts every navigation link.
+    if len(all_links) < request.limit:
+        logger.info(f"Running deep JS nav discovery for {url} (have {len(all_links)} links)")
+        parsed_base = urlparse(url)
+        base_domain = parsed_base.netloc
+        if base_domain.startswith("www."):
+            base_domain = base_domain[4:]
+
+        # Try stealth engine first (best anti-detection + full discovery JS)
+        html, discovered_links, doc_framework = await _deep_discover_via_stealth_engine(url)
+        if not discovered_links:
+            # Fallback to local browser
+            html, discovered_links = await _deep_discover_via_local_browser(url)
+
+        if discovered_links:
+            logger.info(
+                f"Deep discovery found {len(discovered_links)} links"
+                f"{f' (framework: {doc_framework})' if doc_framework else ''}"
+            )
+            for link_url in discovered_links:
+                if link_url not in all_links:
+                    parsed = urlparse(link_url)
+                    link_domain = parsed.netloc
+                    if link_domain.startswith("www."):
+                        link_domain = link_domain[4:]
+                    # Filter by domain
+                    if request.include_subdomains:
+                        base_parts = base_domain.split(".")
+                        parsed_parts = link_domain.split(".")
+                        if len(base_parts) >= 2 and len(parsed_parts) >= 2:
+                            base_root = ".".join(base_parts[-2:])
+                            parsed_root = ".".join(parsed_parts[-2:])
+                            if base_root != parsed_root:
+                                continue
+                    elif link_domain != base_domain:
+                        continue
+                    # Extract title from HTML for this URL if we have the HTML
+                    all_links[link_url] = LinkResult(url=link_url, title=None, description=None)
+
+        # Also extract standard links from the deep-discovery HTML
+        if html and len(all_links) < request.limit:
+            html_links = _extract_links_from_html(html, url, base_domain, request.include_subdomains)
+            for link in html_links:
+                if link.url not in all_links:
+                    all_links[link.url] = link
+
+    # Strategy 4: If we still got very few links, try basic browser fallback
     if len(all_links) < 5:
         logger.info(f"Few links found for {url}, trying browser fallback")
         browser_links = await _crawl_homepage_browser(url, request.include_subdomains)
@@ -186,7 +408,7 @@ async def map_website(request: MapRequest) -> list[LinkResult]:
             if link.url not in all_links:
                 all_links[link.url] = link
 
-    # Strategy 4: Deep BFS crawl if we still have room under the limit
+    # Strategy 5: Deep BFS crawl if we still have room under the limit
     if len(all_links) < request.limit:
         parsed_base = urlparse(url)
         base_domain = parsed_base.netloc
@@ -207,7 +429,7 @@ async def map_website(request: MapRequest) -> list[LinkResult]:
                 if link.url not in all_links:
                     all_links[link.url] = link
 
-    # Strategy 5: Filter by search term
+    # Strategy 6: Filter by search term
     if request.search:
         search_lower = request.search.lower()
         filtered = {}

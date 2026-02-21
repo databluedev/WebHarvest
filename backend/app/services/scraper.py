@@ -497,6 +497,82 @@ _GOOGLE_REFERRERS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Documentation framework detection — wait for content, not just networkidle
+# ---------------------------------------------------------------------------
+
+# Map of doc framework → CSS selectors that indicate content has loaded
+_DOC_FRAMEWORK_CONTENT_SELECTORS: dict[str, list[str]] = {
+    "gitbook": [".gitbook-root main", ".book-body .page-inner", ".page-wrapper .page-inner"],
+    "honkit": [".book-body .page-inner", ".book-body .markdown-section", ".book .body-inner"],
+    "docusaurus": [".theme-doc-markdown", "#__docusaurus main article", ".docMainContainer article"],
+    "mkdocs": [".md-content article", ".md-content", "[data-md-component='content'] article"],
+    "readthedocs": [".rst-content", ".wy-nav-content .section", ".document .section"],
+    "sphinx": [".body", ".sphinxsidebar + .document", ".documentwrapper .body"],
+    "vuepress": [".theme-default-content", ".page .content__default", ".page .theme-container main"],
+    "vitepress": [".VPDoc .vp-doc", ".VPContent main", ".vp-doc"],
+    "nextra": ["article.nextra-content", "main article", ".nextra-body main"],
+    "hugo": [".book-page article", "main article", ".prose"],
+    "mdbook": ["#content main", "#content .content", "main"],
+    "starlight": ["main [data-has-sidebar] article", "main article", "[data-pagefind-body]"],
+    "mintlify": ["main article", "article.prose"],
+}
+
+# Detect selectors: framework name → list of selectors to check in the HTML
+_DOC_FRAMEWORK_DETECT_SELECTORS: dict[str, list[str]] = {
+    "gitbook": ['[class*="gitbook"]', ".gitbook-root", ".book-summary"],
+    "honkit": [".book.with-summary", ".book-summary", ".book-header"],
+    "docusaurus": ["#__docusaurus", '[class*="docusaurus"]'],
+    "mkdocs": [".md-sidebar", ".md-content", '[data-md-component="sidebar"]'],
+    "readthedocs": [".wy-nav-side", ".rst-content"],
+    "sphinx": [".sphinxsidebar", ".sphinxsidebarwrapper"],
+    "vuepress": [".theme-default-content", ".theme-container"],
+    "vitepress": [".VPSidebar", ".VPDoc", "#VPContent"],
+    "nextra": ['[class*="nextra"]', ".nextra-sidebar-container"],
+    "hugo": [".book-menu", ".book-page"],
+    "mdbook": [".sidebar-scrollbox", "#sidebar"],
+    "starlight": ["[data-has-sidebar]"],
+    "mintlify": ['[class*="mintlify"]'],
+}
+
+
+async def _wait_for_doc_content(page, timeout_ms: int = 5000) -> str | None:
+    """Detect doc framework and wait for its content selector to appear.
+
+    Returns the detected framework name, or None if not a doc site.
+    This replaces blind networkidle waiting with targeted content readiness detection.
+    """
+    # Quick detection: check which framework selectors exist
+    detected = None
+    for fw_name, selectors in _DOC_FRAMEWORK_DETECT_SELECTORS.items():
+        for sel in selectors:
+            try:
+                el = await page.query_selector(sel)
+                if el:
+                    detected = fw_name
+                    break
+            except Exception:
+                pass
+        if detected:
+            break
+
+    if not detected:
+        return None
+
+    # Wait for the framework's content selectors to appear
+    content_selectors = _DOC_FRAMEWORK_CONTENT_SELECTORS.get(detected, [])
+    for sel in content_selectors:
+        try:
+            await page.wait_for_selector(sel, timeout=timeout_ms)
+            logger.debug(f"Doc framework '{detected}' content ready via '{sel}'")
+            return detected
+        except Exception:
+            continue
+
+    logger.debug(f"Doc framework '{detected}' detected but content selectors timed out")
+    return detected
+
+
 def _is_hard_site(url: str) -> bool:
     try:
         domain = urlparse(url).netloc.lower()
@@ -2285,6 +2361,12 @@ async def _fetch_with_browser_stealth(
             await page.wait_for_load_state("networkidle", timeout=_idle_timeout)
         except Exception:
             pass
+
+        # Doc framework detection: if this is a doc site (GitBook, Docusaurus, etc.),
+        # wait for the content-specific selectors instead of blind timers
+        _doc_fw = await _wait_for_doc_content(page, timeout_ms=5000)
+        if _doc_fw:
+            logger.debug(f"Doc framework '{_doc_fw}' detected for {url}, content ready")
 
         if hard_site and stealth:
             # Human-like interaction after page load
