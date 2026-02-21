@@ -179,8 +179,11 @@ class WebCrawler:
 
     async def add_to_frontier(self, urls: list[str], depth: int):
         """Add discovered URLs to the priority frontier after filtering."""
+        from app.services.dedup import normalize_url
+
         for url in urls:
-            if await self.is_visited(url):
+            norm = normalize_url(url)
+            if await self.is_visited(norm):
                 continue
             if not self._should_crawl(url, depth):
                 continue
@@ -191,8 +194,7 @@ class WebCrawler:
 
             visited_count = await self.get_visited_count()
             frontier_size = await self.get_frontier_size()
-            if visited_count + frontier_size >= self.config.max_pages * 3:
-                # Allow 3x headroom so we can be selective
+            if visited_count + frontier_size >= self.config.max_pages * 5:
                 break
 
             url_score = score_url(url)

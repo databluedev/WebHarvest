@@ -657,9 +657,10 @@ function PlaygroundContent() {
           // Always send scrape_options with formats so the worker knows what to store
           params.scrape_options = { formats, only_main_content: onlyMainContent, wait_for: waitFor || undefined };
           if (mobile) { params.scrape_options.mobile = true; if (mobileDevice) params.scrape_options.mobile_device = mobileDevice; }
+          // Always send include/exclude paths (visible outside Advanced panel)
+          if (includePaths.trim()) params.include_paths = includePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
+          if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
           if (showAdvanced) {
-            if (includePaths.trim()) params.include_paths = includePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
-            if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
             if (webhookUrl.trim()) params.webhook_url = webhookUrl.trim();
             if (webhookSecret.trim()) params.webhook_secret = webhookSecret.trim();
             if (useProxy) params.use_proxy = true;

@@ -184,9 +184,11 @@ def process_crawl(self, job_id: str, config: dict):
                 while pages_crawled < request.max_pages and not cancelled:
                     batch_items = []
                     remaining = request.max_pages - pages_crawled
-                    batch_size = min(concurrency * 2, remaining)
+                    # Fetch extra to compensate for pages that may be
+                    # skipped (duplicates, empty, failures).
+                    batch_size = min(concurrency * 2, remaining + concurrency)
 
-                    for _ in range(batch_size):
+                    while len(batch_items) < batch_size:
                         next_item = await crawler.get_next_url()
                         if not next_item:
                             break
