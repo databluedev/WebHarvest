@@ -617,6 +617,20 @@ def html_to_markdown_from_tag(tag: Tag | BeautifulSoup) -> str:
     return _postprocess_markdown(markdown)
 
 
+def _resolve_relative_urls(soup: BeautifulSoup, base_url: str) -> None:
+    """Resolve all relative href/src attributes to absolute URLs in-place."""
+    if not base_url:
+        return
+    for tag in soup.find_all(href=True):
+        href = tag["href"].strip()
+        if href and not href.startswith(("#", "javascript:", "mailto:", "tel:", "data:")):
+            tag["href"] = urljoin(base_url, href)
+    for tag in soup.find_all(src=True):
+        src = tag["src"].strip()
+        if src and not src.startswith(("data:", "javascript:")):
+            tag["src"] = urljoin(base_url, src)
+
+
 def _clean_soup_light(html: str) -> BeautifulSoup:
     """Light cleaning: strip only truly junk tags (scripts, styles, hidden).
 
@@ -669,6 +683,9 @@ def extract_and_convert(
     else:
         # Firecrawl-style: light clean (strip scripts/styles/hidden) but keep everything
         tag = _clean_soup_light(raw_html)
+
+    # Resolve relative URLs to absolute before markdown conversion
+    _resolve_relative_urls(tag, url)
 
     if include_tags or exclude_tags:
         # Tag filters need to work on the soup — apply in-place

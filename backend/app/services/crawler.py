@@ -1,6 +1,5 @@
 import fnmatch
 import logging
-import re
 from urllib.parse import urlparse
 
 import httpx
@@ -15,101 +14,12 @@ from app.services.scraper import scrape_url, scrape_url_fetch_only
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# URL content-richness scorer (completely generic, no site-specific patterns)
-# ---------------------------------------------------------------------------
-
-# Regex patterns for structural analysis
-_SLUG_RE = re.compile(r"[a-z0-9]+-[a-z0-9]+-[a-z0-9]+")  # 3+ hyphenated words
-_ALNUM_ID_RE = re.compile(r"^[A-Z0-9]{6,}$")              # product/article ID
-_NUMERIC_ID_RE = re.compile(r"^\d{4,}$")                   # numeric ID
-_DATE_RE = re.compile(r"\d{4}[/-]\d{2}")                   # date in path
-
-
-def score_url(url: str) -> float:
-    """Score a URL by predicted content richness.  Higher = more likely useful.
-
-    Uses only structural URL signals — works on any website:
-    - Path depth (content lives 2-4 levels deep)
-    - Slug detection (hyphenated-word segments = articles/products)
-    - ID detection (alphanumeric codes = specific items)
-    - Date detection (blog/news articles)
-    - Query complexity penalty (tracking params = navigation junk)
-    - Path segment length (longer segments = more descriptive = more content)
-    """
-    parsed = urlparse(url)
-    path = parsed.path.strip("/")
-    segments = [s for s in path.split("/") if s]
-    score = 5.0  # base
-
-    depth = len(segments)
-    if depth == 0:
-        score += 3  # homepage — usually content-rich
-    elif depth == 1:
-        # Single segment: could be a category or a page.
-        # Short single segments are usually nav ("/b", "/s", "/gp").
-        if len(segments[0]) > 15:
-            score += 1  # long slug = likely content
-        else:
-            score -= 2  # short = likely nav/category
-    elif 2 <= depth <= 4:
-        score += 3  # sweet spot for content pages
-    elif depth > 6:
-        score -= 1  # excessively deep, often pagination/filters
-
-    # Slug detection: hyphenated multi-word segments signal content slugs
-    # e.g. "cetaphil-hydrating-sulphate-free-niacinamide"
-    has_slug = False
-    for seg in segments:
-        if _SLUG_RE.search(seg.lower()) and len(seg) > 15:
-            score += 5
-            has_slug = True
-            break
-
-    # ID detection: alphanumeric codes signal specific items
-    for seg in segments:
-        if _ALNUM_ID_RE.match(seg):
-            score += 4
-            break
-        if _NUMERIC_ID_RE.match(seg):
-            score += 3
-            break
-
-    # Date in path: articles/blog posts
-    if _DATE_RE.search(path):
-        score += 3
-
-    # Average segment length — longer descriptive paths = richer content
-    if segments:
-        avg_len = sum(len(s) for s in segments) / len(segments)
-        if avg_len > 20:
-            score += 2
-        elif avg_len < 4:
-            score -= 2  # tiny segments like "/b/", "/s/", "/gp/"
-
-    # Query parameter penalty — lots of params = tracking/filter URLs
-    query = parsed.query
-    if query:
-        param_count = query.count("&") + 1
-        if param_count > 8:
-            score -= 4
-        elif param_count > 4:
-            score -= 2
-
-    # Pages without slugs or IDs at depth > 1 are likely nav/browse pages
-    if depth >= 1 and not has_slug:
-        all_short = all(len(s) < 10 for s in segments)
-        if all_short:
-            score -= 3
-
-    return max(0.0, score)
-
-
 class WebCrawler:
-    """BFS web crawler with Redis-backed priority frontier and visited set.
+    """BFS web crawler with Redis-backed FIFO frontier and visited set.
 
-    The frontier uses a Redis sorted set (ZSET) scored by predicted content
-    richness so the crawler fetches the most promising URLs first.
+    The frontier uses a Redis LIST (RPUSH/LPOP) for plain BFS ordering,
+    with a companion SET for O(1) duplicate prevention.  Sitemap URLs
+    are pre-seeded when available (Firecrawl-style).
     """
 
     def __init__(self, job_id: str, config: CrawlRequest, proxy_manager=None):
@@ -121,22 +31,15 @@ class WebCrawler:
         self._redis: aioredis.Redis | None = None
         self._proxy_manager = proxy_manager
         self._crawl_session = None
-        self.detected_doc_framework: str | None = None  # Set by JS discovery
 
         # Redis keys for this crawl
         self._frontier_key = f"crawl:{job_id}:frontier"
         self._visited_key = f"crawl:{job_id}:visited"
         self._depth_key = f"crawl:{job_id}:depth"
+        self._queued_key = f"crawl:{job_id}:queued"
 
     async def initialize(self):
-        """Set up Redis connection, initial frontier, and persistent browser session.
-
-        For documentation sites (GitBook, Docusaurus, MkDocs, etc.), the frontier
-        is pre-seeded with URLs discovered via deep JS navigation discovery. This
-        is critical because doc sites render their navigation via JavaScript — a
-        normal HTTP fetch of the start page yields almost no internal links, so BFS
-        stalls after 1-2 pages.
-        """
+        """Set up Redis connection, seed frontier (sitemap + start URL), and start browser."""
         # Create a fresh Redis connection for this crawl task
         self._redis = aioredis.from_url(
             settings.REDIS_URL,
@@ -144,18 +47,20 @@ class WebCrawler:
             decode_responses=True,
         )
 
-        # Seed the frontier with the start URL (highest priority)
-        start_score = score_url(self.base_url) + 10  # bonus for seed URL
-        await self._redis.zadd(self._frontier_key, {self.base_url: start_score})
+        # Seed the frontier with the start URL (FIFO — first in, first out)
+        from app.services.dedup import normalize_url
+
+        norm = normalize_url(self.base_url)
+        await self._redis.rpush(self._frontier_key, self.base_url)
+        await self._redis.sadd(self._queued_key, norm)
         await self._redis.hset(self._depth_key, self.base_url, 0)
+
         # Set TTL on all keys (24 hours)
-        for key in [self._frontier_key, self._visited_key, self._depth_key]:
+        for key in [self._frontier_key, self._visited_key, self._depth_key, self._queued_key]:
             await self._redis.expire(key, 86400)
 
-        # Deep JS Navigation Discovery: pre-seed frontier for doc sites
-        # Uses headless browser to render the start page, detect the doc framework,
-        # expand all sidebar nav sections, and extract every navigation link.
-        await self._seed_frontier_with_js_discovery()
+        # Pre-seed frontier from sitemaps (Firecrawl-style)
+        await self._seed_from_sitemaps()
 
         # Create persistent browser session for this crawl
         from app.services.browser import CrawlSession, browser_pool
@@ -168,76 +73,52 @@ class WebCrawler:
                 proxy = self._proxy_manager.to_playwright(proxy_obj)
         await self._crawl_session.start(proxy=proxy, target_url=self.base_url)
 
-    async def _seed_frontier_with_js_discovery(self):
-        """Pre-seed the crawl frontier using deep JS navigation discovery.
+    async def _seed_from_sitemaps(self):
+        """Pre-seed the crawl frontier from sitemap.xml (Firecrawl-style).
 
-        This runs a headless browser against the start URL, detects if it's a
-        documentation site, expands all collapsible sidebar sections, and extracts
-        every navigation link. The discovered URLs are added to the frontier so
-        the BFS crawler has a rich set of pages to visit — even if individual page
-        scrapes (via HTTP) don't find sidebar links.
+        Fetches sitemap URLs and adds them to the FIFO frontier so BFS has
+        a rich initial set of pages to visit.  Falls back gracefully if no
+        sitemap is found — BFS still works via normal link extraction.
         """
         try:
-            from app.services.mapper import (
-                _deep_discover_via_stealth_engine,
-                _deep_discover_via_local_browser,
-            )
-
-            # Try stealth engine first (best anti-detection)
-            html, discovered_links, doc_framework = await _deep_discover_via_stealth_engine(
-                self.base_url
-            )
-            if not discovered_links:
-                # Fallback to local browser
-                html, discovered_links = await _deep_discover_via_local_browser(
-                    self.base_url
-                )
-
-            if not discovered_links:
-                logger.debug(f"No JS nav links discovered for {self.base_url}")
-                return
-
-            # Store detected framework so the crawl worker can pin browser strategy
-            if doc_framework:
-                self.detected_doc_framework = doc_framework
-
-            logger.info(
-                f"Deep JS discovery found {len(discovered_links)} URLs for {self.base_url}"
-                f"{f' (framework: {doc_framework})' if doc_framework else ''}"
-            )
-
-            # Filter and add to frontier
+            from app.services.mapper import _parse_sitemaps
             from app.services.dedup import normalize_url
 
+            sitemap_links = await _parse_sitemaps(self.base_url)
+            if not sitemap_links:
+                logger.debug(f"No sitemap URLs found for {self.base_url}")
+                return
+
+            logger.info(f"Sitemap discovery found {len(sitemap_links)} URLs for {self.base_url}")
+
             added = 0
-            for link_url in discovered_links:
+            for link in sitemap_links:
                 if added >= self.config.max_pages * 5:
                     break
+                link_url = link.url
                 norm = normalize_url(link_url)
-                if await self.is_visited(norm):
+
+                # Skip if already queued
+                if await self._redis.sismember(self._queued_key, norm):
                     continue
                 if not self._should_crawl(link_url, depth=1):
                     continue
 
-                url_score = score_url(link_url)
-                await self._redis.zadd(self._frontier_key, {link_url: max(0, url_score)})
+                await self._redis.rpush(self._frontier_key, link_url)
+                await self._redis.sadd(self._queued_key, norm)
                 await self._redis.hset(self._depth_key, link_url, 1)
                 added += 1
 
-            logger.info(
-                f"Pre-seeded crawl frontier with {added} URLs from JS discovery"
-            )
+            logger.info(f"Pre-seeded crawl frontier with {added} URLs from sitemaps")
         except Exception as e:
-            logger.warning(f"JS nav discovery during crawl init failed: {e}")
+            logger.warning(f"Sitemap discovery during crawl init failed: {e}")
             # Non-fatal — BFS will still work via normal link extraction
 
     async def get_next_url(self) -> tuple[str, int] | None:
-        """Pop the highest-scored URL from the frontier. Returns (url, depth) or None."""
-        # ZPOPMAX returns [(member, score)] — highest score first
-        result = await self._redis.zpopmax(self._frontier_key, count=1)
-        if not result:
+        """Pop the next URL from the FIFO frontier. Returns (url, depth) or None."""
+        url = await self._redis.lpop(self._frontier_key)
+        if not url:
             return None
-        url, _score = result[0]
         depth = await self._redis.hget(self._depth_key, url)
         return url, int(depth or 0)
 
@@ -251,14 +132,17 @@ class WebCrawler:
         return await self._redis.scard(self._visited_key)
 
     async def get_frontier_size(self) -> int:
-        return await self._redis.zcard(self._frontier_key)
+        return await self._redis.llen(self._frontier_key)
 
     async def add_to_frontier(self, urls: list[str], depth: int):
-        """Add discovered URLs to the priority frontier after filtering."""
+        """Add discovered URLs to the FIFO frontier after filtering."""
         from app.services.dedup import normalize_url
 
         for url in urls:
             norm = normalize_url(url)
+            # Skip if already queued or visited
+            if await self._redis.sismember(self._queued_key, norm):
+                continue
             if await self.is_visited(norm):
                 continue
             if not self._should_crawl(url, depth):
@@ -273,10 +157,8 @@ class WebCrawler:
             if visited_count + frontier_size >= self.config.max_pages * 5:
                 break
 
-            url_score = score_url(url)
-            # Slight depth penalty: prefer shallower pages when scores are equal
-            url_score -= depth * 0.5
-            await self._redis.zadd(self._frontier_key, {url: max(0, url_score)})
+            await self._redis.rpush(self._frontier_key, url)
+            await self._redis.sadd(self._queued_key, norm)
             await self._redis.hset(self._depth_key, url, depth)
 
     def _should_crawl(self, url: str, depth: int) -> bool:
@@ -486,7 +368,7 @@ class WebCrawler:
             self._crawl_session = None
         if self._redis:
             await self._redis.delete(
-                self._frontier_key, self._visited_key, self._depth_key
+                self._frontier_key, self._visited_key, self._depth_key, self._queued_key
             )
             await self._redis.aclose()
             self._redis = None
