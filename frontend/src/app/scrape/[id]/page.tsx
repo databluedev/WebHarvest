@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-type TabId = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "json";
+type TabId = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract";
 
 export default function ScrapeDetailPage() {
   const router = useRouter();
@@ -144,13 +144,12 @@ export default function ScrapeDetailPage() {
     ? [
         { id: "markdown", label: "Markdown", icon: FileText, available: !!result.markdown },
         { id: "html", label: "HTML", icon: Code, available: !!result.html },
-        { id: "screenshot", label: "Screenshot", icon: Camera, available: true },
+        { id: "screenshot", label: "Screenshot", icon: Camera, available: !!result.screenshot },
         { id: "links", label: `Links${result.links ? ` (${result.links.length})` : ""}`, icon: Link2, available: !!(result.links?.length || result.links_detail) },
         { id: "structured", label: "Structured Data", icon: Braces, available: !!(result.structured_data && Object.keys(result.structured_data).length > 0) },
         { id: "headings", label: `Headings${result.headings ? ` (${result.headings.length})` : ""}`, icon: List, available: !!result.headings?.length },
         { id: "images", label: `Images${result.images ? ` (${result.images.length})` : ""}`, icon: ImageIcon, available: !!result.images?.length },
         { id: "extract", label: "AI Extract", icon: Sparkles, available: !!result.extract },
-        { id: "json", label: "Full JSON", icon: FileCode, available: true },
       ]
     : [];
 
@@ -175,7 +174,6 @@ export default function ScrapeDetailPage() {
       case "structured": return JSON.stringify(result.structured_data, null, 2);
       case "headings": return JSON.stringify(result.headings, null, 2);
       case "images": return JSON.stringify(result.images, null, 2);
-      case "json": return JSON.stringify(result, null, 2);
       default: return "";
     }
   };
@@ -553,11 +551,6 @@ export default function ScrapeDetailPage() {
                         </pre>
                       )}
 
-                      {activeTab === "json" && (
-                        <pre className="max-h-[600px] overflow-auto rounded-md bg-muted p-4 text-xs whitespace-pre-wrap font-mono">
-                          {JSON.stringify(result, null, 2)}
-                        </pre>
-                      )}
                     </div>
                   </CardContent>
                 </Card>

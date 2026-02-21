@@ -145,7 +145,7 @@ async function handleDownload(job: any) {
 
 // ── Inline Result Card ───────────────────────────────────────
 
-type ResultTab = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "json";
+type ResultTab = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract";
 
 const InlineResultCard = memo(function InlineResultCard({
   page,
@@ -158,13 +158,13 @@ const InlineResultCard = memo(function InlineResultCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<ResultTab>("markdown");
-  const [screenshotData, setScreenshotData] = useState<string | null>(null);
+  const [screenshotData, setScreenshotData] = useState<string | null>(page.screenshot || null);
   const [screenshotLoading, setScreenshotLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const hasMarkdown = !!page.markdown;
   const hasHtml = !!page.html;
-  const hasScreenshot = !!page.id;
+  const hasScreenshot = !!page.screenshot;
   const hasLinks = page.links?.length > 0 || page.links_detail;
   const hasStructured = page.structured_data && Object.keys(page.structured_data).length > 0;
   const hasHeadings = page.headings?.length > 0;
@@ -180,14 +180,13 @@ const InlineResultCard = memo(function InlineResultCard({
     { id: "headings", label: "Headings", icon: List, available: hasHeadings },
     { id: "images", label: "Images", icon: ImageIcon, available: hasImages },
     { id: "extract", label: "AI Extract", icon: Sparkles, available: hasExtract },
-    { id: "json", label: "JSON", icon: FileCode, available: true },
   ];
 
   const availableTabs = tabs.filter((t) => t.available);
 
   useEffect(() => {
     if (!availableTabs.find((t) => t.id === activeTab)) {
-      setActiveTab(availableTabs[0]?.id || "json");
+      setActiveTab(availableTabs[0]?.id || "markdown");
     }
   }, []);
 
@@ -210,7 +209,6 @@ const InlineResultCard = memo(function InlineResultCard({
       case "markdown": text = page.markdown || ""; break;
       case "html": text = page.html || ""; break;
       case "links": text = (page.links || []).join("\n"); break;
-      case "json": text = JSON.stringify(page, null, 2); break;
       default: text = JSON.stringify(page[activeTab], null, 2); break;
     }
     navigator.clipboard.writeText(text);
@@ -399,11 +397,6 @@ const InlineResultCard = memo(function InlineResultCard({
               </pre>
             )}
 
-            {activeTab === "json" && (
-              <pre className="max-h-80 overflow-auto text-[12px] font-mono bg-muted/30 rounded-lg p-4">
-                {JSON.stringify(page, null, 2)}
-              </pre>
-            )}
           </div>
         </div>
       )}
@@ -661,14 +654,15 @@ function PlaygroundContent() {
           if (!url.trim()) return;
           const fullUrl = url.startsWith("http") ? url : `https://${url}`;
           const params: any = { url: fullUrl, max_pages: maxPages, max_depth: maxDepth, concurrency };
+          // Always send scrape_options with formats so the worker knows what to store
+          params.scrape_options = { formats, only_main_content: onlyMainContent, wait_for: waitFor || undefined };
+          if (mobile) { params.scrape_options.mobile = true; if (mobileDevice) params.scrape_options.mobile_device = mobileDevice; }
           if (showAdvanced) {
             if (includePaths.trim()) params.include_paths = includePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
             if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
             if (webhookUrl.trim()) params.webhook_url = webhookUrl.trim();
             if (webhookSecret.trim()) params.webhook_secret = webhookSecret.trim();
             if (useProxy) params.use_proxy = true;
-            params.scrape_options = { formats, only_main_content: onlyMainContent, wait_for: waitFor || undefined };
-            if (mobile) { params.scrape_options.mobile = true; if (mobileDevice) params.scrape_options.mobile_device = mobileDevice; }
           }
           if (extractEnabled && extractPrompt.trim()) {
             params.scrape_options = { ...params.scrape_options, extract: { prompt: extractPrompt.trim() } };

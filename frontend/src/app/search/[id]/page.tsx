@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "json";
+type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract";
 
 function SearchResultCard({ item, index, jobId }: { item: any; index: number; jobId: string }) {
   const [expanded, setExpanded] = useState(false);
@@ -69,20 +69,19 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
   const tabs: { id: TabType; label: string; icon: any; available: boolean }[] = [
     { id: "markdown", label: "Markdown", icon: FileText, available: hasMarkdown },
     { id: "html", label: "HTML", icon: Code, available: hasHtml },
-    { id: "screenshot", label: "Screenshot", icon: Camera, available: true },
+    { id: "screenshot", label: "Screenshot", icon: Camera, available: hasScreenshot },
     { id: "links", label: "Links", icon: Link2, available: hasLinks },
     { id: "structured", label: "Structured Data", icon: Braces, available: hasStructured },
     { id: "headings", label: "Headings", icon: List, available: hasHeadings },
     { id: "images", label: "Images", icon: ImageIcon, available: hasImages },
     { id: "extract", label: "AI Extract", icon: Sparkles, available: hasExtract },
-    { id: "json", label: "Full JSON", icon: FileCode, available: true },
   ];
 
   const availableTabs = tabs.filter((t) => t.available);
 
   useEffect(() => {
     if (!availableTabs.find((t) => t.id === activeTab)) {
-      setActiveTab(availableTabs[0]?.id || "json");
+      setActiveTab(availableTabs[0]?.id || "markdown");
     }
   }, []);
 
@@ -352,11 +351,6 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
               </pre>
             )}
 
-            {activeTab === "json" && (
-              <pre className="max-h-96 overflow-auto text-xs font-mono bg-muted/30 rounded-md p-4">
-                {JSON.stringify(item, null, 2)}
-              </pre>
-            )}
           </div>
         </div>
       )}

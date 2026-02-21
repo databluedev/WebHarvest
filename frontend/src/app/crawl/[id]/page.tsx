@@ -33,17 +33,17 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "json";
+type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract";
 
 const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { page: any; index: number; jobId: string }) {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("markdown");
-  const [screenshotData, setScreenshotData] = useState<string | null>(null);
+  const [screenshotData, setScreenshotData] = useState<string | null>(page.screenshot || null);
   const [screenshotLoading, setScreenshotLoading] = useState(false);
 
   const hasMarkdown = !!page.markdown;
   const hasHtml = !!page.html;
-  const hasScreenshot = !!page.id;
+  const hasScreenshot = !!page.screenshot;
   const hasLinks = page.links?.length > 0 || page.links_detail;
   const hasStructured = page.structured_data && Object.keys(page.structured_data).length > 0;
   const hasHeadings = page.headings?.length > 0;
@@ -72,7 +72,6 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
     { id: "headings", label: "Headings", icon: List, available: hasHeadings },
     { id: "images", label: "Images", icon: ImageIcon, available: hasImages },
     { id: "extract", label: "AI Extract", icon: Sparkles, available: hasExtract },
-    { id: "json", label: "Full JSON", icon: FileCode, available: true },
   ];
 
   const availableTabs = tabs.filter((t) => t.available);
@@ -80,7 +79,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
   // Auto-select first available tab
   useEffect(() => {
     if (!availableTabs.find((t) => t.id === activeTab)) {
-      setActiveTab(availableTabs[0]?.id || "json");
+      setActiveTab(availableTabs[0]?.id || "markdown");
     }
   }, []);
 
@@ -419,11 +418,6 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
               </pre>
             )}
 
-            {activeTab === "json" && (
-              <pre className="max-h-96 overflow-auto text-xs font-mono bg-muted/30 rounded-md p-4">
-                {JSON.stringify(page, null, 2)}
-              </pre>
-            )}
           </div>
         </div>
       )}
