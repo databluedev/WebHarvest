@@ -18,7 +18,8 @@ from app.config import settings
 from app.models.job import Job
 from app.models.job_result import JobResult
 from app.models.user import User
-from app.schemas.map import MapRequest, MapResponse
+from app.schemas.map import MapRequest, MapResponse, LinkResult
+from app.core.cache import get_cached_map
 from app.workers.map_worker import process_map
 
 router = APIRouter()
@@ -45,6 +46,15 @@ async def map_site(
     response.headers["X-RateLimit-Reset"] = str(rl.reset)
     if not rl.allowed:
         raise RateLimitError("Map rate limit exceeded. Try again in a minute.")
+
+    # Cross-user cache check — return instantly if another user already mapped this
+    cached = await get_cached_map(
+        request.url, request.limit, request.include_subdomains,
+        request.use_sitemap, request.search,
+    )
+    if cached:
+        links = [LinkResult(**l) if isinstance(l, dict) else l for l in cached]
+        return MapResponse(success=True, total=len(links), links=links)
 
     # Create job record
     job = Job(

@@ -65,6 +65,36 @@ def process_crawl(self, job_id: str, config: dict):
         request = CrawlRequest(**config)
         concurrency = max(1, min(request.concurrency, 10))
 
+        # Cross-user cache check — skip crawl entirely if cached
+        from app.core.cache import get_cached_crawl, set_cached_crawl
+        cached_crawl = await get_cached_crawl(
+            request.url, request.max_pages, request.max_depth,
+        )
+        if cached_crawl:
+            logger.info(f"Crawl cache hit for {request.url} ({len(cached_crawl)} pages)")
+            async with session_factory() as db:
+                for item in cached_crawl:
+                    job_result = JobResult(
+                        job_id=UUID(job_id),
+                        url=item.get("url", ""),
+                        markdown=item.get("markdown"),
+                        html=item.get("html"),
+                        links=item.get("links"),
+                        extract=item.get("extract"),
+                        screenshot_url=item.get("screenshot"),
+                        metadata_=item.get("metadata"),
+                    )
+                    db.add(job_result)
+                job = await db.get(Job, UUID(job_id))
+                if job:
+                    job.status = "completed"
+                    job.total_pages = len(cached_crawl)
+                    job.completed_pages = len(cached_crawl)
+                    job.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+            await db_engine.dispose()
+            return
+
         # Load proxy manager if use_proxy is set
         proxy_manager = None
         if request.use_proxy:
@@ -493,6 +523,33 @@ def process_crawl(self, job_id: str, config: dict):
                     job.completed_pages = pages_crawled
                     job.completed_at = datetime.now(timezone.utc)
                 await db.commit()
+
+            # Cache crawl results for other users
+            if pages_crawled > 0:
+                try:
+                    cache_data = []
+                    async with session_factory() as db:
+                        from sqlalchemy import select
+                        result = await db.execute(
+                            select(JobResult).where(JobResult.job_id == UUID(job_id))
+                        )
+                        for jr in result.scalars().all():
+                            cache_data.append({
+                                "url": jr.url,
+                                "markdown": jr.markdown,
+                                "html": jr.html,
+                                "links": jr.links,
+                                "extract": jr.extract,
+                                "screenshot": jr.screenshot_url,
+                                "metadata": jr.metadata_,
+                            })
+                    if cache_data:
+                        await set_cached_crawl(
+                            request.url, request.max_pages, request.max_depth,
+                            cache_data,
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to cache crawl results for {request.url}: {e}")
 
             # Send webhook if configured
             if request.webhook_url:

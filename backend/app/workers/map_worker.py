@@ -59,11 +59,26 @@ def process_map(self, job_id: str, config: dict):
 
         try:
             request = MapRequest(**config)
-            links = await map_website(request)
+
+            # Cross-user cache check — skip the actual map if cached
+            from app.core.cache import get_cached_map, set_cached_map
+            cached = await get_cached_map(
+                request.url, request.limit, request.include_subdomains,
+                request.use_sitemap, request.search,
+            )
+            if cached:
+                links_data = cached
+                logger.info(f"Map cache hit for {request.url} ({len(links_data)} links)")
+            else:
+                links = await map_website(request)
+                links_data = [link.model_dump() for link in links]
+                # Cache for other users
+                await set_cached_map(
+                    request.url, request.limit, request.include_subdomains,
+                    request.use_sitemap, request.search, links_data,
+                )
 
             async with session_factory() as db:
-                # Store all links as a single JobResult (matches GET endpoint format)
-                links_data = [link.model_dump() for link in links]
                 job_result = JobResult(
                     job_id=UUID(job_id),
                     url=request.url,
@@ -74,8 +89,8 @@ def process_map(self, job_id: str, config: dict):
                 job = await db.get(Job, UUID(job_id))
                 if job:
                     job.status = "completed"
-                    job.total_pages = len(links)
-                    job.completed_pages = len(links)
+                    job.total_pages = len(links_data)
+                    job.completed_pages = len(links_data)
                     job.completed_at = datetime.now(timezone.utc)
                 await db.commit()
 

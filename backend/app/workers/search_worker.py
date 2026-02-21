@@ -79,6 +79,36 @@ def process_search(self, job_id: str, config: dict):
             await db.commit()
 
         try:
+            # Cross-user cache check
+            from app.core.cache import get_cached_search, set_cached_search
+            cached_search = await get_cached_search(
+                request.query, request.num_results, request.engine, request.formats,
+            )
+            if cached_search:
+                logger.info(f"Search cache hit for '{request.query}' ({len(cached_search)} results)")
+                async with session_factory() as db:
+                    for item in cached_search:
+                        job_result = JobResult(
+                            job_id=UUID(job_id),
+                            url=item["url"],
+                            markdown=item.get("markdown"),
+                            html=item.get("html"),
+                            links=item.get("links"),
+                            extract=item.get("extract"),
+                            screenshot_url=item.get("screenshot"),
+                            metadata_=item.get("metadata"),
+                        )
+                        db.add(job_result)
+                    job = await db.get(Job, UUID(job_id))
+                    if job:
+                        job.status = "completed"
+                        job.total_pages = len(cached_search)
+                        job.completed_pages = len(cached_search)
+                        job.completed_at = datetime.now(timezone.utc)
+                    await db.commit()
+                await db_engine.dispose()
+                return
+
             # Step 1: Search the web
             search_results = await web_search(
                 query=request.query,
@@ -214,6 +244,32 @@ def process_search(self, job_id: str, config: dict):
                         if job:
                             job.completed_pages = completed
                         await db.commit()
+
+            # Cache the search results for other users
+            try:
+                cache_data = []
+                async with session_factory() as db:
+                    from sqlalchemy import select
+                    result = await db.execute(
+                        select(JobResult).where(JobResult.job_id == UUID(job_id))
+                    )
+                    for jr in result.scalars().all():
+                        cache_data.append({
+                            "url": jr.url,
+                            "markdown": jr.markdown,
+                            "html": jr.html,
+                            "links": jr.links,
+                            "extract": jr.extract,
+                            "screenshot": jr.screenshot_url,
+                            "metadata": jr.metadata_,
+                        })
+                if cache_data:
+                    await set_cached_search(
+                        request.query, request.num_results, request.engine,
+                        request.formats, cache_data,
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to cache search results for '{request.query}': {e}")
 
             # Mark completed
             async with session_factory() as db:

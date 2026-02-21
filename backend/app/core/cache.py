@@ -1,4 +1,17 @@
-import asyncio
+"""
+Cross-user URL-based cache for all modes (scrape, map, search, crawl).
+
+Every mode stores results in Redis keyed by SHA256(url + relevant params).
+When any user requests the same URL with the same params, the cached result
+is returned instantly — no job, no worker, no waiting.
+
+Redis keys:
+  cache:scrape:{hash}  → single-page scrape result
+  cache:map:{hash}     → list of discovered URLs
+  cache:search:{hash}  → list of search results with scraped content
+  cache:crawl:{hash}   → list of crawled page results
+"""
+
 import hashlib
 import json
 import logging
@@ -8,108 +21,109 @@ from app.core.redis import redis_client
 
 logger = logging.getLogger(__name__)
 
-CACHE_PREFIX = "cache:scrape:"
-INFLIGHT_PREFIX = "inflight:scrape:"
 
+# ---------------------------------------------------------------------------
+# Generic cache helpers — all modes use these
+# ---------------------------------------------------------------------------
 
-def _cache_key(url: str, formats: list[str]) -> str:
-    """Generate a SHA256-based cache key from URL and formats."""
-    key_data = f"{url}:{','.join(sorted(formats))}"
-    digest = hashlib.sha256(key_data.encode()).hexdigest()
-    return f"{CACHE_PREFIX}{digest}"
-
-
-async def get_cached_scrape(url: str, formats: list[str]) -> dict | None:
-    """Retrieve a cached scrape result. Returns None if not cached or cache disabled."""
+async def get_url_cache(prefix: str, key_data: str) -> dict | list | None:
+    """Retrieve a cached result by mode prefix and key data. Returns None on miss."""
     if not settings.CACHE_ENABLED:
         return None
-
     try:
-        key = _cache_key(url, formats)
+        digest = hashlib.sha256(key_data.encode()).hexdigest()
+        key = f"{prefix}{digest}"
         data = await redis_client.get(key)
         if data:
-            logger.debug(f"Cache hit for {url}")
+            logger.debug(f"Cache hit: {prefix} key={key_data[:80]}")
             return json.loads(data)
     except Exception as e:
-        logger.warning(f"Cache get failed: {e}")
-
+        logger.warning(f"Cache get failed ({prefix}): {e}")
     return None
 
 
-async def set_cached_scrape(
-    url: str, formats: list[str], data: dict, ttl: int | None = None
+async def set_url_cache(
+    prefix: str, key_data: str, data: dict | list, ttl: int | None = None
 ) -> None:
-    """Store a scrape result in cache."""
+    """Store a result in the cross-user cache."""
     if not settings.CACHE_ENABLED:
         return
-
     try:
-        key = _cache_key(url, formats)
+        digest = hashlib.sha256(key_data.encode()).hexdigest()
+        key = f"{prefix}{digest}"
         ttl = ttl or settings.CACHE_TTL_SECONDS
-        await redis_client.setex(key, ttl, json.dumps(data, default=str))
-        logger.debug(f"Cached scrape for {url} (TTL={ttl}s)")
+        serialized = json.dumps(data, default=str)
+        # Skip caching if data is excessively large (>10MB) to protect Redis
+        if len(serialized) > 10_000_000:
+            logger.debug(f"Skipping cache — data too large ({len(serialized)} bytes)")
+            return
+        await redis_client.setex(key, ttl, serialized)
+        logger.debug(f"Cache set: {prefix} (TTL={ttl}s, size={len(serialized)})")
     except Exception as e:
-        logger.warning(f"Cache set failed: {e}")
+        logger.warning(f"Cache set failed ({prefix}): {e}")
 
 
-def _inflight_key(url: str, formats: list[str]) -> str:
-    """Generate a Redis key for the in-flight lock, reusing the same hash."""
-    key_data = f"{url}:{','.join(sorted(formats))}"
-    digest = hashlib.sha256(key_data.encode()).hexdigest()
-    return f"{INFLIGHT_PREFIX}{digest}"
+# ---------------------------------------------------------------------------
+# Mode-specific helpers — build cache keys from request params
+# ---------------------------------------------------------------------------
+
+SCRAPE_PREFIX = "cache:scrape:"
+MAP_PREFIX = "cache:map:"
+SEARCH_PREFIX = "cache:search:"
+CRAWL_PREFIX = "cache:crawl:"
 
 
-async def try_claim_inflight(url: str, formats: list[str]) -> bool:
-    """Try to claim the in-flight lock for a URL+formats combo.
-
-    Uses SETNX so only one caller wins. Returns True if this caller
-    should perform the scrape; False if another request already owns it.
-    """
-    if not settings.CACHE_ENABLED:
-        return True  # caching disabled — always scrape
-
-    try:
-        key = _inflight_key(url, formats)
-        acquired = await redis_client.set(key, "1", nx=True, ex=120)
-        if acquired:
-            logger.debug(f"Claimed in-flight lock for {url}")
-        return bool(acquired)
-    except Exception as e:
-        logger.warning(f"In-flight claim failed: {e}")
-        return True  # on error, fall through to scrape normally
+def _scrape_key_data(url: str, formats: list[str]) -> str:
+    return f"{url}:{','.join(sorted(formats))}"
 
 
-async def release_inflight(url: str, formats: list[str]) -> None:
-    """Release the in-flight lock after scrape completes (success or failure)."""
-    if not settings.CACHE_ENABLED:
-        return
-
-    try:
-        key = _inflight_key(url, formats)
-        await redis_client.delete(key)
-        logger.debug(f"Released in-flight lock for {url}")
-    except Exception as e:
-        logger.warning(f"In-flight release failed: {e}")
+def _map_key_data(url: str, limit: int, include_subdomains: bool, use_sitemap: bool, search: str | None) -> str:
+    return f"{url}:{limit}:{include_subdomains}:{use_sitemap}:{search or ''}"
 
 
-async def wait_for_cached_result(
-    url: str,
-    formats: list[str],
-    timeout: float = 90,
-    poll_interval: float | None = None,
-) -> dict | None:
-    """Poll for a cached scrape result until it appears or timeout expires."""
-    if poll_interval is None:
-        poll_interval = settings.CACHE_INFLIGHT_POLL_INTERVAL
+def _search_key_data(query: str, num_results: int, engine: str, formats: list[str]) -> str:
+    return f"{query}:{num_results}:{engine}:{','.join(sorted(formats))}"
 
-    elapsed = 0.0
-    while elapsed < timeout:
-        cached = await get_cached_scrape(url, formats)
-        if cached is not None:
-            logger.debug(f"Got cached result after waiting {elapsed:.1f}s for {url}")
-            return cached
-        await asyncio.sleep(poll_interval)
-        elapsed += poll_interval
 
-    logger.debug(f"Timed out waiting {timeout}s for cached result for {url}")
-    return None
+def _crawl_key_data(url: str, max_pages: int, max_depth: int) -> str:
+    return f"{url}:{max_pages}:{max_depth}"
+
+
+# --- Scrape ---
+
+async def get_cached_scrape(url: str, formats: list[str]) -> dict | None:
+    return await get_url_cache(SCRAPE_PREFIX, _scrape_key_data(url, formats))
+
+
+async def set_cached_scrape(url: str, formats: list[str], data: dict, ttl: int | None = None) -> None:
+    await set_url_cache(SCRAPE_PREFIX, _scrape_key_data(url, formats), data, ttl)
+
+
+# --- Map ---
+
+async def get_cached_map(url: str, limit: int, include_subdomains: bool, use_sitemap: bool, search: str | None) -> list | None:
+    return await get_url_cache(MAP_PREFIX, _map_key_data(url, limit, include_subdomains, use_sitemap, search))
+
+
+async def set_cached_map(url: str, limit: int, include_subdomains: bool, use_sitemap: bool, search: str | None, data: list, ttl: int | None = None) -> None:
+    await set_url_cache(MAP_PREFIX, _map_key_data(url, limit, include_subdomains, use_sitemap, search), data, ttl)
+
+
+# --- Search ---
+
+async def get_cached_search(query: str, num_results: int, engine: str, formats: list[str]) -> list | None:
+    return await get_url_cache(SEARCH_PREFIX, _search_key_data(query, num_results, engine, formats))
+
+
+async def set_cached_search(query: str, num_results: int, engine: str, formats: list[str], data: list, ttl: int | None = None) -> None:
+    await set_url_cache(SEARCH_PREFIX, _search_key_data(query, num_results, engine, formats), data, ttl)
+
+
+# --- Crawl ---
+
+async def get_cached_crawl(url: str, max_pages: int, max_depth: int) -> list | None:
+    return await get_url_cache(CRAWL_PREFIX, _crawl_key_data(url, max_pages, max_depth))
+
+
+async def set_cached_crawl(url: str, max_pages: int, max_depth: int, data: list, ttl: int | None = None) -> None:
+    await set_url_cache(CRAWL_PREFIX, _crawl_key_data(url, max_pages, max_depth), data, ttl)
