@@ -2520,6 +2520,12 @@ async def _fetch_with_browser_session(
         else:
             await page.wait_for_timeout(random.randint(100, 250))
 
+        # Doc framework detection: if this is a JS-rendered doc site,
+        # wait for content-specific selectors to appear (up to 5s)
+        _doc_fw = await _wait_for_doc_content(page, timeout_ms=5000)
+        if _doc_fw:
+            logger.debug(f"Doc framework '{_doc_fw}' detected in session for {url}, content ready")
+
         await _try_accept_cookies(page)
 
         if request.wait_for > 0:

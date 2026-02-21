@@ -121,6 +121,7 @@ class WebCrawler:
         self._redis: aioredis.Redis | None = None
         self._proxy_manager = proxy_manager
         self._crawl_session = None
+        self.detected_doc_framework: str | None = None  # Set by JS discovery
 
         # Redis keys for this crawl
         self._frontier_key = f"crawl:{job_id}:frontier"
@@ -195,6 +196,10 @@ class WebCrawler:
             if not discovered_links:
                 logger.debug(f"No JS nav links discovered for {self.base_url}")
                 return
+
+            # Store detected framework so the crawl worker can pin browser strategy
+            if doc_framework:
+                self.detected_doc_framework = doc_framework
 
             logger.info(
                 f"Deep JS discovery found {len(discovered_links)} URLs for {self.base_url}"

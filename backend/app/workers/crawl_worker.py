@@ -175,8 +175,24 @@ def process_crawl(self, job_id: str, config: dict):
 
             # Strategy pinning: after first page succeeds, pin that strategy
             # for all remaining pages to skip the full tier cascade.
+            #
+            # For JS-rendered doc sites (detected during frontier seeding),
+            # pre-pin to browser strategy so we never waste time on HTTP
+            # fetches that return empty shell HTML.
             _pinned_strategy: str | None = None
             _pinned_tier: int | None = None
+            if crawler.detected_doc_framework:
+                from app.config import settings
+                if settings.STEALTH_ENGINE_URL:
+                    _pinned_strategy = "stealth_chromium"
+                    _pinned_tier = 2
+                else:
+                    _pinned_strategy = "chromium_stealth"
+                    _pinned_tier = 2
+                logger.warning(
+                    f"Doc framework '{crawler.detected_doc_framework}' detected — "
+                    f"pre-pinned to {_pinned_strategy} (tier {_pinned_tier}) for full JS rendering"
+                )
 
             async def fetch_producer():
                 """BFS loop: fetch pages, put raw results on extract_queue."""
