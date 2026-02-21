@@ -528,13 +528,20 @@ function PlaygroundContent() {
         case "map": res = await api.getMapStatus(jobId); break;
         case "batch": res = await api.getBatchStatus(jobId); break;
       }
-      setActiveJob((prev) => prev && prev.id === jobId ? {
-        ...prev,
-        status: res.status || prev.status,
-        completed: res.completed_pages || res.completed_results || res.completed_urls || prev.completed,
-        data: res.data || res.links || prev.data,
-        error: res.error,
-      } : prev);
+      setActiveJob((prev) => {
+        if (!prev || prev.id !== jobId) return prev;
+        const completed = res.completed_pages ?? res.completed_results ?? res.completed_urls ?? prev.completed;
+        const total = res.total_pages ?? res.total_results ?? res.total_urls ?? res.total ?? prev.total;
+        const data = res.data || res.links || prev.data;
+        return {
+          ...prev,
+          status: res.status || prev.status,
+          completed: completed,
+          total: total,
+          data: data,
+          error: res.error,
+        };
+      });
       return res.status;
     } catch { return null; }
   }, []);

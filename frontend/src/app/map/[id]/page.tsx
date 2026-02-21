@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ExportDropdown } from "@/components/ui/export-dropdown";
-import { api } from "@/lib/api";
+import { api, API_BASE_URL } from "@/lib/api";
 import {
   Loader2,
   ArrowLeft,
@@ -29,6 +29,8 @@ export default function MapDetailPage() {
   const [copied, setCopied] = useState(false);
   const [urlFilter, setUrlFilter] = useState("");
   const [visibleCount, setVisibleCount] = useState(100);
+  const [polling, setPolling] = useState(true);
+  const sseRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     if (!api.getToken()) {
@@ -38,21 +40,60 @@ export default function MapDetailPage() {
     fetchStatus();
   }, [jobId]);
 
-  // Auto-poll when job is still running
+  // SSE for real-time updates — falls back to polling on failure
   useEffect(() => {
-    if (!status || status.status === "completed" || status.status === "failed") return;
-    const interval = setInterval(() => {
-      fetchStatus();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [status]);
+    if (!polling || !jobId) return;
+    if (status && ["completed", "failed", "cancelled"].includes(status.status)) {
+      setPolling(false);
+      return;
+    }
+
+    const token = api.getToken();
+    if (!token) return;
+
+    const url = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
+
+    try {
+      const es = new EventSource(url);
+      sseRef.current = es;
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          fetchStatus();
+          if (data.done || ["completed", "failed", "cancelled"].includes(data.status)) {
+            setPolling(false);
+            es.close();
+          }
+        } catch {}
+      };
+      es.onerror = () => {
+        es.close();
+        sseRef.current = null;
+        // Fall back to polling
+        const interval = setInterval(() => {
+          fetchStatus();
+        }, 2000);
+        return () => clearInterval(interval);
+      };
+      return () => { es.close(); sseRef.current = null; };
+    } catch {
+      const interval = setInterval(() => {
+        fetchStatus();
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [polling, status?.status]);
 
   const fetchStatus = useCallback(async () => {
     try {
       const res = await api.getMapStatus(jobId);
       setStatus(res);
+      if (["completed", "failed", "cancelled"].includes(res.status)) {
+        setPolling(false);
+      }
     } catch (err: any) {
       setError(err.message);
+      setPolling(false);
     }
   }, [jobId]);
 
@@ -71,6 +112,15 @@ export default function MapDetailPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const isRunning =
+    status?.status === "running" || status?.status === "pending" || status?.status === "started";
+  const isFinished =
+    status?.status === "completed" || status?.status === "failed" || status?.status === "cancelled";
+  const progressPercent =
+    status?.total_pages > 0
+      ? Math.min(100, Math.round((status.completed_pages / status.total_pages) * 100))
+      : 0;
 
   const filteredLinks = useMemo(() => {
     if (!status?.links) return [];
@@ -130,7 +180,8 @@ export default function MapDetailPage() {
                         }
                         className="text-sm px-3 py-1"
                       >
-                        {status.status}
+                        {isRunning && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
+                        {status.status === "running" ? "Mapping..." : status.status}
                       </Badge>
                       {status.url && (
                         <a
@@ -157,10 +208,35 @@ export default function MapDetailPage() {
                     </div>
                   </div>
 
-                  <div className="flex gap-3 mt-4 pt-4 border-t border-border text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                      <MapIcon className="h-3.5 w-3.5" />
-                      <span>{status.total} URLs discovered</span>
+                  {/* Progress */}
+                  <div className="space-y-2 mt-4 pt-4 border-t border-border">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {status.completed_pages || status.total || 0} URL{(status.completed_pages || status.total || 0) !== 1 ? "s" : ""}{" "}
+                        discovered
+                        {isRunning && status.total_pages > 0 && (
+                          <span> of {status.total_pages} target</span>
+                        )}
+                      </span>
+                      {progressPercent > 0 && (
+                        <span className="text-muted-foreground">{isFinished ? 100 : progressPercent}%</span>
+                      )}
+                    </div>
+                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          isRunning
+                            ? "bg-yellow-500"
+                            : status.status === "completed"
+                            ? "bg-green-500"
+                            : "bg-red-500"
+                        }`}
+                        style={{
+                          width: isFinished
+                            ? "100%"
+                            : `${Math.max(progressPercent, status.total > 0 ? 5 : 0)}%`,
+                        }}
+                      />
                     </div>
                   </div>
 
@@ -244,6 +320,16 @@ export default function MapDetailPage() {
                     )}
                   </CardContent>
                 </Card>
+              ) : isRunning ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/50 mb-4" />
+                  <p className="text-sm text-muted-foreground">
+                    Discovering URLs...
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">
+                    Crawling sitemaps, homepage links, and following internal pages
+                  </p>
+                </div>
               ) : status.status === "failed" ? (
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-16 text-center">

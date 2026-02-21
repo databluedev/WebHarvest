@@ -134,7 +134,9 @@ async def get_map_status(
         "job_id": str(job.id),
         "status": job.status,
         "url": job.config.get("url", "") if job.config else "",
-        "total": job.total_pages,
+        "total": job.total_pages or 0,
+        "completed_pages": job.completed_pages or 0,
+        "total_pages": job.total_pages or 0,
         "links": links,
         "error": job.error,
     }
