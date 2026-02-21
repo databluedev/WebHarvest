@@ -66,11 +66,15 @@ def process_crawl(self, job_id: str, config: dict):
         concurrency = max(1, min(request.concurrency, 10))
 
         # Cross-user cache check — skip crawl entirely if cached
+        # Only use cache if it has a reasonable number of pages (at least 50%
+        # of requested or 5+).  Stale caches from before frontier pre-seeding
+        # may contain only 1-2 pages for JS-rendered doc sites.
         from app.core.cache import get_cached_crawl, set_cached_crawl
         cached_crawl = await get_cached_crawl(
             request.url, request.max_pages, request.max_depth,
         )
-        if cached_crawl:
+        min_acceptable = max(5, request.max_pages // 2)
+        if cached_crawl and len(cached_crawl) >= min(min_acceptable, request.max_pages):
             logger.info(f"Crawl cache hit for {request.url} ({len(cached_crawl)} pages)")
             async with session_factory() as db:
                 for item in cached_crawl:
@@ -527,7 +531,11 @@ def process_crawl(self, job_id: str, config: dict):
                 await db.commit()
 
             # Cache crawl results for other users
-            if pages_crawled > 0:
+            # Only cache crawls that got a reasonable number of pages.
+            # Incomplete crawls (e.g. 2 pages from a JS-rendered site before
+            # frontier pre-seeding was added) should not pollute the cache.
+            min_cache_pages = max(5, request.max_pages // 2)
+            if pages_crawled >= min(min_cache_pages, request.max_pages):
                 try:
                     cache_data = []
                     async with session_factory() as db:
