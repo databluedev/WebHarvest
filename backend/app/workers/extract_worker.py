@@ -57,7 +57,7 @@ def process_extract(self, job_id: str, config: dict):
         prompt = config.get("prompt")
         schema = config.get("schema_")
         provider = config.get("provider")
-        only_main_content = config.get("only_main_content", True)
+        only_main_content = config.get("only_main_content", False)
         wait_for = config.get("wait_for", 0)
         timeout = config.get("timeout", 30000)
         use_proxy = config.get("use_proxy", False)

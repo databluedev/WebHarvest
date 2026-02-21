@@ -10,7 +10,7 @@ class ScrapeOptions(BaseModel):
     formats: list[str] = [
         "markdown",
     ]
-    only_main_content: bool = True
+    only_main_content: bool = False
     wait_for: int = 0
     timeout: int = 30000
     include_tags: list[str] | None = None

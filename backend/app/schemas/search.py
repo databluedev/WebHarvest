@@ -16,7 +16,7 @@ class SearchRequest(BaseModel):
     formats: list[str] = [
         "markdown"
     ]  # All 7 formats: markdown, html, links, screenshot, structured_data, headings, images
-    only_main_content: bool = True
+    only_main_content: bool = False
     use_proxy: bool = False
     headers: dict[str, str] | None = None
     cookies: dict[str, str] | None = None

@@ -26,7 +26,7 @@ class ExtractRequest(BaseModel):
     provider: str | None = None  # openai, anthropic, groq, etc.
 
     # Scrape options (only used when url/urls provided)
-    only_main_content: bool = True
+    only_main_content: bool = False
     wait_for: int = 0
     timeout: int = 30000
     use_proxy: bool = False

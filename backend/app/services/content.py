@@ -70,11 +70,11 @@ JUNK_TAGS = {
     "datalist",
 }
 
-# Selectors ALWAYS removed — these are never useful page content
-BOILERPLATE_SELECTORS = [
-    # Navigation — always boilerplate (mega-menus, site nav, etc.)
-    "nav",
-    "[role='navigation']",
+# ---------------------------------------------------------------------------
+# Hard junk: ALWAYS removed regardless of only_main_content setting.
+# These are never useful page content under any circumstances.
+# ---------------------------------------------------------------------------
+HARD_JUNK_SELECTORS = [
     # Cookie/consent/GDPR banners
     ".cookie-banner",
     ".cookie-popup",
@@ -100,7 +100,6 @@ BOILERPLATE_SELECTORS = [
     ".vjs-menu",
     ".vjs-text-track-settings",
     ".vjs-modal-dialog",
-    "[class*='video-player']",
     "[class*='caption-window']",
     "[class*='caption-settings']",
     "[class*='player-controls']",
@@ -111,6 +110,24 @@ BOILERPLATE_SELECTORS = [
     ".visually-hidden",
     ".screen-reader-only",
     "[class*='skip-to']",
+    # Ads
+    ".sidebar-ad",
+    "[class*='ad-slot']",
+    "[class*='advertisement']",
+    # Chat widgets
+    "[class*='chat-widget']",
+    "[class*='live-chat']",
+    "#hubspot-messages-iframe-container",
+]
+
+# ---------------------------------------------------------------------------
+# Soft boilerplate: ONLY removed when only_main_content=True.
+# These contain structural content that may be valuable in full-page mode.
+# ---------------------------------------------------------------------------
+SOFT_BOILERPLATE_SELECTORS = [
+    # Navigation
+    "nav",
+    "[role='navigation']",
     # Social sharing
     ".share-buttons",
     ".social-share",
@@ -140,15 +157,10 @@ BOILERPLATE_SELECTORS = [
     ".pagination",
     ".pager",
     "[class*='pagination']",
-    # Sidebar elements that are typically ads/promos
-    ".sidebar-ad",
-    "[class*='ad-slot']",
-    "[class*='advertisement']",
-    # Chat widgets
-    "[class*='chat-widget']",
-    "[class*='live-chat']",
-    "#hubspot-messages-iframe-container",
 ]
+
+# Combined list for only_main_content=True (backward compat)
+BOILERPLATE_SELECTORS = HARD_JUNK_SELECTORS + SOFT_BOILERPLATE_SELECTORS
 
 # Selectors for elements that should ALWAYS be kept
 PRESERVE_SELECTORS = [
@@ -555,7 +567,7 @@ def apply_tag_filters(
 
 
 def _postprocess_markdown(markdown: str) -> str:
-    """Post-processing pipeline for clean markdown output."""
+    """Post-processing pipeline — minimal cleaning to preserve maximum data."""
     # 1. Collapse 3+ newlines into 2
     markdown = re.sub(r"\n{3,}", "\n\n", markdown)
     # 2. Remove trailing whitespace on lines
@@ -563,16 +575,13 @@ def _postprocess_markdown(markdown: str) -> str:
     # 3. Remove excessive spaces (but preserve indentation)
     markdown = re.sub(r"([^\n]) {3,}", r"\1 ", markdown)
 
-    # 4. Remove navigation-like link clusters (5+ consecutive short link-only lines)
-    markdown = _remove_link_clusters(markdown)
+    # 4. Link clusters are PRESERVED — they are valid TOC, nav, reference lists
 
     # 5. Deduplicate repeated content (carousel slides, repeated sections)
     markdown = _deduplicate_content(markdown)
 
-    # 6. Remove empty headings and orphaned markers
+    # 6. Remove only truly empty headings (no content at all)
     markdown = re.sub(r"^#{1,6}\s*$", "", markdown, flags=re.MULTILINE)
-    # Remove lines that are just dashes, pipes, or bullets with no content
-    markdown = re.sub(r"^[\s\-\|*>]+$", "", markdown, flags=re.MULTILINE)
 
     # 7. Final collapse of excessive newlines
     markdown = re.sub(r"\n{3,}", "\n\n", markdown)
@@ -608,10 +617,41 @@ def html_to_markdown_from_tag(tag: Tag | BeautifulSoup) -> str:
     return _postprocess_markdown(markdown)
 
 
+def _clean_soup_light(html: str) -> BeautifulSoup:
+    """Light cleaning: strip only truly junk tags (scripts, styles, hidden).
+
+    Keeps ALL structural content — nav, sidebar, footer, breadcrumbs, etc.
+    This is the Firecrawl-style approach: full page minus non-renderable junk.
+    """
+    soup = BeautifulSoup(html, "lxml")
+
+    # Only remove tags that can NEVER produce meaningful markdown
+    LIGHT_JUNK_TAGS = {
+        "script", "style", "noscript", "svg", "path", "meta", "link",
+        "canvas", "object", "embed", "source", "track", "template",
+        "datalist", "iframe", "dialog", "select", "option",
+    }
+    for tag in soup.find_all(list(LIGHT_JUNK_TAGS)):
+        tag.decompose()
+
+    # Remove only truly invisible elements (display:none, hidden attribute)
+    _remove_hidden_elements(soup)
+
+    # Remove only hard junk that is never content (cookie banners, modals, chat widgets, ads)
+    for selector in HARD_JUNK_SELECTORS:
+        try:
+            for el in soup.select(selector):
+                el.decompose()
+        except Exception:
+            pass
+
+    return soup
+
+
 def extract_and_convert(
     raw_html: str,
     url: str,
-    only_main_content: bool = True,
+    only_main_content: bool = False,
     include_tags: list[str] | None = None,
     exclude_tags: list[str] | None = None,
 ) -> tuple[str, str]:
@@ -627,7 +667,8 @@ def extract_and_convert(
     if only_main_content:
         tag = _extract_main_tag(raw_html, url)
     else:
-        tag = BeautifulSoup(raw_html, "lxml")
+        # Firecrawl-style: light clean (strip scripts/styles/hidden) but keep everything
+        tag = _clean_soup_light(raw_html)
 
     if include_tags or exclude_tags:
         # Tag filters need to work on the soup — apply in-place

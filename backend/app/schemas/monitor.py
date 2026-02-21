@@ -19,7 +19,7 @@ class MonitorCreateRequest(BaseModel):
     webhook_secret: str | None = None
     headers: dict[str, str] | None = None
     cookies: dict[str, str] | None = None
-    only_main_content: bool = True
+    only_main_content: bool = False
     threshold: float = 0.05  # Minimum change ratio to trigger (0.0-1.0)
 
 

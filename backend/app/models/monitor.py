@@ -37,7 +37,7 @@ class Monitor(Base):
     webhook_secret: Mapped[str | None] = mapped_column(String(255))
     headers: Mapped[dict | None] = mapped_column(JSONB)
     cookies: Mapped[dict | None] = mapped_column(JSONB)
-    only_main_content: Mapped[bool] = mapped_column(Boolean, default=True)
+    only_main_content: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # State
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

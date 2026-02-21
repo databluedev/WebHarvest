@@ -49,7 +49,7 @@ class ScrapeRequest(BaseModel):
     @classmethod
     def _add_protocol(cls, v: str) -> str:
         return _normalize_url(v)
-    only_main_content: bool = True
+    only_main_content: bool = False
     wait_for: int = 0  # ms to wait after page load
     timeout: int = 30000  # ms
     include_tags: list[str] | None = None
