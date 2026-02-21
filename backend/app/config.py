@@ -108,6 +108,7 @@ class Settings(BaseSettings):
 
     # Proxy
     USE_BUILTIN_PROXIES: bool = False
+    SCRAPE_DO_API_KEY: str = ""  # scrape.do proxy API key — auto-used for hard sites
 
     # Batch Processing
     RATE_LIMIT_BATCH: int = 20

@@ -970,6 +970,17 @@ async def scrape_url(
             proxy_playwright = proxy_manager.to_playwright(proxy_obj)
 
     hard_site = _is_hard_site(url)
+
+    # Auto-use Scrape.do proxy for hard sites when no user proxy configured
+    if not proxy_url and hard_site and settings.SCRAPE_DO_API_KEY:
+        _sd_key = settings.SCRAPE_DO_API_KEY
+        proxy_url = f"http://{_sd_key}:render=false&super=true@proxy.scrape.do:8080"
+        proxy_playwright = {
+            "server": "http://proxy.scrape.do:8080",
+            "username": _sd_key,
+            "password": "render=false&super=true",
+        }
+
     needs_browser = bool(
         request.actions or "screenshot" in request.formats or request.wait_for > 0
     )
@@ -2974,6 +2985,17 @@ async def scrape_url_fetch_only(
             proxy_playwright = proxy_manager.to_playwright(proxy_obj)
 
     hard_site = _is_hard_site(url)
+
+    # Auto-use Scrape.do proxy for hard sites when no user proxy configured
+    if not proxy_url and hard_site and settings.SCRAPE_DO_API_KEY:
+        _sd_key = settings.SCRAPE_DO_API_KEY
+        proxy_url = f"http://{_sd_key}:render=false&super=true@proxy.scrape.do:8080"
+        proxy_playwright = {
+            "server": "http://proxy.scrape.do:8080",
+            "username": _sd_key,
+            "password": "render=false&super=true",
+        }
+
     needs_browser = bool(
         request.actions or "screenshot" in request.formats or request.wait_for > 0
     )
