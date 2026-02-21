@@ -96,6 +96,19 @@ async def cleanup_async_pools() -> None:
         _stealth_client = None
         _stealth_loop_id = None
 
+    # Reset browser_pool's event-loop-bound locks so the next Celery task
+    # (which creates a new event loop) won't hit "bound to a different event loop".
+    # We don't close browsers here — BrowserPool.initialize() handles that
+    # when it detects a loop change.
+    try:
+        browser_pool._init_lock = None
+        browser_pool._loop = None
+        browser_pool._chromium_semaphore = None
+        browser_pool._firefox_semaphore = None
+        browser_pool._initialized = False
+    except Exception:
+        pass
+
 
 async def _get_httpx_client(proxy_url: str | None = None) -> httpx.AsyncClient:
     """Get or create a reusable httpx client (no proxy variant).
