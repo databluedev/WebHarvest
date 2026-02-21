@@ -8,7 +8,7 @@
 
 > **Still in active development** — features may change, APIs may break, and some functionality is incomplete.
 
-**Open-source, self-hosted web scraping platform** with a 5-tier scraping pipeline, circuit breakers, built-in monitoring, scheduling, and LLM extraction.
+**Open-source, self-hosted web scraping platform** with a 5-tier scraping pipeline, cross-user caching, format-aware extraction, built-in monitoring, scheduling, and LLM extraction.
 
 Built with FastAPI + Next.js + PostgreSQL + Redis + Celery + Playwright.
 
@@ -19,6 +19,8 @@ Built with FastAPI + Next.js + PostgreSQL + Redis + Celery + Playwright.
 | Feature | Included |
 |---------|:--------:|
 | 5-tier scraping pipeline with strategy cache | Yes |
+| Cross-user URL cache (Redis) — instant results for repeated URLs | Yes |
+| Format-aware extraction — only extract what you request | Yes |
 | Circuit breaker per domain | Yes |
 | Dead Letter Queue for failed tasks | Yes |
 | Built-in URL change monitoring | Yes |
@@ -28,7 +30,8 @@ Built with FastAPI + Next.js + PostgreSQL + Redis + Celery + Playwright.
 | Multi-format document extraction (PDF/DOCX/XLSX/PPTX/CSV/RTF/EPUB) | Yes |
 | BYOK LLM extraction (100+ models via LiteLLM) | Yes |
 | Full browser rendering (Chromium + Firefox) | Yes |
-| Proxy rotation with bulk import | Yes |
+| Stealth Engine sidecar (isolated browser with advanced fingerprinting) | Yes |
+| Proxy rotation with bulk import + Scrape.do integration | Yes |
 | Self-hosted / no cloud dependency | Yes |
 | Python SDK (sync + async) | Yes |
 | Prometheus metrics | Yes |
@@ -61,33 +64,64 @@ Built with FastAPI + Next.js + PostgreSQL + Redis + Celery + Playwright.
                                     +----------v----------+
                                     |   Celery Workers     |
                                     |  (scrape, crawl,     |
-                                    |   batch, search,     |
+                                    |   map, search,       |
                                     |   extract, monitor)  |
                                     +----------+----------+
                                                |
-                                    +----------v----------+
-                                    |   Browser Pool       |
-                                    |  (Chromium + Firefox) |
-                                    +----------+----------+
-                                               |
-                                        Target Sites
+                              +----------------+----------------+
+                              |                                 |
+                   +----------v----------+          +-----------v-----------+
+                   |   Browser Pool       |          |   Stealth Engine      |
+                   |  (Chromium + Firefox) |          |  (Isolated sidecar)   |
+                   +----------+----------+          +-----------+-----------+
+                              |                                 |
+                              +-----------+---------------------+
+                                          |
+                                   Target Sites
 ```
 
 ---
 
 ## What It Does
 
-WebHarvest lets you extract content from any website through 5 core actions:
+WebHarvest lets you extract content from any website through 4 core actions:
 
 | Action | Description |
 |--------|-------------|
 | **Scrape** | Extract content from a single URL — markdown, HTML, screenshots, links, structured data, headings, images |
 | **Crawl** | Recursively crawl an entire website following links (BFS), scraping each page |
 | **Map** | Fast URL discovery via sitemaps and homepage link extraction (no content scraping) |
-| **Batch** | Scrape a list of URLs in parallel |
 | **Search** | Search the web (DuckDuckGo/Google/Brave) and scrape each result page |
 
 Every action creates a **Job** record in the database. Results are persisted and can be viewed, exported (JSON/CSV/ZIP), and accessed later from the dashboard or API.
+
+### Cross-User Caching
+
+Results are cached in Redis keyed by URL + parameters. When any user requests the same URL with the same settings, the cached result is returned instantly — no job, no worker, no waiting.
+
+| Mode | Cache Key | Where Checked |
+|------|-----------|---------------|
+| Scrape | URL + formats | API endpoint (instant return, no job created) |
+| Map | URL + limit + subdomains + sitemap + search | API endpoint (instant) + worker |
+| Search | Query + num_results + engine + formats | Worker (instant job completion) |
+| Crawl | URL + max_pages + max_depth | Worker (instant job completion) |
+
+Cache TTL defaults to 1 hour (`CACHE_TTL_SECONDS`). Results larger than 10MB are not cached.
+
+### Format-Aware Extraction
+
+Selecting only the formats you need directly improves performance and reduces server load. The pipeline **skips expensive operations** entirely when they're not requested:
+
+| Format | What Gets Skipped When Not Selected |
+|--------|-------------------------------------|
+| `screenshot` | No browser launch, no page rendering, no screenshot capture |
+| `links` | No link parsing or detailed link extraction |
+| `html` | No HTML copy in result |
+| `structured_data` | No JSON-LD / OpenGraph / meta tag parsing |
+| `headings` | No heading hierarchy extraction |
+| `images` | No image tag extraction |
+
+When only `markdown` is selected, the scraper uses fast HTTP-only tiers (curl_cffi, httpx) instead of launching a browser — this is significantly faster and uses far less CPU/memory.
 
 ---
 
@@ -96,6 +130,7 @@ Every action creates a **Job** record in the database. Results are persisted and
 - **Full Browser Rendering** — Playwright (Chromium + Firefox) handles JavaScript-heavy sites
 - **Anti-Bot Bypass** — 20-level stealth injection, TLS fingerprint impersonation (curl_cffi), request interception, Google referrer chains, and cookie-enhanced HTTP
 - **5-Tier Scraping Pipeline** — Strategy cache → Cookie HTTP → HTTP race → Browser race → Heavy strategies → Fallback archives, with per-domain strategy learning
+- **Stealth Engine** — Optional sidecar microservice with isolated browser instances and advanced fingerprinting for hard-to-scrape sites
 - **Fast Crawling** — Persistent browser sessions, cookie reuse across pages, and producer-consumer pipeline overlap fetch and extraction for ~5x crawl speed
 - **Smart Content Extraction** — Trafilatura strips boilerplate before processing
 - **Advanced Document Extraction** — Multi-format support for PDF (tables, images, OCR), DOCX (formatting, hyperlinks, footnotes), XLSX, PPTX, CSV, RTF, and EPUB with multi-strategy fallbacks
@@ -103,7 +138,8 @@ Every action creates a **Job** record in the database. Results are persisted and
 - **URL Change Monitoring** — Track changes to any URL with configurable intervals, CSS selector targeting, keyword detection, content hash comparison, and similarity thresholds
 - **Scheduled Jobs** — Cron-based recurring scrapes with Celery Beat and timezone support
 - **Webhooks** — HMAC-SHA256 signed notifications when jobs complete or monitors detect changes, with delivery history and debugging
-- **Proxy Support** — Add your own proxies for rotation with bulk import
+- **Proxy Support** — Add your own proxies for rotation with bulk import, plus Scrape.do integration for hard sites
+- **Cross-User Caching** — Redis-based URL cache shared across all users for instant repeated lookups
 - **Usage Quotas** — Per-user quota tracking and enforcement with usage analytics
 - **Export** — Download results as JSON, CSV, or ZIP
 - **Job History** — Full dashboard with filtering, search, and pagination
@@ -169,10 +205,10 @@ Go to `http://localhost:3000` in your browser.
 | Page | URL | What It Does |
 |------|-----|-------------|
 | **Home** | `/` | Quick action cards + recent activity feed |
+| **Playground** | `/playground` | Multi-mode workspace — scrape, crawl, map, search in one page |
 | **Scrape** | `/scrape` | Single-page scraper with format toggles |
 | **Crawl** | `/crawl` | Full-site crawler with depth/concurrency controls |
 | **Map** | `/map` | URL discovery tool |
-| **Batch** | `/batch` | Multi-URL scraper |
 | **Search** | `/search` | Search + scrape engine |
 | **Extract** | `/extract` | Standalone LLM extraction UI |
 | **Jobs** | `/jobs` | Full job history with filters |
@@ -182,8 +218,6 @@ Go to `http://localhost:3000` in your browser.
 | **API Keys** | `/api-keys` | Generate keys for programmatic access |
 | **Settings** | `/settings` | LLM keys (BYOK) and proxy management |
 | **Dashboard** | `/dashboard` | Usage stats, charts, and analytics |
-
-After running a **Scrape** or **Map**, you're redirected to a detail page (`/scrape/{id}` or `/map/{id}`) where you can browse results with tabs and export data.
 
 ---
 
@@ -263,7 +297,10 @@ curl -X POST http://localhost:8000/v1/crawl \
   -d '{
     "url": "https://example.com",
     "max_pages": 50,
-    "max_depth": 3
+    "max_depth": 3,
+    "scrape_options": {
+      "formats": ["markdown"]
+    }
   }'
 # Returns: {"success": true, "job_id": "uuid", "status": "started"}
 
@@ -303,24 +340,6 @@ curl http://localhost:8000/v1/map/JOB_ID/export?format=csv \
   -H "Authorization: Bearer YOUR_TOKEN" -o urls.csv
 ```
 
-### Batch Scrape
-
-```bash
-# Scrape multiple URLs in parallel
-curl -X POST http://localhost:8000/v1/batch/scrape \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "urls": ["https://example.com/page1", "https://example.com/page2"],
-    "formats": ["markdown"],
-    "concurrency": 5
-  }'
-
-# Check batch status
-curl http://localhost:8000/v1/batch/JOB_ID \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
 ### Search + Scrape
 
 ```bash
@@ -331,7 +350,8 @@ curl -X POST http://localhost:8000/v1/search \
   -d '{
     "query": "best python web frameworks 2025",
     "num_results": 5,
-    "engine": "duckduckgo"
+    "engine": "duckduckgo",
+    "formats": ["markdown"]
   }'
 
 # Check search status
@@ -412,10 +432,12 @@ When scraping, you can request these formats:
 | `markdown` | Clean markdown content (default) |
 | `html` | Cleaned HTML |
 | `links` | All links on the page with internal/external breakdown |
-| `screenshot` | Full-page screenshot (base64 PNG) |
+| `screenshot` | Full-page screenshot (base64 JPEG) |
 | `structured_data` | JSON-LD, OpenGraph, Twitter Cards, meta tags |
 | `headings` | Heading hierarchy (H1-H6) |
 | `images` | All images with src, alt text, dimensions |
+
+Only request the formats you need — the pipeline skips extraction for formats not in the list, saving CPU and time.
 
 ---
 
@@ -455,11 +477,6 @@ links = wh.map("https://example.com", limit=500)
 for link in links.links:
     print(link.url, link.title)
 
-# Batch scrape
-status = wh.batch(["https://example.com/a", "https://example.com/b"])
-for page in status.data:
-    print(page.url, page.markdown[:100])
-
 # Search + scrape
 status = wh.search("python web scraping", num_results=5)
 for page in status.data:
@@ -497,11 +514,10 @@ WebHarvest/
 │   │   │   ├── scrape.py      # POST /v1/scrape + GET detail + export
 │   │   │   ├── crawl.py       # POST /v1/crawl + GET status + export
 │   │   │   ├── map.py         # POST /v1/map + GET detail + export
-│   │   │   ├── batch.py       # POST /v1/batch/scrape + GET status
 │   │   │   ├── search.py      # POST /v1/search + GET status
 │   │   │   ├── extract.py     # Standalone LLM extraction
-│   │   │   ├── monitors.py    # URL change monitoring
-│   │   │   ├── webhooks.py    # Webhook delivery logs
+│   │   │   ├── monitor.py     # URL change monitoring
+│   │   │   ├── webhook.py     # Webhook delivery logs
 │   │   │   ├── usage.py       # Usage stats, history, top domains
 │   │   │   └── schedule.py    # CRUD for scheduled jobs
 │   │   ├── models/            # SQLAlchemy models
@@ -514,15 +530,21 @@ WebHarvest/
 │   │   │   ├── scraper.py     # 5-tier scraping pipeline with strategy cache
 │   │   │   ├── browser.py     # Browser pool + CrawlSession (persistent contexts)
 │   │   │   ├── crawler.py     # BFS crawler with session management
-│   │   │   ├── document.py    # Multi-format document extraction (PDF/DOCX/XLSX/PPTX/CSV/RTF/EPUB)
+│   │   │   ├── document.py    # Multi-format document extraction
 │   │   │   ├── mapper.py      # Sitemap + link discovery
 │   │   │   ├── search.py      # Search engine integration
 │   │   │   ├── llm_extract.py # LLM extraction via LiteLLM
 │   │   │   ├── webhook.py     # Webhook delivery with HMAC-SHA256
 │   │   │   └── quota.py       # Usage quota tracking
+│   │   ├── core/              # Framework utilities
+│   │   │   ├── cache.py       # Cross-user URL cache (scrape, map, search, crawl)
+│   │   │   ├── redis.py       # ResilientRedis client
+│   │   │   ├── rate_limiter.py
+│   │   │   └── metrics.py     # Prometheus metrics
 │   │   ├── workers/           # Celery background tasks
 │   │   │   ├── crawl_worker.py    # Producer-consumer pipeline
-│   │   │   ├── batch_worker.py
+│   │   │   ├── scrape_worker.py
+│   │   │   ├── map_worker.py
 │   │   │   ├── search_worker.py
 │   │   │   ├── extract_worker.py
 │   │   │   ├── monitor_worker.py
@@ -535,10 +557,10 @@ WebHarvest/
 │   ├── src/
 │   │   ├── app/               # Pages (App Router)
 │   │   │   ├── page.tsx       # Home + recent activity
+│   │   │   ├── playground/    # Multi-mode workspace
 │   │   │   ├── scrape/        # Scrape page + detail page
 │   │   │   ├── crawl/         # Crawl page + detail page
 │   │   │   ├── map/           # Map page + detail page
-│   │   │   ├── batch/         # Batch page + detail page
 │   │   │   ├── search/        # Search page + detail page
 │   │   │   ├── extract/       # LLM extraction UI
 │   │   │   ├── jobs/          # Job history
@@ -548,6 +570,11 @@ WebHarvest/
 │   │   │   └── settings/      # LLM keys + proxies
 │   │   ├── components/        # Reusable UI components
 │   │   └── lib/api.ts         # API client
+│   └── Dockerfile
+├── stealth-engine/             # Stealth browser sidecar
+│   ├── main.py                # FastAPI service with isolated browser
+│   ├── browser_pool.py        # Chromium + Firefox pool
+│   ├── config.py
 │   └── Dockerfile
 ├── sdk/                        # Python SDK
 │   ├── webharvest/
@@ -580,12 +607,15 @@ All configuration is done through environment variables in `.env`:
 | `RATE_LIMIT_SCRAPE` | `100` | Scrape requests per minute |
 | `RATE_LIMIT_CRAWL` | `20` | Crawl requests per minute |
 | `RATE_LIMIT_MAP` | `50` | Map requests per minute |
-| `RATE_LIMIT_BATCH` | `20` | Batch requests per minute |
 | `RATE_LIMIT_SEARCH` | `30` | Search requests per minute |
 | `MAX_CRAWL_PAGES` | `1000` | Max pages per crawl |
 | `MAX_CRAWL_DEPTH` | `10` | Max link depth per crawl |
 | `DEFAULT_TIMEOUT` | `30000` | Default scrape timeout (ms) |
-| `CACHE_TTL_SECONDS` | `3600` | Cache TTL for scrape results |
+| `CACHE_ENABLED` | `true` | Enable cross-user URL cache |
+| `CACHE_TTL_SECONDS` | `3600` | Cache TTL (1 hour default) |
+| `STEALTH_ENGINE_URL` | (empty) | Stealth engine sidecar URL (optional) |
+| `GO_HTML_TO_MD_URL` | (empty) | Go HTML-to-Markdown sidecar URL (optional) |
+| `SCRAPE_DO_API_KEY` | (empty) | Scrape.do proxy API key for hard sites (optional) |
 
 ---
 
@@ -662,6 +692,7 @@ alembic revision --autogenerate -m "description"  # Create new migration
 | **Cache / Queue** | Redis 7 |
 | **Task Queue** | Celery 5 + Celery Beat |
 | **Browser** | Playwright (Chromium + Firefox), persistent sessions for crawl mode |
+| **Stealth Engine** | Isolated browser sidecar with advanced fingerprinting |
 | **HTTP Engine** | curl_cffi (TLS fingerprint impersonation), httpx (HTTP/2) |
 | **Content Extraction** | Trafilatura, BeautifulSoup, Markdownify |
 | **Document Parsing** | PyMuPDF, pdfplumber, python-docx, openpyxl, python-pptx, striprtf |
