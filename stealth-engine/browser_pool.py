@@ -160,6 +160,7 @@ class StealthBrowserPool:
             "locale": "en-US",
             "timezone_id": "America/New_York",
             "color_scheme": "light",
+            "ignore_https_errors": True,
         }
         if proxy:
             ctx_opts["proxy"] = proxy
