@@ -1340,6 +1340,7 @@ async def scrape_url(
 
     # === Parallel content extraction ===
     result_data: dict[str, Any] = {}
+    _extract_start = time.time()
 
     # Fast path: combined extraction + markdown in single parse (saves ~200-350ms)
     loop = asyncio.get_running_loop()
@@ -1421,6 +1422,15 @@ async def scrape_url(
         metadata_dict = extraction_results[-1]
     else:
         metadata_dict = extract_metadata(raw_html, url, status_code, response_headers)
+
+    _extract_elapsed = (time.time() - _extract_start) * 1000
+    _fetch_elapsed = (_extract_start - start_time) * 1000
+    _total_elapsed = (time.time() - start_time) * 1000
+    logger.info(
+        f"[TIMING] {url} — fetch: {_fetch_elapsed:.0f}ms, "
+        f"extract: {_extract_elapsed:.0f}ms, total: {_total_elapsed:.0f}ms "
+        f"(tier={winning_tier}, strategy={winning_strategy}, html={len(raw_html)}b)"
+    )
 
     if "html" in request.formats:
         result_data["html"] = clean_html
