@@ -441,6 +441,43 @@ def process_crawl(self, job_id: str, config: dict):
                 )
                 extract_done.set()
 
+            async def _capture_screenshot(crawler, url, item, scrape_data):
+                """Try crawl-session then browser-pool screenshot, with retry."""
+                _raw_for_ss = ""
+                if "fetch_result" in item:
+                    _raw_for_ss = item["fetch_result"].get("raw_html", "")
+                elif scrape_data.html:
+                    _raw_for_ss = scrape_data.html
+                if not _raw_for_ss:
+                    return None
+                for _ss_attempt in range(2):
+                    # Try crawl session first
+                    val = await crawler.take_screenshot(url, _raw_for_ss)
+                    if val:
+                        return val
+                    # Fallback: browser_pool (independent browser instance)
+                    try:
+                        from app.services.browser import browser_pool
+
+                        async with browser_pool.get_page(
+                            target_url=url
+                        ) as _ss_page:
+                            await _ss_page.set_content(
+                                _raw_for_ss,
+                                wait_until="domcontentloaded",
+                            )
+                            await _ss_page.wait_for_timeout(500)
+                            _ss_bytes = await _ss_page.screenshot(
+                                type="png", full_page=True
+                            )
+                            return base64.b64encode(_ss_bytes).decode()
+                    except Exception:
+                        pass
+                    # Brief wait for browser to reinitialize
+                    if _ss_attempt == 0:
+                        await asyncio.sleep(2)
+                return None
+
             async def extract_consumer():
                 """Extract content from fetched pages, save to DB."""
                 nonlocal pages_crawled, cancelled, _pinned_strategy, _pinned_tier
@@ -580,64 +617,25 @@ def process_crawl(self, job_id: str, config: dict):
 
                         # Capture screenshot — only if user requested it.
                         # Retry once if the browser was mid-reinitialisation.
+                        # Entire block is time-boxed to prevent the consumer
+                        # from stalling on huge pages (set_content /
+                        # full_page screenshot with megabytes of HTML).
                         screenshot_val = None
                         if _user_formats and "screenshot" not in _user_formats:
                             pass  # User didn't request screenshots — skip entirely
                         elif not (screenshot_val := scrape_data.screenshot):
-                            _raw_for_ss = ""
-                            if "fetch_result" in item:
-                                _raw_for_ss = item["fetch_result"].get(
-                                    "raw_html", ""
+                            try:
+                                screenshot_val = await asyncio.wait_for(
+                                    _capture_screenshot(
+                                        crawler, url, item, scrape_data
+                                    ),
+                                    timeout=45,
                                 )
-                            elif scrape_data.html:
-                                _raw_for_ss = scrape_data.html
-                            if _raw_for_ss:
-                                for _ss_attempt in range(2):
-                                    # Try crawl session first
-                                    screenshot_val = (
-                                        await crawler.take_screenshot(
-                                            url, _raw_for_ss
-                                        )
-                                    )
-                                    if screenshot_val:
-                                        break
-                                    # Fallback: browser_pool (independent
-                                    # browser instance)
-                                    try:
-                                        from app.services.browser import (
-                                            browser_pool,
-                                        )
-
-                                        async with browser_pool.get_page(
-                                            target_url=url
-                                        ) as _ss_page:
-                                            await _ss_page.set_content(
-                                                _raw_for_ss,
-                                                wait_until=(
-                                                    "domcontentloaded"
-                                                ),
-                                            )
-                                            await _ss_page.wait_for_timeout(
-                                                500
-                                            )
-                                            _ss_bytes = (
-                                                await _ss_page.screenshot(
-                                                    type="png",
-                                                    full_page=True,
-                                                )
-                                            )
-                                            screenshot_val = (
-                                                base64.b64encode(
-                                                    _ss_bytes
-                                                ).decode()
-                                            )
-                                    except Exception:
-                                        pass
-                                    if screenshot_val:
-                                        break
-                                    # Brief wait for browser to reinitialize
-                                    if _ss_attempt == 0:
-                                        await asyncio.sleep(2)
+                            except (asyncio.TimeoutError, Exception) as _ss_err:
+                                logger.warning(
+                                    f"Screenshot capture timed out / failed "
+                                    f"for {url}: {_ss_err}"
+                                )
 
                         # Store result — only include fields the user requested
                         async with session_factory() as db:
