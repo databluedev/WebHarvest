@@ -2,11 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PageLayout } from "@/components/layout/page-layout";
 import { api } from "@/lib/api";
 import {
   History,
@@ -55,18 +51,18 @@ const JOB_STATUSES = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
-function getStatusBadgeVariant(status: string): "success" | "destructive" | "warning" | "secondary" {
+function getStatusClasses(status: string): string {
   switch (status) {
     case "completed":
-      return "success";
+      return "border-emerald-500/30 text-emerald-400 bg-emerald-500/10";
     case "failed":
-      return "destructive";
+      return "border-red-500/30 text-red-400 bg-red-500/10";
     case "running":
-      return "warning";
+      return "border-amber-500/30 text-amber-400 bg-amber-500/10";
     case "pending":
     case "cancelled":
     default:
-      return "secondary";
+      return "border-white/20 text-white/50 bg-white/[0.03]";
   }
 }
 
@@ -266,264 +262,265 @@ export default function JobsPage() {
   };
 
   const SortIcon = ({ column }: { column: string }) => {
-    if (sortBy !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />;
-    return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
+    if (sortBy !== column) return <ArrowUpDown className="h-3 w-3 ml-1 text-white/30" />;
+    return sortDir === "asc"
+      ? <ArrowUp className="h-3 w-3 ml-1 text-white" />
+      : <ArrowDown className="h-3 w-3 ml-1 text-white" />;
   };
 
   return (
-    <SidebarProvider>
-    <div className="flex h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto bg-background">
-        <MobileMenuButton />
-        <div className="p-8">
-          <div className="mb-8 animate-float-in">
-            <h1 className="text-3xl font-bold tracking-tight">Job History</h1>
-            <p className="text-muted-foreground mt-1">
-              View all your past scrape, crawl, search, and map jobs
-            </p>
+    <PageLayout activePage="jobs">
+      <div className="px-6 md:px-10 max-w-[1400px] mx-auto py-10">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-[36px] font-extrabold tracking-tight uppercase font-mono text-white">
+            Job History
+          </h1>
+          <p className="text-white/50 font-mono text-[14px] mt-1">
+            View all your past scrape, crawl, search, and map jobs
+          </p>
+        </div>
+
+        {/* Filters */}
+        <div className="border border-white/10 bg-white/[0.02] p-5 mb-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+              <input
+                placeholder="Search by URL or query..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                className="h-10 w-full bg-transparent border border-white/10 pl-9 pr-3 text-[14px] font-mono text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+              />
+            </div>
+            <select
+              value={typeFilter}
+              onChange={handleTypeChange}
+              className="h-10 bg-[#0a0a0a] border border-white/10 px-3 text-[13px] font-mono text-white focus:outline-none focus:border-white/30"
+            >
+              {JOB_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={handleStatusChange}
+              className="h-10 bg-[#0a0a0a] border border-white/10 px-3 text-[13px] font-mono text-white focus:outline-none focus:border-white/30"
+            >
+              {JOB_STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleSearch}
+              className="border border-white/20 px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-white hover:bg-white hover:text-black transition-all flex items-center gap-2"
+            >
+              <Search className="h-4 w-4" />
+              Search
+            </button>
+            {selectedJobs.size > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                className="border border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20 px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono flex items-center gap-2 transition-all"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete {selectedJobs.size}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="mb-4 border border-red-500/30 bg-red-500/10 p-3 flex items-center gap-2 text-[13px] font-mono text-red-400">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        {/* Jobs Table */}
+        <div className="border border-white/10 bg-white/[0.02]">
+          {/* Table header bar */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+            <span className="text-[16px] font-mono font-bold text-white">Jobs</span>
+            {!loading && (
+              <span className="text-[13px] font-mono text-white/50">
+                {total} total job{total !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
 
-          {/* Filters */}
-          <Card className="mb-6">
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by URL or query..."
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    onKeyDown={handleSearchKeyDown}
-                    className="pl-9"
-                  />
-                </div>
-                <select
-                  value={typeFilter}
-                  onChange={handleTypeChange}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                >
-                  {JOB_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={statusFilter}
-                  onChange={handleStatusChange}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                >
-                  {JOB_STATUSES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-                <Button onClick={handleSearch} variant="secondary" className="gap-2">
-                  <Search className="h-4 w-4" />
-                  Search
-                </Button>
-                {selectedJobs.size > 0 && (
-                  <Button onClick={handleBulkDelete} variant="destructive" size="sm" className="gap-2">
-                    <Trash2 className="h-4 w-4" />
-                    Delete {selectedJobs.size}
-                  </Button>
-                )}
+          <div className="px-5 pb-5">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-3" />
+                <p className="text-[13px] font-mono text-white/40">Loading jobs...</p>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Error */}
-          {error && (
-            <div className="mb-4 rounded-md bg-destructive/10 border border-destructive/20 p-3 flex items-center gap-2 text-sm text-red-400">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {error}
-            </div>
-          )}
-
-          {/* Jobs Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center justify-between">
-                <span>Jobs</span>
-                {!loading && (
-                  <span className="text-sm font-normal text-muted-foreground">
-                    {total} total job{total !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-16">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground">Loading jobs...</p>
-                </div>
-              ) : jobs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <History className="h-12 w-12 text-muted-foreground/40 mb-4" />
-                  <p className="text-lg font-medium">No jobs found</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {searchQuery || typeFilter !== "all" || statusFilter !== "all"
-                      ? "Try adjusting your filters or search query."
-                      : "Start a scrape, crawl, or search to see your job history here."}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="py-3 px-3 w-8">
-                            <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
-                              {selectedJobs.size === jobs.length && jobs.length > 0 ? (
+            ) : jobs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <History className="h-12 w-12 text-white/40 mb-4" />
+                <p className="text-[16px] font-mono font-bold text-white">No jobs found</p>
+                <p className="text-[13px] font-mono text-white/50 mt-1">
+                  {searchQuery || typeFilter !== "all" || statusFilter !== "all"
+                    ? "Try adjusting your filters or search query."
+                    : "Start a scrape, crawl, or search to see your job history here."}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[13px] font-mono">
+                    <thead>
+                      <tr className="border-b border-white/[0.06]">
+                        <th className="py-3 px-3 w-8">
+                          <button onClick={toggleSelectAll} className="text-white/30 hover:text-white">
+                            {selectedJobs.size === jobs.length && jobs.length > 0 ? (
+                              <CheckSquare className="h-4 w-4" />
+                            ) : (
+                              <Square className="h-4 w-4" />
+                            )}
+                          </button>
+                        </th>
+                        <th className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono">Type</th>
+                        <th className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono">URL / Query</th>
+                        <th
+                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono cursor-pointer hover:text-white/60 select-none"
+                          onClick={() => handleSort("status")}
+                        >
+                          <span className="flex items-center">Status<SortIcon column="status" /></span>
+                        </th>
+                        <th
+                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono cursor-pointer hover:text-white/60 select-none"
+                          onClick={() => handleSort("total_pages")}
+                        >
+                          <span className="flex items-center">Pages<SortIcon column="total_pages" /></span>
+                        </th>
+                        <th
+                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono cursor-pointer hover:text-white/60 select-none"
+                          onClick={() => handleSort("duration_seconds")}
+                        >
+                          <span className="flex items-center">Duration<SortIcon column="duration_seconds" /></span>
+                        </th>
+                        <th
+                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono cursor-pointer hover:text-white/60 select-none"
+                          onClick={() => handleSort("created_at")}
+                        >
+                          <span className="flex items-center">Created<SortIcon column="created_at" /></span>
+                        </th>
+                        <th className="text-right py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {jobs.map((job) => (
+                        <tr
+                          key={job.id}
+                          onClick={() => handleRowClick(job)}
+                          className="border-b border-white/[0.06] hover:bg-white/[0.03] cursor-pointer transition-colors"
+                        >
+                          <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => toggleSelectJob(job.id)} className="text-white/30 hover:text-white">
+                              {selectedJobs.has(job.id) ? (
                                 <CheckSquare className="h-4 w-4" />
                               ) : (
                                 <Square className="h-4 w-4" />
                               )}
                             </button>
-                          </th>
-                          <th className="text-left py-3 px-3 font-medium text-muted-foreground">Type</th>
-                          <th className="text-left py-3 px-3 font-medium text-muted-foreground">URL / Query</th>
-                          <th className="text-left py-3 px-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none" onClick={() => handleSort("status")}>
-                            <span className="flex items-center">Status<SortIcon column="status" /></span>
-                          </th>
-                          <th className="text-left py-3 px-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none" onClick={() => handleSort("total_pages")}>
-                            <span className="flex items-center">Pages<SortIcon column="total_pages" /></span>
-                          </th>
-                          <th className="text-left py-3 px-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none" onClick={() => handleSort("duration_seconds")}>
-                            <span className="flex items-center">Duration<SortIcon column="duration_seconds" /></span>
-                          </th>
-                          <th className="text-left py-3 px-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground select-none" onClick={() => handleSort("created_at")}>
-                            <span className="flex items-center">Created<SortIcon column="created_at" /></span>
-                          </th>
-                          <th className="text-right py-3 px-3 font-medium text-muted-foreground"></th>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-white/20 text-white/50 bg-white/[0.03]">
+                              {job.type}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 max-w-[300px]">
+                            <span className="truncate block text-white font-mono" title={getJobUrl(job) || "-"}>
+                              {getJobUrl(job) || "-"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border ${getStatusClasses(job.status)}`}>
+                              {job.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 tabular-nums text-white font-mono">
+                            {job.completed_pages !== null && job.total_pages !== null
+                              ? `${job.completed_pages} / ${job.total_pages}`
+                              : job.total_pages !== null
+                              ? job.total_pages
+                              : "-"}
+                          </td>
+                          <td className="py-3 px-3 tabular-nums text-white font-mono">
+                            {formatDuration(job.duration_seconds)}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap text-white/50 font-mono">
+                            {formatDate(job.created_at ?? "")}
+                          </td>
+                          <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="inline-flex items-center justify-center h-8 w-8 text-white/30 hover:text-white transition-colors"
+                              onClick={() => router.push(getRerunPath(job))}
+                              title="Rerun"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </button>
+                            <button
+                              className={`inline-flex items-center justify-center h-8 w-8 transition-colors ${
+                                deleteConfirm === job.id
+                                  ? "text-red-400 bg-red-500/10"
+                                  : "text-white/30 hover:text-red-400"
+                              }`}
+                              onClick={() => handleDelete(job.id)}
+                              disabled={deleting === job.id}
+                              title={deleteConfirm === job.id ? "Click again to confirm delete" : "Delete job"}
+                            >
+                              {deleting === job.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </button>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {jobs.map((job) => (
-                          <tr
-                            key={job.id}
-                            onClick={() => handleRowClick(job)}
-                            className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors"
-                          >
-                            <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                              <button onClick={() => toggleSelectJob(job.id)} className="text-muted-foreground hover:text-foreground">
-                                {selectedJobs.has(job.id) ? (
-                                  <CheckSquare className="h-4 w-4" />
-                                ) : (
-                                  <Square className="h-4 w-4" />
-                                )}
-                              </button>
-                            </td>
-                            <td className="py-3 px-3">
-                              <Badge variant="outline" className="capitalize">
-                                {job.type}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-3 max-w-[300px]">
-                              <span className="truncate block" title={getJobUrl(job) || "-"}>
-                                {getJobUrl(job) || "-"}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3">
-                              <Badge variant={getStatusBadgeVariant(job.status)}>
-                                {job.status}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-3 tabular-nums">
-                              {job.completed_pages !== null && job.total_pages !== null
-                                ? `${job.completed_pages} / ${job.total_pages}`
-                                : job.total_pages !== null
-                                ? job.total_pages
-                                : "-"}
-                            </td>
-                            <td className="py-3 px-3 tabular-nums">
-                              {formatDuration(job.duration_seconds)}
-                            </td>
-                            <td className="py-3 px-3 whitespace-nowrap text-muted-foreground">
-                              {formatDate(job.created_at ?? "")}
-                            </td>
-                            <td className="py-3 px-3 text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  router.push(getRerunPath(job));
-                                }}
-                                title="Rerun"
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className={`h-8 w-8 ${
-                                  deleteConfirm === job.id
-                                    ? "text-destructive hover:text-destructive bg-destructive/10"
-                                    : "text-muted-foreground hover:text-destructive"
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(job.id);
-                                }}
-                                disabled={deleting === job.id}
-                                title={deleteConfirm === job.id ? "Click again to confirm delete" : "Delete job"}
-                              >
-                                {deleting === job.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-                      <p className="text-sm text-muted-foreground">
-                        Page {page} of {totalPages}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPage((p) => Math.max(1, p - 1))}
-                          disabled={page <= 1}
-                          className="gap-1"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                          Previous
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                          disabled={page >= totalPages}
-                          className="gap-1"
-                        >
-                          Next
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/[0.06]">
+                    <p className="text-[13px] font-mono text-white/50">
+                      Page {page} of {totalPages}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page <= 1}
+                        className="border border-white/20 px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-white hover:bg-white hover:text-black transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-white flex items-center gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={page >= totalPages}
+                        className="border border-white/20 px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-white hover:bg-white hover:text-black transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-white flex items-center gap-1"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
                     </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </main>
-    </div>
-    </SidebarProvider>
+      </div>
+    </PageLayout>
   );
 }

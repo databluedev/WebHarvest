@@ -2,10 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { ChevronDown, ChevronRight, Search, FileText, Copy, Check, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { PageLayout } from "@/components/layout/page-layout";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1557,12 +1556,12 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-medium text-muted-foreground/50 uppercase tracking-widest">
+        <span className="text-[10px] font-medium text-white/30 uppercase tracking-widest">
           {label}
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-muted-foreground/50 hover:text-foreground/70 hover:bg-foreground/[0.05] transition-all duration-150"
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-all duration-150"
         >
           {copied ? (
             <>
@@ -1577,7 +1576,7 @@ function CodeBlock({ code, label }: { code: string; label: string }) {
           )}
         </button>
       </div>
-      <pre className="rounded-lg border border-border bg-muted p-4 overflow-x-auto text-[12px] leading-relaxed font-mono text-foreground/70">
+      <pre className="rounded-lg border border-white/10 bg-[#0a0a0a] p-4 overflow-x-auto text-[12px] leading-relaxed font-mono text-white/70">
         <code>{code}</code>
       </pre>
     </div>
@@ -1606,16 +1605,16 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden transition-all duration-200">
+    <div className="rounded-lg border border-white/10 bg-white/[0.02] overflow-hidden transition-all duration-200">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 p-4 text-left hover:bg-foreground/[0.02] transition-all duration-150"
+        className="w-full flex items-center gap-3 p-4 text-left hover:bg-white/[0.03] transition-all duration-150"
       >
         <div className="shrink-0">
           {expanded ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground/50" />
+            <ChevronDown className="h-4 w-4 text-white/30" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+            <ChevronRight className="h-4 w-4 text-white/30" />
           )}
         </div>
         <Badge
@@ -1623,24 +1622,24 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
         >
           {endpoint.method}
         </Badge>
-        <code className="text-sm font-mono text-foreground/80 truncate">
+        <code className="text-sm font-mono text-white truncate">
           {endpoint.path}
         </code>
-        <span className="ml-auto text-xs text-muted-foreground/50 hidden sm:block max-w-[40%] truncate">
+        <span className="ml-auto text-xs text-white/40 hidden sm:block max-w-[40%] truncate">
           {endpoint.description}
         </span>
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 pt-0 border-t border-border animate-scale-in">
-          <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
+        <div className="px-4 pb-4 pt-0 border-t border-white/10 animate-scale-in">
+          <p className="text-sm text-white/60 mt-4 leading-relaxed">
             {endpoint.description}
           </p>
 
           {getPlaygroundLink(endpoint.path) && (
             <Link
               href={getPlaygroundLink(endpoint.path)!}
-              className="inline-flex items-center gap-1.5 mt-3 text-xs font-medium text-primary hover:underline"
+              className="inline-flex items-center gap-1.5 mt-3 text-xs font-medium text-emerald-400 hover:text-emerald-300"
             >
               <ExternalLink className="h-3 w-3" />
               Try in Playground
@@ -1721,221 +1720,218 @@ export default function DocsPage() {
   );
 
   return (
-    <div className="flex h-screen bg-background">
-      {/* Sidebar Navigation */}
-      <aside className="hidden lg:flex flex-col w-72 border-r border-border bg-sidebar">
-        {/* Sidebar Header */}
-        <div className="p-6 border-b border-border">
-          <div className="flex items-center gap-2.5 mb-4">
-            <div className="h-9 w-9 rounded-lg bg-primary/10 grid place-items-center">
-              <FileText className="h-4.5 w-4.5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-base font-semibold tracking-tight">API Docs</h1>
-              <p className="text-[11px] text-muted-foreground/50">v1 Reference</p>
-            </div>
-          </div>
-
-          {/* Search Input */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
-            <Input
-              placeholder="Search endpoints..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 rounded-md text-sm h-9"
-            />
-          </div>
-        </div>
-
-        {/* Section Links */}
-        <nav className="flex-1 overflow-y-auto py-3 px-3">
-          {API_SECTIONS.map((section) => {
-            const isActive = activeSection === section.id;
-            return (
-              <button
-                key={section.id}
-                onClick={() => handleSectionClick(section.id)}
-                className={`relative w-full flex items-center justify-between rounded-md px-3 py-2.5 text-left text-sm transition-all duration-150 mb-0.5 ${
-                  isActive
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:text-foreground/80 hover:bg-foreground/[0.03]"
-                }`}
-              >
-                {isActive && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full bg-primary" />
-                )}
-                <span>{section.title}</span>
-                <span
-                  className={`text-[10px] tabular-nums ${
-                    isActive ? "text-primary/60" : "text-muted-foreground/40"
-                  }`}
-                >
-                  {section.endpoints.length}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Sidebar Footer */}
-        <div className="p-4 border-t border-border">
-          <div className="rounded-lg border border-border bg-muted/50 p-3">
-            <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
-              <span className="text-foreground/60 font-medium">{API_SECTIONS.length} sections</span>
-              {" / "}
-              <span className="text-foreground/60 font-medium">{totalEndpoints} endpoints</span>
-            </p>
-            <p className="text-[10px] text-muted-foreground/40 mt-1">
-              Base URL: <code className="text-primary/70 font-mono">/api/v1</code>
-            </p>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main
-        className="flex-1 overflow-y-auto"
-        onScroll={handleScroll}
-      >
-        <div className="max-w-4xl mx-auto px-6 md:px-10 py-10">
-          {/* Page Header */}
-          <header className="mb-10 animate-float-in">
-            <div className="inline-flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3.5 py-1.5 mb-5">
-              <FileText className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs text-foreground/60">API Reference</span>
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight leading-[1.1]">
-              API{" "}
-              <span className="text-foreground">Documentation</span>
-            </h1>
-            <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mt-4 leading-relaxed font-light">
-              Complete reference for the WebHarvest REST API. All endpoints accept and
-              return JSON. Authenticate using a Bearer token or API key in the{" "}
-              <code className="text-xs bg-foreground/[0.06] px-1.5 py-0.5 rounded font-mono text-foreground/70">
-                Authorization
-              </code>{" "}
-              header.
-            </p>
-
-            {/* Auth example */}
-            <div className="mt-5 rounded-lg border border-border bg-card p-4">
-              <p className="text-[10px] text-muted-foreground/50 uppercase tracking-widest font-medium mb-2">
-                Authorization Header
-              </p>
-              <code className="text-sm font-mono text-foreground/60 block">
-                <span className="text-muted-foreground/40">Authorization:</span>{" "}
-                <span className="text-primary/80">Bearer</span>{" "}
-                <span className="text-amber-400/70">wh_prod_sk_a1b2c3d4...</span>
-              </code>
+    <PageLayout activePage="docs">
+      <div className="flex min-h-[calc(100vh-7rem)]">
+        {/* Docs sidebar (hidden lg:flex) */}
+        <aside className="hidden lg:flex flex-col w-72 border-r border-white/10 bg-white/[0.02] sticky top-28 h-[calc(100vh-7rem)]">
+          {/* Sidebar Header */}
+          <div className="p-6 border-b border-white/10">
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="h-9 w-9 rounded-lg bg-white/[0.05] grid place-items-center">
+                <FileText className="h-4.5 w-4.5 text-white/60" />
+              </div>
+              <div>
+                <h1 className="text-base font-semibold tracking-tight text-white font-mono uppercase">API Docs</h1>
+                <p className="text-[11px] text-white/30 font-mono">v1 Reference</p>
+              </div>
             </div>
 
-            {/* Mobile search */}
-            <div className="relative mt-5 lg:hidden">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40" />
-              <Input
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" />
+              <input
                 placeholder="Search endpoints..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 rounded-md text-sm h-10"
+                className="w-full pl-9 pr-3 rounded-md text-sm h-9 bg-transparent border border-white/10 text-white placeholder:text-white/30 font-mono focus:outline-none focus:border-white/20 transition-colors"
               />
             </div>
+          </div>
 
-            {/* Mobile section pills */}
-            <div className="flex flex-wrap gap-2 mt-5 lg:hidden">
-              {API_SECTIONS.map((section) => (
+          {/* Section Links */}
+          <nav className="flex-1 overflow-y-auto py-3 px-3">
+            {API_SECTIONS.map((section) => {
+              const isActive = activeSection === section.id;
+              return (
                 <button
                   key={section.id}
                   onClick={() => handleSectionClick(section.id)}
-                  className={`rounded-md px-3 py-1.5 text-xs transition-all duration-150 border ${
-                    activeSection === section.id
-                      ? "bg-primary/10 text-primary border-primary/20"
-                      : "text-muted-foreground border-border hover:bg-muted"
+                  className={`relative w-full flex items-center justify-between rounded-md px-3 py-2.5 text-left text-sm transition-all duration-150 mb-0.5 font-mono ${
+                    isActive
+                      ? "bg-white/[0.05] text-white font-medium"
+                      : "text-white/40 hover:text-white/70 hover:bg-white/[0.02]"
                   }`}
                 >
-                  {section.title}
+                  {isActive && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full bg-emerald-500" />
+                  )}
+                  <span>{section.title}</span>
+                  <span className="text-[10px] tabular-nums text-white/30">
+                    {section.endpoints.length}
+                  </span>
                 </button>
+              );
+            })}
+          </nav>
+
+          {/* Sidebar Footer */}
+          <div className="p-4 border-t border-white/10">
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <p className="text-[11px] text-white/50 leading-relaxed font-mono">
+                <span className="text-white/60 font-medium">{API_SECTIONS.length} sections</span>
+                {" / "}
+                <span className="text-white/60 font-medium">{totalEndpoints} endpoints</span>
+              </p>
+              <p className="text-[10px] text-white/30 mt-1 font-mono">
+                Base URL: <code className="text-emerald-400/70 font-mono">/api/v1</code>
+              </p>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <main
+          className="flex-1 overflow-y-auto"
+          onScroll={handleScroll}
+        >
+          <div className="max-w-4xl mx-auto px-6 md:px-10 py-10">
+            {/* Page Header */}
+            <header className="mb-10">
+              <div className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.02] px-3.5 py-1.5 mb-5">
+                <FileText className="h-3.5 w-3.5 text-white/50" />
+                <span className="text-xs text-white/50 font-mono uppercase tracking-wider">API Reference</span>
+              </div>
+              <h1 className="text-[40px] font-extrabold tracking-tight uppercase font-mono text-white leading-[1.1]">
+                API Documentation
+              </h1>
+              <p className="text-sm sm:text-base text-white/50 max-w-2xl mt-4 leading-relaxed font-light">
+                Complete reference for the WebHarvest REST API. All endpoints accept and
+                return JSON. Authenticate using a Bearer token or API key in the{" "}
+                <code className="text-xs bg-white/[0.06] px-1.5 py-0.5 rounded font-mono text-white/70">
+                  Authorization
+                </code>{" "}
+                header.
+              </p>
+
+              {/* Auth example */}
+              <div className="mt-5 rounded-lg border border-white/10 bg-white/[0.02] p-4">
+                <p className="text-[10px] text-white/30 uppercase tracking-widest font-medium mb-2 font-mono">
+                  Authorization Header
+                </p>
+                <code className="text-sm font-mono text-white/60 block">
+                  <span className="text-white/40">Authorization:</span>{" "}
+                  <span className="text-blue-400">Bearer</span>{" "}
+                  <span className="text-amber-400">wh_prod_sk_a1b2c3d4...</span>
+                </code>
+              </div>
+
+              {/* Mobile search */}
+              <div className="relative mt-5 lg:hidden">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" />
+                <input
+                  placeholder="Search endpoints..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 rounded-md text-sm h-10 bg-transparent border border-white/10 text-white placeholder:text-white/30 font-mono focus:outline-none focus:border-white/20 transition-colors"
+                />
+              </div>
+
+              {/* Mobile section pills */}
+              <div className="flex flex-wrap gap-2 mt-5 lg:hidden">
+                {API_SECTIONS.map((section) => (
+                  <button
+                    key={section.id}
+                    onClick={() => handleSectionClick(section.id)}
+                    className={`rounded-md px-3 py-1.5 text-xs transition-all duration-150 border font-mono ${
+                      activeSection === section.id
+                        ? "bg-white/[0.05] text-white border-white/30"
+                        : "text-white/40 border-white/20 hover:bg-white/[0.02] hover:text-white/60"
+                    }`}
+                  >
+                    {section.title}
+                  </button>
+                ))}
+              </div>
+            </header>
+
+            {/* Sections */}
+            <div className="space-y-12">
+              {filteredSections.length === 0 && (
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-12 text-center">
+                  <Search className="h-10 w-10 text-white/20 mx-auto mb-4" />
+                  <p className="text-white/40 text-sm">
+                    No endpoints matching{" "}
+                    <span className="text-white/70 font-medium">
+                      &ldquo;{searchQuery}&rdquo;
+                    </span>
+                  </p>
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="mt-3 text-xs text-emerald-400 hover:text-emerald-300"
+                  >
+                    Clear search
+                  </button>
+                </div>
+              )}
+
+              {filteredSections.map((section) => (
+                <section
+                  key={section.id}
+                  id={`section-${section.id}`}
+                  className="scroll-mt-32"
+                >
+                  {/* Section Header */}
+                  <div className="mb-4">
+                    <h2 className="text-[20px] font-bold tracking-tight text-white font-mono uppercase flex items-center gap-3">
+                      {section.title}
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] font-normal text-white/40 border-white/20"
+                      >
+                        {section.endpoints.length}{" "}
+                        {section.endpoints.length === 1 ? "endpoint" : "endpoints"}
+                      </Badge>
+                    </h2>
+                    <p className="text-sm text-white/50 mt-1.5 leading-relaxed max-w-2xl">
+                      {section.description}
+                    </p>
+                  </div>
+
+                  {/* Endpoints */}
+                  <div className="space-y-2">
+                    {section.endpoints.map((endpoint, idx) => (
+                      <EndpointCard
+                        key={`${endpoint.method}-${endpoint.path}-${idx}`}
+                        endpoint={endpoint}
+                      />
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
-          </header>
 
-          {/* Sections */}
-          <div className="space-y-12">
-            {filteredSections.length === 0 && (
-              <div className="rounded-lg border border-border bg-card p-12 text-center">
-                <Search className="h-10 w-10 text-muted-foreground/30 mx-auto mb-4" />
-                <p className="text-muted-foreground text-sm">
-                  No endpoints matching{" "}
-                  <span className="text-foreground/70 font-medium">
-                    &ldquo;{searchQuery}&rdquo;
-                  </span>
+            {/* Footer */}
+            <footer className="mt-16 mb-8 pt-8 border-t border-white/10">
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-6 text-center">
+                <p className="text-sm text-white/50">
+                  Need help?{" "}
+                  <a href="/api-keys" className="text-emerald-400 hover:text-emerald-300">
+                    Generate an API key
+                  </a>{" "}
+                  to get started or check the{" "}
+                  <a href="/" className="text-emerald-400 hover:text-emerald-300">
+                    dashboard
+                  </a>{" "}
+                  for usage analytics.
                 </p>
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="mt-3 text-xs text-primary hover:underline"
-                >
-                  Clear search
-                </button>
+                <p className="text-[11px] text-white/30 mt-2 font-mono">
+                  WebHarvest API v1 -- Self-hosted open source web crawling platform
+                </p>
               </div>
-            )}
-
-            {filteredSections.map((section) => (
-              <section
-                key={section.id}
-                id={`section-${section.id}`}
-                className="scroll-mt-6"
-              >
-                {/* Section Header */}
-                <div className="mb-4">
-                  <h2 className="text-xl font-bold tracking-tight flex items-center gap-3">
-                    {section.title}
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] font-normal text-muted-foreground border-border"
-                    >
-                      {section.endpoints.length}{" "}
-                      {section.endpoints.length === 1 ? "endpoint" : "endpoints"}
-                    </Badge>
-                  </h2>
-                  <p className="text-sm text-muted-foreground/70 mt-1.5 leading-relaxed max-w-2xl">
-                    {section.description}
-                  </p>
-                </div>
-
-                {/* Endpoints */}
-                <div className="space-y-2">
-                  {section.endpoints.map((endpoint, idx) => (
-                    <EndpointCard
-                      key={`${endpoint.method}-${endpoint.path}-${idx}`}
-                      endpoint={endpoint}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+            </footer>
           </div>
-
-          {/* Footer */}
-          <footer className="mt-16 mb-8 pt-8 border-t border-border">
-            <div className="rounded-lg border border-border bg-card p-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                Need help?{" "}
-                <a href="/api-keys" className="text-primary hover:underline">
-                  Generate an API key
-                </a>{" "}
-                to get started or check the{" "}
-                <a href="/" className="text-primary hover:underline">
-                  dashboard
-                </a>{" "}
-                for usage analytics.
-              </p>
-              <p className="text-[11px] text-muted-foreground/40 mt-2">
-                WebHarvest API v1 -- Self-hosted open source web crawling platform
-              </p>
-            </div>
-          </footer>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </PageLayout>
   );
 }
