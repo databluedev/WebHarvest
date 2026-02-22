@@ -11,7 +11,8 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        sans: ["'Outfit'", "system-ui", "-apple-system", "sans-serif"],
+        sans: ["var(--font-outfit)", "'Outfit'", "system-ui", "-apple-system", "sans-serif"],
+        display: ["var(--font-syne)", "'Syne'", "system-ui", "sans-serif"],
         mono: ["'JetBrains Mono'", "'Fira Code'", "'Cascadia Code'", "monospace"],
       },
       colors: {

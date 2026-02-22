@@ -413,3 +413,98 @@ input[type="range"]::-webkit-slider-thumb {
 .page-subtitle {
   @apply text-sm text-muted-foreground mt-1;
 }
+
+/* ========================================
+   Landing Page
+   ======================================== */
+
+@keyframes ticker-slide {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes landing-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.animate-ticker {
+  animation: ticker-slide 30s linear infinite;
+}
+
+.animate-gradient-text {
+  background: linear-gradient(135deg, #10b981, #f59e0b);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 4s ease infinite;
+}
+
+.animate-landing-float {
+  animation: landing-float 6s ease-in-out infinite;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s infinite;
+}
+
+/* Landing feature grid with 1px gap borders */
+.landing-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: hsl(var(--border));
+  border: 1px solid hsl(var(--border));
+}
+
+@media (max-width: 1024px) {
+  .landing-feature-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .landing-feature-grid { grid-template-columns: 1fr; }
+}
+
+/* Landing comparison table */
+.landing-table {
+  @apply w-full text-sm border-collapse;
+  border: 1px solid hsl(var(--border));
+}
+.landing-table th,
+.landing-table td {
+  @apply px-5 py-3.5 text-left;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.landing-table th {
+  @apply font-mono text-xs uppercase tracking-wider text-muted-foreground;
+  background: hsl(var(--card));
+}
+.landing-table td:first-child {
+  @apply font-mono text-xs text-muted-foreground tracking-wide;
+}
+.landing-table .hl {
+  background: rgba(16, 185, 129, 0.03);
+}
+.landing-table th.hl {
+  color: #10b981;
+}
+.landing-table td.hl {
+  color: hsl(var(--foreground));
+}
+.landing-table tr:hover td {
+  background: rgba(255, 255, 255, 0.01);
+}
+.landing-table tr:hover td.hl {
+  background: rgba(16, 185, 129, 0.06);
+}
