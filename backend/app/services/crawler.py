@@ -296,18 +296,25 @@ class WebCrawler:
             return
 
         # Faceted URL filtering
+        _pre_facet = len(urls)
         if getattr(self.config, "filter_faceted_urls", True):
             from app.services.dedup import filter_faceted_urls
             urls = filter_faceted_urls(urls)
 
         filtered = []
+        _rejected_visited = 0
+        _rejected_crawl = 0
+        _rejected_robots = 0
         for url in urls:
             norm = normalize_url(url)
             if await self.is_visited(norm):
+                _rejected_visited += 1
                 continue
             if not self._should_crawl(url, depth):
+                _rejected_crawl += 1
                 continue
             if self.config.respect_robots_txt and not await self._is_allowed_by_robots(url):
+                _rejected_robots += 1
                 continue
 
             # Re-check backpressure after each URL
@@ -321,7 +328,17 @@ class WebCrawler:
             filtered.append((norm, depth))
 
         if not filtered:
+            logger.warning(
+                f"Frontier filter: 0/{_pre_facet} URLs survived for {self.job_id} "
+                f"(after_facet={len(urls)}, visited={_rejected_visited}, "
+                f"crawl_filter={_rejected_crawl}, robots={_rejected_robots})"
+            )
             return
+        logger.info(
+            f"Frontier: added {len(filtered)}/{_pre_facet} URLs for {self.job_id} "
+            f"(facet={_pre_facet - len(urls)}, visited={_rejected_visited}, "
+            f"crawl_filter={_rejected_crawl}, robots={_rejected_robots})"
+        )
 
         if self._use_redis:
             await self._redis_add_urls(filtered)
