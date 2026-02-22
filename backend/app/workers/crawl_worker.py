@@ -209,11 +209,31 @@ def process_crawl(self, job_id: str, config: dict):
                                 if fetch_result:
                                     html_len = len(fetch_result.get("raw_html", ""))
                                     ws = fetch_result.get("winning_strategy", "?")
+                                    sc = fetch_result.get("status_code", 0)
                                     logger.warning(
-                                        f"Fetched {url} via {ws} ({html_len} chars)"
+                                        f"Fetched {url} via {ws} ({html_len} chars, {sc})"
                                     )
+
+                                    # Firecrawl-style escalation: if the page
+                                    # returned a block status (401/403/429) or
+                                    # looks blocked, unpin the strategy so the
+                                    # next page retries all strategies fresh.
+                                    _is_blocked = sc in (401, 403, 429)
+                                    if not _is_blocked:
+                                        from app.services.scraper import _looks_blocked
+                                        raw = fetch_result.get("raw_html", "")
+                                        _is_blocked = _looks_blocked(raw)
+
+                                    if _is_blocked and _pinned_strategy is not None:
+                                        logger.warning(
+                                            f"Strategy escalation: {ws} returned "
+                                            f"blocked ({sc}) for {url}, unpinning"
+                                        )
+                                        _pinned_strategy = None
+                                        _pinned_tier = None
+
                                     # Pin strategy from first success
-                                    if _pinned_strategy is None:
+                                    if _pinned_strategy is None and not _is_blocked:
                                         wt = fetch_result.get("winning_tier")
                                         if ws and wt is not None:
                                             _pinned_strategy = ws
@@ -449,8 +469,9 @@ def process_crawl(self, job_id: str, config: dict):
                                     cancelled = True
                             await db.commit()
 
-                        # Add discovered links to frontier
-                        if discovered_links:
+                        # Add discovered links to frontier (skip if we've
+                        # already hit the page limit — no point expanding)
+                        if discovered_links and pages_crawled < request.max_pages:
                             await crawler.add_to_frontier(discovered_links, depth + 1)
 
                     except Exception as e:

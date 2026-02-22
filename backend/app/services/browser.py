@@ -135,8 +135,16 @@ AD_SERVING_DOMAINS = frozenset(
 )
 
 # Resource types to block in crawl mode (saves bandwidth, speeds up loads).
-# Images are NOT blocked — needed for screenshot rendering and lazy-load triggers.
 CRAWL_BLOCKED_RESOURCE_TYPES = frozenset({"media", "font"})
+
+# Image/media file extensions to block by URL pattern in crawl mode
+# (Firecrawl pattern: block heavy assets during page fetch — screenshots
+# are rendered separately from captured HTML, so images aren't needed.)
+_BLOCKED_MEDIA_EXTENSIONS = frozenset({
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp",
+    ".tiff", ".mp3", ".mp4", ".avi", ".flac", ".ogg", ".wav", ".webm",
+    ".woff", ".woff2", ".ttf", ".eot",
+})
 
 
 async def _setup_route_blocking(
@@ -146,7 +154,8 @@ async def _setup_route_blocking(
 
     Args:
         context: Playwright BrowserContext to apply routes to.
-        block_media: If True, also block video/audio/font resources (crawl mode).
+        block_media: If True, also block images/video/audio/font by resource
+                     type AND URL extension (crawl mode — Firecrawl pattern).
     """
 
     async def _route_handler(route, request):
@@ -165,10 +174,24 @@ async def _setup_route_blocking(
                 await route.abort()
                 return
 
-        # Block heavy resource types in crawl mode
-        if block_media and request.resource_type in CRAWL_BLOCKED_RESOURCE_TYPES:
-            await route.abort()
-            return
+        if block_media:
+            # Block heavy resource types
+            if request.resource_type in CRAWL_BLOCKED_RESOURCE_TYPES:
+                await route.abort()
+                return
+
+            # Block media files by URL extension (Firecrawl pattern)
+            # Extract path portion (before query string) and check extension
+            try:
+                path_part = after_scheme.split("/", 1)[1].split("?")[0].lower()
+                dot_pos = path_part.rfind(".")
+                if dot_pos != -1:
+                    ext = path_part[dot_pos:]
+                    if ext in _BLOCKED_MEDIA_EXTENSIONS:
+                        await route.abort()
+                        return
+            except (IndexError, ValueError):
+                pass
 
         await route.continue_()
 

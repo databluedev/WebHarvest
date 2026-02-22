@@ -52,10 +52,12 @@ _TRACKING_PARAMS = {
 
 
 def normalize_url(url: str) -> str:
-    """Normalize a URL for deduplication.
+    """Normalize a URL for deduplication (Firecrawl-style permutation dedup).
 
     - Lowercase scheme and host
+    - Strip www. prefix (www.example.com == example.com)
     - Remove trailing slash (unless path is just /)
+    - Strip index.html / index.htm (same page as directory)
     - Sort query params
     - Strip tracking params (utm_*, fbclid, gclid, etc.)
     - Remove fragments
@@ -76,6 +78,10 @@ def normalize_url(url: str) -> str:
     if (scheme == "http" and port == 80) or (scheme == "https" and port == 443):
         port = None
 
+    # Strip www. prefix for dedup (www.example.com == example.com)
+    if host.startswith("www."):
+        host = host[4:]
+
     netloc = host
     if port:
         netloc = f"{host}:{port}"
@@ -92,6 +98,8 @@ def normalize_url(url: str) -> str:
     # Remove trailing slash (but keep root /)
     if len(path) > 1 and path.endswith("/"):
         path = path.rstrip("/")
+    # Strip index.html / index.htm (same page as directory)
+    path = re.sub(r"/index\.html?$", "", path) or "/"
 
     # Sort and filter query params
     query_params = parse_qs(parsed.query, keep_blank_values=True)

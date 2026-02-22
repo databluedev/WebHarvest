@@ -81,9 +81,20 @@ class TestNormalizeUrl:
         assert normalize_url("HTTPS://Example.Com/Path") == "https://example.com/Path"
 
     def test_host_lowercased(self):
-        """Hostname is lowercased."""
+        """Hostname is lowercased and www. stripped."""
         result = normalize_url("https://WWW.EXAMPLE.COM/page")
-        assert "www.example.com" in result
+        assert "example.com" in result
+        # www. should be stripped for dedup
+        assert "www." not in result
+
+    def test_www_stripped_for_dedup(self):
+        """www.example.com normalizes to example.com (Firecrawl-style dedup)."""
+        assert normalize_url("https://www.example.com/page") == normalize_url("https://example.com/page")
+
+    def test_index_html_stripped(self):
+        """index.html is stripped (same page as directory)."""
+        assert normalize_url("https://example.com/docs/index.html") == "https://example.com/docs"
+        assert normalize_url("https://example.com/index.htm") == "https://example.com/"
 
     def test_default_http_port_removed(self):
         """Port 80 is removed for http."""
