@@ -39,6 +39,54 @@ import {
   Menu,
 } from "lucide-react";
 
+// ── Glitch Text Hook ─────────────────────────────────────────
+
+const GLITCH_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*!?<>{}[]";
+
+function useGlitchText(text: string, duration = 400) {
+  const [display, setDisplay] = useState(text);
+  const frameRef = useRef<number | null>(null);
+  const prevText = useRef(text);
+
+  useEffect(() => {
+    if (text === prevText.current) return;
+    prevText.current = text;
+
+    const target = text.toUpperCase();
+    const len = Math.max(target.length, display.length);
+    const startTime = performance.now();
+
+    const scramble = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      let result = "";
+      for (let i = 0; i < len; i++) {
+        const charProgress = Math.max(0, (progress - i / len / 2) * 2);
+        if (charProgress >= 1 && i < target.length) {
+          result += target[i];
+        } else if (i < target.length) {
+          result += GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
+        }
+      }
+      setDisplay(result);
+
+      if (progress < 1) {
+        frameRef.current = requestAnimationFrame(scramble);
+      } else {
+        setDisplay(target);
+      }
+    };
+
+    frameRef.current = requestAnimationFrame(scramble);
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    };
+  }, [text, duration]);
+
+  return display;
+}
+
 // ── Types ────────────────────────────────────────────────────
 
 type Endpoint = "scrape" | "crawl" | "search" | "map";
@@ -399,6 +447,8 @@ function PlaygroundContent() {
     return ENDPOINTS.find((e) => e.id === ep) ? ep : "scrape";
   });
 
+  const glitchTitle = useGlitchText(activeEndpoint);
+
   useEffect(() => {
     const ep = searchParams.get("endpoint") as Endpoint;
     if (ep && ENDPOINTS.find((e) => e.id === ep) && ep !== activeEndpoint) {
@@ -640,7 +690,7 @@ function PlaygroundContent() {
               <div>
                 <div className="inline-block border border-emerald-500 text-emerald-400 text-[11px] uppercase tracking-[0.25em] px-4 py-1.5 mb-8 font-mono">Interactive Console</div>
                 <h1 className="font-display text-[48px] md:text-[72px] leading-[0.9] tracking-[-3px] uppercase mb-6">
-                  <span className="animate-gradient-text">{activeEndpoint.toUpperCase()}</span><br />
+                  <span className="animate-gradient-text">{glitchTitle}</span><br />
                   <span className="text-white/30">THE WEB.</span>
                 </h1>
                 <p className="text-[16px] text-white/50 max-w-[500px] leading-[1.8] border-l-2 border-emerald-500/40 pl-6 font-mono">
