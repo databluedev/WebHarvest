@@ -34,7 +34,6 @@ const nextConfig = {
 };
 
 module.exports = withSentryConfig(nextConfig, {
-  // No source map upload — keeps config simple (no auth token needed)
   silent: true,
   disableServerWebpackPlugin: true,
   disableClientWebpackPlugin: true,

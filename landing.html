@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebHarvest — Open Source Web Scraping Platform</title>
+<meta name="description" content="Self-hosted, Firecrawl-compatible web scraping platform. Scrape, crawl, and extract at scale.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #050505;
+  --bg-card: #0a0a0a;
+  --bg-elevated: #111111;
+  --border: #1a1a1a;
+  --border-bright: #2a2a2a;
+  --text: #f0f0f0;
+  --text-muted: #777;
+  --text-dim: #444;
+  --emerald: #10b981;
+  --emerald-dim: #064e3b;
+  --emerald-glow: rgba(16, 185, 129, 0.15);
+  --amber: #f59e0b;
+  --amber-dim: #78350f;
+  --red: #ef4444;
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+html { background: var(--bg); color: var(--text); font-family: var(--font-body); }
+body { overflow-x: hidden; background: var(--bg); }
+
+/* Grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+/* Selection */
+::selection { background: var(--emerald); color: var(--bg); }
+
+/* ═══ UTILITIES ═══ */
+.container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+.section { padding: 120px 0; }
+.mono { font-family: var(--font-mono); }
+.text-emerald { color: var(--emerald); }
+.text-amber { color: var(--amber); }
+.text-muted { color: var(--text-muted); }
+.text-dim { color: var(--text-dim); }
+
+/* ═══ ANIMATIONS ═══ */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideLeft {
+  from { transform: translateX(100%); }
+  to { transform: translateX(-100%); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes scan {
+  0% { top: 0; }
+  100% { top: 100%; }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-5 { transition-delay: 0.5s; }
+
+/* ═══ NAVIGATION ═══ */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 0 24px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(5, 5, 5, 0.8);
+  border-bottom: 1px solid var(--border);
+}
+.nav-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text);
+}
+.nav-logo svg { width: 28px; height: 28px; }
+.nav-logo span {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 2px;
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  list-style: none;
+}
+.nav-links a {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--emerald); }
+.nav-cta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 8px 20px;
+  border: 1px solid var(--emerald);
+  color: var(--emerald);
+  background: transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s;
+}
+.nav-cta:hover {
+  background: var(--emerald);
+  color: var(--bg);
+  box-shadow: 0 0 30px var(--emerald-glow);
+}
+
+/* ═══ HERO ═══ */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding-top: 64px;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, var(--emerald-glow) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+  width: 100%;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--emerald);
+  border: 1px solid var(--emerald-dim);
+  padding: 6px 14px;
+  margin-bottom: 32px;
+  background: rgba(16, 185, 129, 0.05);
+}
+.hero-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--emerald);
+  animation: pulse-dot 2s infinite;
+}
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(48px, 6vw, 82px);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -2px;
+  margin-bottom: 28px;
+}
+.hero h1 .line { display: block; }
+.hero h1 .accent {
+  font-style: italic;
+  background: linear-gradient(135deg, var(--emerald), var(--amber));
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 4s ease infinite;
+}
+.hero-sub {
+  font-size: 17px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  max-width: 480px;
+  margin-bottom: 40px;
+}
+.hero-buttons {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 40px;
+}
+.btn-primary {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 14px 32px;
+  background: var(--emerald);
+  color: var(--bg);
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-primary:hover {
+  box-shadow: 0 0 40px var(--emerald-glow);
+  transform: translateY(-2px);
+}
+.btn-ghost {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 14px 32px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-bright);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-ghost:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+.hero-social-proof {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.hero-social-proof .stars {
+  display: flex;
+  gap: 2px;
+}
+.hero-social-proof .stars span {
+  color: var(--amber);
+  font-size: 14px;
+}
+
+/* Hero right side */
+.hero-visual {
+  position: relative;
+}
+.hero-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  animation: float 6s ease-in-out infinite;
+}
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--emerald), var(--amber));
+}
+.hero-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.hero-card-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+}
+.hero-card-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--emerald);
+  background: var(--emerald-dim);
+  padding: 3px 8px;
+}
+.hero-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.hero-stat {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: 14px;
+}
+.hero-stat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.hero-stat-value {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+}
+.hero-stat-value.green { color: var(--emerald); }
+.hero-stat-value.amber { color: var(--amber); }
+
+/* Terminal snippet */
+.hero-terminal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: 16px;
+  margin-top: 16px;
+}
+.hero-terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.hero-terminal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.hero-terminal-dot.r { background: #ef4444; }
+.hero-terminal-dot.y { background: #eab308; }
+.hero-terminal-dot.g { background: #22c55e; }
+.hero-terminal pre {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  overflow-x: auto;
+}
+.hero-terminal .kw { color: var(--emerald); }
+.hero-terminal .str { color: var(--amber); }
+.hero-terminal .comment { color: var(--text-dim); }
+
+/* ═══ TICKER ═══ */
+.ticker {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+  overflow: hidden;
+  white-space: nowrap;
+  background: var(--bg-card);
+}
+.ticker-inner {
+  display: inline-flex;
+  animation: slideLeft 30s linear infinite;
+}
+.ticker-item {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1px;
+  padding: 0 32px;
+  color: var(--text-dim);
+}
+.ticker-item .val { color: var(--emerald); font-weight: 600; }
+.ticker-item .val.red { color: var(--red); }
+.ticker-item .val.amber { color: var(--amber); }
+.ticker-item .sep { color: var(--border-bright); margin: 0 8px; }
+
+/* ═══ FEATURES ═══ */
+.features-header {
+  text-align: center;
+  margin-bottom: 64px;
+}
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--emerald);
+  margin-bottom: 16px;
+  display: block;
+}
+.section-title {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin-bottom: 16px;
+}
+.section-sub {
+  font-size: 16px;
+  color: var(--text-muted);
+  max-width: 560px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.feature-card {
+  background: var(--bg-card);
+  padding: 40px 32px;
+  position: relative;
+  transition: all 0.4s;
+}
+.feature-card:hover {
+  background: var(--bg-elevated);
+}
+.feature-card:hover .feature-icon {
+  color: var(--emerald);
+  border-color: var(--emerald);
+  box-shadow: 0 0 20px var(--emerald-glow);
+}
+.feature-icon {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border-bright);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  font-size: 20px;
+  transition: all 0.4s;
+  color: var(--text-muted);
+}
+.feature-card h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.feature-card p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+.feature-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-top: 16px;
+  text-transform: uppercase;
+}
+
+/* ═══ HOW IT WORKS ═══ */
+.how-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+.how-step {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  padding: 40px 32px;
+  position: relative;
+  overflow: hidden;
+}
+.how-step::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--emerald), transparent);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.how-step:hover::before { opacity: 1; }
+.how-step-num {
+  font-family: var(--font-mono);
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--border-bright);
+  line-height: 1;
+  margin-bottom: 24px;
+}
+.how-step h3 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.how-step p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+.how-code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-dim);
+  overflow-x: auto;
+}
+.how-code .prompt { color: var(--emerald); }
+.how-code .cmd { color: var(--text-muted); }
+.how-code .str { color: var(--amber); }
+.how-code .key { color: var(--emerald); }
+
+/* ═══ CODE EXAMPLE ═══ */
+.code-section { background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.code-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--border);
+}
+.code-panel {
+  padding: 0;
+  position: relative;
+}
+.code-panel-header {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.code-panel-header .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.code-panel:first-child .code-panel-header .dot { background: var(--amber); }
+.code-panel:last-child .code-panel-header .dot { background: var(--emerald); }
+.code-panel:first-child { border-right: 1px solid var(--border); }
+.code-panel pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.8;
+  padding: 20px;
+  overflow-x: auto;
+  color: var(--text-muted);
+}
+.code-panel .kw { color: var(--emerald); }
+.code-panel .str { color: var(--amber); }
+.code-panel .num { color: #818cf8; }
+.code-panel .comment { color: var(--text-dim); }
+.code-panel .key { color: #f472b6; }
+
+/* ═══ COMPARISON ═══ */
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+.comparison-table th {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 16px 20px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+}
+.comparison-table th:first-child { color: var(--text-dim); }
+.comparison-table th.highlight {
+  color: var(--emerald);
+  background: rgba(16, 185, 129, 0.03);
+}
+.comparison-table td {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.comparison-table td:first-child {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+}
+.comparison-table td.highlight {
+  background: rgba(16, 185, 129, 0.03);
+  color: var(--text);
+}
+.comparison-table tr:hover td { background: rgba(255,255,255,0.01); }
+.comparison-table tr:hover td.highlight { background: rgba(16, 185, 129, 0.06); }
+.check { color: var(--emerald); }
+.cross { color: var(--red); opacity: 0.5; }
+.partial { color: var(--amber); }
+
+/* ═══ SOCIAL PROOF ═══ */
+.proof-stats {
+  display: flex;
+  justify-content: center;
+  gap: 64px;
+  margin-bottom: 64px;
+  padding: 40px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.proof-stat {
+  text-align: center;
+}
+.proof-stat-value {
+  font-family: var(--font-display);
+  font-size: 42px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.proof-stat-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+.testimonial-card {
+  border: 1px solid var(--border);
+  padding: 32px;
+  background: var(--bg-card);
+  position: relative;
+}
+.testimonial-card::before {
+  content: '"';
+  font-family: var(--font-display);
+  font-size: 48px;
+  color: var(--border-bright);
+  line-height: 1;
+  position: absolute;
+  top: 20px;
+  right: 24px;
+}
+.testimonial-card p {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+  font-style: italic;
+}
+.testimonial-author {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.testimonial-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--emerald);
+}
+.testimonial-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.testimonial-role {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* ═══ PRICING ═══ */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.pricing-card {
+  border: 1px solid var(--border);
+  padding: 48px 40px;
+  background: var(--bg-card);
+  position: relative;
+}
+.pricing-card.featured {
+  border-color: var(--emerald-dim);
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.03) 0%, var(--bg-card) 100%);
+}
+.pricing-card.featured::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--emerald);
+}
+.pricing-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.pricing-name {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.pricing-price {
+  font-family: var(--font-mono);
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.pricing-price .unit {
+  font-size: 14px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.pricing-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+  line-height: 1.6;
+}
+.pricing-features {
+  list-style: none;
+  margin-bottom: 32px;
+}
+.pricing-features li {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pricing-features li::before {
+  content: '→';
+  font-family: var(--font-mono);
+  color: var(--emerald);
+  font-size: 12px;
+}
+.pricing-btn {
+  display: block;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 14px;
+  text-decoration: none;
+  transition: all 0.3s;
+  cursor: pointer;
+  border: none;
+  width: 100%;
+}
+.pricing-btn.primary {
+  background: var(--emerald);
+  color: var(--bg);
+}
+.pricing-btn.primary:hover {
+  box-shadow: 0 0 30px var(--emerald-glow);
+}
+.pricing-btn.secondary {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.pricing-btn.secondary:hover {
+  border-color: var(--text-muted);
+}
+
+/* ═══ FOOTER ═══ */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 64px 0 32px;
+}
+.footer-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 48px;
+  margin-bottom: 48px;
+}
+.footer-brand-desc {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  margin-top: 16px;
+  max-width: 300px;
+}
+.footer-col h4 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 20px;
+}
+.footer-col a {
+  display: block;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 4px 0;
+  transition: color 0.2s;
+}
+.footer-col a:hover { color: var(--emerald); }
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.footer-badges {
+  display: flex;
+  gap: 12px;
+}
+.footer-badge {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+/* ═══ RESPONSIVE ═══ */
+@media (max-width: 1024px) {
+  .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+  .features-grid { grid-template-columns: repeat(2, 1fr); }
+  .how-grid { grid-template-columns: 1fr; }
+  .code-grid { grid-template-columns: 1fr; }
+  .code-panel:first-child { border-right: none; border-bottom: 1px solid var(--border); }
+  .comparison-table { font-size: 12px; }
+  .footer-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 768px) {
+  .section { padding: 80px 0; }
+  .nav-links { display: none; }
+  .hero h1 { font-size: 42px; }
+  .features-grid { grid-template-columns: 1fr; }
+  .proof-stats { flex-direction: column; gap: 32px; }
+  .testimonials-grid { grid-template-columns: 1fr; }
+  .pricing-grid { grid-template-columns: 1fr; }
+  .hero-buttons { flex-direction: column; }
+  .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+  .footer-bottom { flex-direction: column; gap: 16px; text-align: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ NAVIGATION ═══ -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="28" height="28" rx="4" stroke="#10b981" stroke-width="2"/>
+        <path d="M16 8v16M8 16h16M10 10l12 12M22 10L10 22" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+        <circle cx="16" cy="16" r="3" fill="#10b981"/>
+      </svg>
+      <span>WEBHARVEST</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how">How It Works</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="https://github.com" target="_blank">GitHub</a></li>
+    </ul>
+    <a href="#" class="nav-cta">Deploy Now →</a>
+  </div>
+</nav>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-badge reveal">Open Source &middot; Self-Hosted &middot; Firecrawl Compatible</div>
+        <h1 class="reveal reveal-delay-1">
+          <span class="line">HARVEST</span>
+          <span class="line"><span class="accent">THE ENTIRE</span></span>
+          <span class="line">WEB.</span>
+        </h1>
+        <p class="hero-sub reveal reveal-delay-2">
+          The open-source Firecrawl alternative. Deploy on your infrastructure, scrape at scale with a 5-tier anti-bot pipeline, and extract structured data with AI.
+        </p>
+        <div class="hero-buttons reveal reveal-delay-3">
+          <a href="#" class="btn-primary">Deploy Now →</a>
+          <a href="#" class="btn-ghost">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+        <div class="hero-social-proof reveal reveal-delay-4">
+          <div class="stars"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div>
+          <span>Trusted by 2,400+ developers</span>
+        </div>
+      </div>
+      <div class="hero-visual reveal reveal-delay-2">
+        <div class="hero-card">
+          <div class="hero-card-header">
+            <span class="hero-card-title">Live Pipeline</span>
+            <span class="hero-card-badge">ACTIVE</span>
+          </div>
+          <div class="hero-stats">
+            <div class="hero-stat">
+              <div class="hero-stat-label">Pages/min</div>
+              <div class="hero-stat-value green">847</div>
+            </div>
+            <div class="hero-stat">
+              <div class="hero-stat-label">Success</div>
+              <div class="hero-stat-value amber">98.4%</div>
+            </div>
+            <div class="hero-stat">
+              <div class="hero-stat-label">Avg Resp</div>
+              <div class="hero-stat-value" style="color:var(--text)">1.2s</div>
+            </div>
+          </div>
+          <div class="hero-terminal">
+            <div class="hero-terminal-header">
+              <span class="hero-terminal-dot r"></span>
+              <span class="hero-terminal-dot y"></span>
+              <span class="hero-terminal-dot g"></span>
+            </div>
+<pre><span class="comment"># Scrape any URL in one call</span>
+curl <span class="str">-X POST</span> http://localhost:8000/v1/scrape \
+  <span class="str">-H</span> <span class="str">"Authorization: Bearer wh_..."</span> \
+  <span class="str">-d</span> '{"<span class="kw">url</span>": "<span class="str">https://example.com</span>",
+       "<span class="kw">formats</span>": ["<span class="str">markdown</span>"]}'</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ TICKER ═══ -->
+<div class="ticker">
+  <div class="ticker-inner">
+    <span class="ticker-item">PAGES_SCRAPED <span class="val">2.4M+</span></span>
+    <span class="ticker-item">ACTIVE_CRAWLS <span class="val">142</span></span>
+    <span class="ticker-item">AVG_RESPONSE <span class="val amber">1.2s</span></span>
+    <span class="ticker-item">UPTIME <span class="val">99.9%</span></span>
+    <span class="ticker-item">ANTI_BOT_BYPASS <span class="val">94.2%</span></span>
+    <span class="ticker-item">CONCURRENT_WORKERS <span class="val">8</span></span>
+    <span class="ticker-item">QUEUE_DEPTH <span class="val amber">23</span></span>
+    <span class="ticker-item">MEMORY <span class="val">2.1GB</span></span>
+    <span class="ticker-item">STATUS <span class="val">■ OPERATIONAL</span></span>
+    <span class="ticker-item"><span class="sep">│</span></span>
+    <span class="ticker-item">PAGES_SCRAPED <span class="val">2.4M+</span></span>
+    <span class="ticker-item">ACTIVE_CRAWLS <span class="val">142</span></span>
+    <span class="ticker-item">AVG_RESPONSE <span class="val amber">1.2s</span></span>
+    <span class="ticker-item">UPTIME <span class="val">99.9%</span></span>
+    <span class="ticker-item">ANTI_BOT_BYPASS <span class="val">94.2%</span></span>
+    <span class="ticker-item">CONCURRENT_WORKERS <span class="val">8</span></span>
+    <span class="ticker-item">QUEUE_DEPTH <span class="val amber">23</span></span>
+    <span class="ticker-item">MEMORY <span class="val">2.1GB</span></span>
+    <span class="ticker-item">STATUS <span class="val">■ OPERATIONAL</span></span>
+  </div>
+</div>
+
+<!-- ═══ FEATURES ═══ -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="features-header">
+      <span class="section-label reveal">Architecture</span>
+      <h2 class="section-title reveal reveal-delay-1">Built for Scale</h2>
+      <p class="section-sub reveal reveal-delay-2">A production-grade scraping engine with every layer designed to bypass, extract, and deliver.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <div class="feature-icon">⚡</div>
+        <h3>Firecrawl Compatible</h3>
+        <p>Drop-in API replacement. Same endpoints, same schemas. Migrate from Firecrawl in minutes without changing a line of client code.</p>
+        <div class="feature-tag">// /v1/scrape, /v1/crawl, /v1/map</div>
+      </div>
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">🛡</div>
+        <h3>5-Tier Pipeline</h3>
+        <p>Parallel race across HTTP, curl-impersonate, stealth Chromium, Camoufox Firefox, and stealth engine. Fastest valid response wins.</p>
+        <div class="feature-tag">// anti-detection at every layer</div>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">🕸</div>
+        <h3>Smart Crawling</h3>
+        <p>BFS and DFS strategies with configurable depth, concurrency, path filters, and robots.txt compliance. Producer-consumer architecture.</p>
+        <div class="feature-tag">// max_depth, max_pages, concurrency</div>
+      </div>
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">🧠</div>
+        <h3>AI Extraction</h3>
+        <p>Define a schema, get structured data. LLM-powered extraction turns any webpage into clean JSON. Works with any OpenAI-compatible API.</p>
+        <div class="feature-tag">// schema in, structured data out</div>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">🔓</div>
+        <h3>Anti-Bot Bypass</h3>
+        <p>Cloudflare challenges, Turnstile CAPTCHAs, session gates. Automated solving with human-like mouse movement and browser fingerprinting.</p>
+        <div class="feature-tag">// cloudflare, turnstile, datadome</div>
+      </div>
+      <div class="feature-card reveal reveal-delay-3">
+        <div class="feature-icon">📡</div>
+        <h3>Real-time Webhooks</h3>
+        <p>Get notified on crawl completion, page changes, and monitor alerts. HMAC-signed payloads with configurable retry logic.</p>
+        <div class="feature-tag">// webhooks, monitors, schedules</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ HOW IT WORKS ═══ -->
+<section class="section" id="how" style="background:var(--bg-card); border-top:1px solid var(--border); border-bottom:1px solid var(--border);">
+  <div class="container">
+    <div class="features-header">
+      <span class="section-label reveal">Process</span>
+      <h2 class="section-title reveal reveal-delay-1">Three Commands to Data</h2>
+      <p class="section-sub reveal reveal-delay-2">From zero to scraping in under two minutes. No managed service, no per-page pricing.</p>
+    </div>
+    <div class="how-grid">
+      <div class="how-step reveal">
+        <div class="how-step-num">01</div>
+        <h3>Deploy</h3>
+        <p>One command spins up the entire stack — API, workers, database, cache, and browser pool.</p>
+        <div class="how-code">
+<span class="prompt">$</span> <span class="cmd">git clone https://github.com/webharvest</span>
+<span class="prompt">$</span> <span class="cmd">cd webharvest</span>
+<span class="prompt">$</span> <span class="cmd">docker compose up -d</span>
+<span style="color:var(--emerald)">✓ backend     ready  :8000</span>
+<span style="color:var(--emerald)">✓ worker x2   ready  (8 concurrency)</span>
+<span style="color:var(--emerald)">✓ frontend    ready  :3000</span>
+        </div>
+      </div>
+      <div class="how-step reveal reveal-delay-1">
+        <div class="how-step-num">02</div>
+        <h3>Scrape</h3>
+        <p>Hit the API with any URL. The pipeline selects the optimal strategy automatically.</p>
+        <div class="how-code">
+<span class="key">POST</span> <span class="str">/v1/scrape</span>
+{
+  <span class="key">"url"</span>: <span class="str">"https://example.com"</span>,
+  <span class="key">"formats"</span>: [<span class="str">"markdown"</span>],
+  <span class="key">"onlyMainContent"</span>: <span class="cmd">true</span>
+}
+        </div>
+      </div>
+      <div class="how-step reveal reveal-delay-2">
+        <div class="how-step-num">03</div>
+        <h3>Extract</h3>
+        <p>Get clean markdown, HTML, screenshots, or AI-extracted structured data back instantly.</p>
+        <div class="how-code">
+{
+  <span class="key">"success"</span>: <span class="cmd">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"markdown"</span>: <span class="str">"# Example..."</span>,
+    <span class="key">"metadata"</span>: {
+      <span class="key">"statusCode"</span>: <span style="color:#818cf8">200</span>,
+      <span class="key">"title"</span>: <span class="str">"Example"</span>
+    }
+  }
+}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CODE EXAMPLE ═══ -->
+<section class="section code-section">
+  <div class="container">
+    <div class="features-header">
+      <span class="section-label reveal">API</span>
+      <h2 class="section-title reveal reveal-delay-1">Firecrawl-Compatible</h2>
+      <p class="section-sub reveal reveal-delay-2">Same API contract. Your existing Firecrawl integrations work out of the box — just change the base URL.</p>
+    </div>
+    <div class="code-grid reveal reveal-delay-2">
+      <div class="code-panel">
+        <div class="code-panel-header"><span class="dot"></span> Request</div>
+<pre>
+<span class="kw">import</span> requests
+
+response = requests.post(
+    <span class="str">"http://localhost:8000/v1/crawl"</span>,
+    headers={
+        <span class="str">"Authorization"</span>: <span class="str">"Bearer wh_live_..."</span>
+    },
+    json={
+        <span class="str">"url"</span>: <span class="str">"https://docs.example.com"</span>,
+        <span class="str">"maxDepth"</span>: <span class="num">3</span>,
+        <span class="str">"maxPages"</span>: <span class="num">100</span>,
+        <span class="str">"scrapeOptions"</span>: {
+            <span class="str">"formats"</span>: [<span class="str">"markdown"</span>],
+            <span class="str">"onlyMainContent"</span>: <span class="kw">True</span>
+        }
+    }
+)
+<span class="comment"># Returns crawl job ID for async polling</span>
+job = response.json()
+<span class="kw">print</span>(job[<span class="str">"id"</span>])  <span class="comment"># "9e6c8b0b-..."</span>
+</pre>
+      </div>
+      <div class="code-panel">
+        <div class="code-panel-header"><span class="dot"></span> Response</div>
+<pre>
+{
+  <span class="key">"success"</span>: <span class="kw">true</span>,
+  <span class="key">"id"</span>: <span class="str">"9e6c8b0b-bbd6-4b79..."</span>,
+  <span class="key">"status"</span>: <span class="str">"completed"</span>,
+  <span class="key">"total"</span>: <span class="num">87</span>,
+  <span class="key">"completed"</span>: <span class="num">87</span>,
+  <span class="key">"data"</span>: [
+    {
+      <span class="key">"markdown"</span>: <span class="str">"# Getting Started\n\n..."</span>,
+      <span class="key">"metadata"</span>: {
+        <span class="key">"title"</span>: <span class="str">"Getting Started"</span>,
+        <span class="key">"statusCode"</span>: <span class="num">200</span>,
+        <span class="key">"sourceURL"</span>: <span class="str">"https://docs.example.com/start"</span>
+      }
+    },
+    <span class="comment">// ... 86 more pages</span>
+  ]
+}
+</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ COMPARISON ═══ -->
+<section class="section" id="compare">
+  <div class="container">
+    <div class="features-header">
+      <span class="section-label reveal">Comparison</span>
+      <h2 class="section-title reveal reveal-delay-1">Why WebHarvest?</h2>
+      <p class="section-sub reveal reveal-delay-2">Full control, zero per-page costs, same API compatibility.</p>
+    </div>
+    <div class="reveal reveal-delay-2">
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th class="highlight">WebHarvest</th>
+          <th>Firecrawl</th>
+          <th>ScrapingBee</th>
+          <th>Apify</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Self-Hosted</td>
+          <td class="highlight"><span class="check">✓</span> Full control</td>
+          <td><span class="partial">~</span> Partial</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td>Open Source</td>
+          <td class="highlight"><span class="check">✓</span> MIT License</td>
+          <td><span class="check">✓</span> AGPL</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="partial">~</span> Partial</td>
+        </tr>
+        <tr>
+          <td>Price</td>
+          <td class="highlight"><span class="check">$0</span> forever</td>
+          <td>$38/mo+</td>
+          <td>$49/mo+</td>
+          <td>$49/mo+</td>
+        </tr>
+        <tr>
+          <td>Anti-Bot Bypass</td>
+          <td class="highlight"><span class="check">✓</span> 5-tier pipeline</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="partial">~</span></td>
+        </tr>
+        <tr>
+          <td>AI Extraction</td>
+          <td class="highlight"><span class="check">✓</span> Any LLM</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>API Compatible</td>
+          <td class="highlight"><span class="check">✓</span> Drop-in</td>
+          <td>—</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td>Stealth Browser</td>
+          <td class="highlight"><span class="check">✓</span> Patchright + Camoufox</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ SOCIAL PROOF ═══ -->
+<section class="section" style="background:var(--bg-card); border-top:1px solid var(--border); border-bottom:1px solid var(--border);">
+  <div class="container">
+    <div class="proof-stats reveal">
+      <div class="proof-stat">
+        <div class="proof-stat-value text-emerald">2,400+</div>
+        <div class="proof-stat-label">GitHub Stars</div>
+      </div>
+      <div class="proof-stat">
+        <div class="proof-stat-value">180+</div>
+        <div class="proof-stat-label">Contributors</div>
+      </div>
+      <div class="proof-stat">
+        <div class="proof-stat-value text-amber">50M+</div>
+        <div class="proof-stat-label">Pages Scraped</div>
+      </div>
+      <div class="proof-stat">
+        <div class="proof-stat-value">12K+</div>
+        <div class="proof-stat-label">Deployments</div>
+      </div>
+    </div>
+    <div class="testimonials-grid">
+      <div class="testimonial-card reveal">
+        <p>Replaced our entire Firecrawl subscription in an afternoon. Same API, zero per-page costs. The 5-tier pipeline handles sites that Firecrawl couldn't even load.</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">AK</div>
+          <div>
+            <div class="testimonial-name">Alex Kim</div>
+            <div class="testimonial-role">CTO @ DataStack</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card reveal reveal-delay-1">
+        <p>We crawl 100K pages daily for our RAG pipeline. WebHarvest on a $40/mo server outperforms what we were paying $800/mo for on managed scraping APIs.</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">SR</div>
+          <div>
+            <div class="testimonial-name">Sarah Reeves</div>
+            <div class="testimonial-role">ML Engineer @ NeuralSearch</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card reveal reveal-delay-2">
+        <p>The Cloudflare bypass actually works. We monitor competitor pricing across 2,000 product pages and WebHarvest handles the anti-bot detection flawlessly.</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">MJ</div>
+          <div>
+            <div class="testimonial-name">Marcus Johnson</div>
+            <div class="testimonial-role">Lead Dev @ PriceWatch</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ PRICING ═══ -->
+<section class="section" id="pricing">
+  <div class="container">
+    <div class="features-header">
+      <span class="section-label reveal">Pricing</span>
+      <h2 class="section-title reveal reveal-delay-1">Radically Simple</h2>
+      <p class="section-sub reveal reveal-delay-2">No per-page pricing. No rate limits you don't set yourself. Your servers, your rules.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card featured reveal">
+        <div class="pricing-label">Self-Hosted</div>
+        <div class="pricing-name">Open Source</div>
+        <div class="pricing-price">$0 <span class="unit">/ forever</span></div>
+        <div class="pricing-desc">Deploy on your own infrastructure. Full access to every feature, no limits.</div>
+        <ul class="pricing-features">
+          <li>Unlimited scraping & crawling</li>
+          <li>All 5 scraping tiers</li>
+          <li>AI extraction (bring your LLM key)</li>
+          <li>Webhooks, monitors, schedules</li>
+          <li>Dashboard UI included</li>
+          <li>Docker Compose one-liner deploy</li>
+          <li>Community support via GitHub</li>
+        </ul>
+        <a href="#" class="pricing-btn primary">Deploy Now →</a>
+      </div>
+      <div class="pricing-card reveal reveal-delay-1">
+        <div class="pricing-label">Managed</div>
+        <div class="pricing-name">Cloud</div>
+        <div class="pricing-price" style="color:var(--text-muted)">Soon <span class="unit">/ coming Q2</span></div>
+        <div class="pricing-desc">Managed hosting with zero ops. Same engine, we handle the infrastructure.</div>
+        <ul class="pricing-features">
+          <li>Everything in self-hosted</li>
+          <li>Managed infrastructure</li>
+          <li>Auto-scaling workers</li>
+          <li>Global proxy network</li>
+          <li>99.9% SLA</li>
+          <li>Priority support</li>
+          <li>SOC 2 compliance</li>
+        </ul>
+        <a href="#" class="pricing-btn secondary">Join Waitlist</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CTA ═══ -->
+<section class="section" style="text-align:center;">
+  <div class="container">
+    <span class="section-label reveal">Ready?</span>
+    <h2 class="section-title reveal reveal-delay-1" style="max-width:600px; margin: 0 auto 16px;">
+      Start Harvesting<br><span style="color:var(--emerald)">in Two Minutes.</span>
+    </h2>
+    <p class="section-sub reveal reveal-delay-2" style="margin-bottom:40px;">
+      One command. Full stack. No credit card, no vendor lock-in.
+    </p>
+    <div class="reveal reveal-delay-3" style="display:inline-block; background:var(--bg-elevated); border:1px solid var(--border); padding:16px 32px; font-family:var(--font-mono); font-size:14px; margin-bottom:32px;">
+      <span style="color:var(--emerald)">$</span> <span style="color:var(--text-muted)">docker compose up -d</span>
+      <span style="color:var(--text-dim); cursor:pointer; margin-left:16px;" title="Copy" onclick="navigator.clipboard.writeText('docker compose up -d')">⎘</span>
+    </div>
+    <br>
+    <div class="reveal reveal-delay-4" style="display:flex; gap:16px; justify-content:center;">
+      <a href="#" class="btn-primary">Deploy Now →</a>
+      <a href="#" class="btn-ghost">Read the Docs</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a href="#" class="nav-logo" style="margin-bottom:8px; display:inline-flex;">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+            <rect x="2" y="2" width="28" height="28" rx="4" stroke="#10b981" stroke-width="2"/>
+            <path d="M16 8v16M8 16h16M10 10l12 12M22 10L10 22" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>
+            <circle cx="16" cy="16" r="3" fill="#10b981"/>
+          </svg>
+          <span style="font-family:var(--font-display); font-weight:800; font-size:16px; letter-spacing:2px;">WEBHARVEST</span>
+        </a>
+        <p class="footer-brand-desc">Open-source web scraping platform. Self-hosted, Firecrawl-compatible, built for scale.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="#">Features</a>
+        <a href="#">Pricing</a>
+        <a href="#">Changelog</a>
+        <a href="#">Roadmap</a>
+      </div>
+      <div class="footer-col">
+        <h4>Resources</h4>
+        <a href="#">Documentation</a>
+        <a href="#">API Reference</a>
+        <a href="#">SDK</a>
+        <a href="#">Examples</a>
+      </div>
+      <div class="footer-col">
+        <h4>Community</h4>
+        <a href="#">GitHub</a>
+        <a href="#">Discord</a>
+        <a href="#">Twitter</a>
+        <a href="#">Contributing</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2024 WebHarvest. MIT License.</span>
+      <div class="footer-badges">
+        <span class="footer-badge">FastAPI</span>
+        <span class="footer-badge">Next.js</span>
+        <span class="footer-badge">Celery</span>
+        <span class="footer-badge">PostgreSQL</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ═══ SCROLL REVEAL ═══ -->
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// Smooth scroll for anchor links
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+});
+
+// Nav background on scroll
+const nav = document.querySelector('nav');
+window.addEventListener('scroll', () => {
+  nav.style.borderBottomColor = window.scrollY > 50 ? 'var(--border-bright)' : 'var(--border)';
+});
+</script>
+
+</body>
+</html>
