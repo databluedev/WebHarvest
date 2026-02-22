@@ -604,7 +604,7 @@ function PlaygroundContent() {
 
       {/* ═══ TICKER ═══ */}
       <div className="fixed top-16 left-0 right-0 z-40 border-b border-white/[0.06] bg-[#050505] overflow-hidden h-8 flex items-center">
-        <div className="flex whitespace-nowrap animate-ticker-slide">
+        <div className="flex whitespace-nowrap animate-ticker">
           {[0, 1].map((dup) => (
             <div key={dup} className="flex">
               {TICKER_ITEMS.map((item, i) => (
