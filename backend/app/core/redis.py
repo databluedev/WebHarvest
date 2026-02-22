@@ -242,6 +242,17 @@ class ResilientRedis:
         """
         return self.client.pipeline()
 
+    def reset(self):
+        """Synchronously drop the client reference (for event loop changes).
+
+        The old connection will be garbage-collected. Use this when the
+        event loop has already been closed and ``await close()`` is impossible.
+        """
+        self._client = None
+        self._consecutive_failures = 0
+        self._circuit_open_until = 0.0
+        self._reconnect_delay = 1.0
+
     async def close(self):
         if self._client:
             try:

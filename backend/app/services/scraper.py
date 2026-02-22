@@ -102,6 +102,9 @@ async def cleanup_async_pools() -> None:
         _stealth_client = None
         _stealth_loop_id = None
 
+    # Redis client (bound to the dying event loop)
+    await _redis.close()
+
     _reset_browser_pool_state()
 
 
@@ -138,6 +141,7 @@ def reset_pool_state_sync() -> None:
     _curl_loop_id = None
     _stealth_client = None
     _stealth_loop_id = None
+    _redis.reset()
     _reset_browser_pool_state()
 
 
@@ -1064,7 +1068,12 @@ async def _race_strategies(
         exc = context.get("exception")
         if exc:
             exc_name = type(exc).__name__
-            if "TargetClosedError" in exc_name or "Target" in exc_name:
+            # Suppress expected errors from losing race strategies
+            if exc_name in ("TargetClosedError", "TimeoutError") or "Target" in exc_name:
+                return
+            # Suppress Playwright navigation errors (e.g. net::ERR_ABORTED)
+            msg = str(exc)
+            if "net::ERR_ABORTED" in msg or "frame was detached" in msg:
                 return
         if _original_handler:
             _original_handler(loop_ref, context)
@@ -1132,6 +1141,14 @@ async def _race_strategies(
                         for p in pending:
                             p.cancel()
                         pending = set()
+                        # Drain remaining done tasks so asyncio doesn't log
+                        # "Task exception was never retrieved" for losers
+                        for other in done:
+                            if other is not task and not other.cancelled():
+                                try:
+                                    other.result()
+                                except Exception:
+                                    pass
                         break
                     else:
                         html_len = len(result[0]) if isinstance(result, tuple) and result[0] else 0
