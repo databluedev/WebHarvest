@@ -135,15 +135,12 @@ AD_SERVING_DOMAINS = frozenset(
 )
 
 # Resource types to block in crawl mode (saves bandwidth, speeds up loads).
-CRAWL_BLOCKED_RESOURCE_TYPES = frozenset({"media", "font"})
+CRAWL_BLOCKED_RESOURCE_TYPES = frozenset({"media"})
 
-# Image/media file extensions to block by URL pattern in crawl mode
-# (Firecrawl pattern: block heavy assets during page fetch — screenshots
-# are rendered separately from captured HTML, so images aren't needed.)
+# Video/audio file extensions to block by URL pattern in crawl mode.
+# Images and fonts are allowed so pages render properly for screenshots.
 _BLOCKED_MEDIA_EXTENSIONS = frozenset({
-    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp",
-    ".tiff", ".mp3", ".mp4", ".avi", ".flac", ".ogg", ".wav", ".webm",
-    ".woff", ".woff2", ".ttf", ".eot",
+    ".mp3", ".mp4", ".avi", ".flac", ".ogg", ".wav", ".webm",
 })
 
 

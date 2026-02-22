@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import re
 
 from browserforge.headers import HeaderGenerator
 from patchright.async_api import async_playwright, Browser, BrowserContext, Page
@@ -708,6 +709,10 @@ class StealthBrowserPool:
         else:
             ch_platform = '"Linux"'
 
+        m = re.search(r"Chrome/(\d+)", ua)
+        chrome_ver = m.group(1) if m else "131"
+        sec_ch_ua = f'"Chromium";v="{chrome_ver}", "Google Chrome";v="{chrome_ver}", "Not-A.Brand";v="24"'
+
         ctx_opts: dict = {
             "user_agent": ua,
             "viewport": vp,
@@ -719,7 +724,7 @@ class StealthBrowserPool:
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
                 "Accept-Language": "en-US,en;q=0.9",
                 "Accept-Encoding": "gzip, deflate, br",
-                "Sec-Ch-Ua": '"Chromium";v="125", "Google Chrome";v="125", "Not-A.Brand";v="99"',
+                "Sec-Ch-Ua": sec_ch_ua,
                 "Sec-Ch-Ua-Mobile": "?0",
                 "Sec-Ch-Ua-Platform": ch_platform,
                 "Sec-Fetch-Dest": "document",

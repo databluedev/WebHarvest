@@ -774,10 +774,19 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
                 status_code = 200
                 resp_headers = {}  # Original headers are stale after redirect
 
-        # Scroll to bottom to trigger lazy-loaded content
+        # Progressive scroll to trigger lazy-loaded content
         try:
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await page.wait_for_timeout(1000)
+            vh = await page.evaluate("window.innerHeight") or 800
+            scroll_distance = 0
+            max_scroll = 8000
+            step = vh - 100
+            while scroll_distance < max_scroll:
+                await page.mouse.wheel(0, step)
+                scroll_distance += step
+                await page.wait_for_timeout(random.randint(150, 350))
+            await page.wait_for_timeout(random.randint(200, 500))
+            await page.evaluate("window.scrollTo(0, 0)")
+            await page.wait_for_timeout(random.randint(100, 200))
         except Exception:
             pass
 
@@ -870,10 +879,19 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
                 status_code = 200
                 resp_headers = {}  # Original headers are stale after redirect
 
-        # Scroll to bottom to trigger lazy-loaded content
+        # Progressive scroll to trigger lazy-loaded content
         try:
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await page.wait_for_timeout(1000)
+            vh = await page.evaluate("window.innerHeight") or 800
+            scroll_distance = 0
+            max_scroll = 8000
+            step = vh - 100
+            while scroll_distance < max_scroll:
+                await page.mouse.wheel(0, step)
+                scroll_distance += step
+                await page.wait_for_timeout(random.randint(150, 350))
+            await page.wait_for_timeout(random.randint(200, 500))
+            await page.evaluate("window.scrollTo(0, 0)")
+            await page.wait_for_timeout(random.randint(100, 200))
         except Exception:
             pass
 
