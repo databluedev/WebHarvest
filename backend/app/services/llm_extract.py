@@ -78,15 +78,85 @@ async def extract_with_llm(
             "\n\nReturn ONLY valid JSON, no markdown formatting or explanation."
         )
 
+    # Check if content exceeds LLM context window (~8000 words)
+    # If so, chunk the content and process each chunk, then merge results
+    content_words = content.split()
+    max_words = 7500  # Leave room for system prompt + instructions
+
+    if len(content_words) > max_words:
+        # Use chunking to split content into processable pieces
+        from app.services.chunking import RegexChunking
+
+        chunker = RegexChunking(patterns=[r"\n\n"])
+        chunks = chunker.chunk(content)
+
+        # Merge small chunks to fill up to max_words each
+        merged_chunks = []
+        current_chunk = ""
+        for chunk in chunks:
+            if len((current_chunk + "\n\n" + chunk).split()) > max_words:
+                if current_chunk:
+                    merged_chunks.append(current_chunk)
+                current_chunk = chunk
+            else:
+                current_chunk = (current_chunk + "\n\n" + chunk).strip()
+        if current_chunk:
+            merged_chunks.append(current_chunk)
+
+        if not merged_chunks:
+            merged_chunks = [" ".join(content_words[:max_words])]
+
+        # Process each chunk and merge results
+        all_results = []
+        for i, chunk in enumerate(merged_chunks):
+            chunk_result = await _extract_single_chunk(
+                litellm, model, api_key, system_prompt, prompt, chunk, schema, i, len(merged_chunks)
+            )
+            if chunk_result:
+                all_results.append(chunk_result)
+
+        # Merge chunk results
+        if not all_results:
+            return {"error": "No results from any chunk"}
+        if len(all_results) == 1:
+            return all_results[0]
+        # For list results, concatenate
+        if all(isinstance(r, list) for r in all_results):
+            merged = []
+            for r in all_results:
+                merged.extend(r)
+            return merged
+        # For dict results, merge keys (later chunks override)
+        if all(isinstance(r, dict) for r in all_results):
+            merged = {}
+            for r in all_results:
+                merged.update(r)
+            return merged
+        return all_results
+    else:
+        return await _extract_single_chunk(
+            litellm, model, api_key, system_prompt, prompt, content, schema, 0, 1
+        )
+
+
+async def _extract_single_chunk(
+    litellm,
+    model: str,
+    api_key: str,
+    system_prompt: str,
+    prompt: str | None,
+    content: str,
+    schema: dict | None,
+    chunk_index: int,
+    total_chunks: int,
+) -> dict[str, Any] | list[Any]:
+    """Extract from a single content chunk."""
     user_prompt = ""
     if prompt:
         user_prompt = f"Instruction: {prompt}\n\n"
+    if total_chunks > 1:
+        user_prompt += f"[Chunk {chunk_index + 1}/{total_chunks}]\n\n"
     user_prompt += f"Content to extract from:\n\n{content}"
-
-    # Truncate content to avoid token limits (keep ~8000 words)
-    words = user_prompt.split()
-    if len(words) > 8000:
-        user_prompt = " ".join(words[:8000]) + "\n\n[Content truncated...]"
 
     try:
         response = await asyncio.wait_for(
@@ -119,11 +189,11 @@ async def extract_with_llm(
             return {"raw_response": result_text}
 
     except asyncio.TimeoutError:
-        logger.error(f"LLM extraction timed out for model={model}")
+        logger.error(f"LLM extraction timed out for model={model} (chunk {chunk_index + 1}/{total_chunks})")
         raise BadRequestError(f"LLM extraction timed out after 60s (model={model})")
     except Exception as e:
         logger.error(
-            f"LLM extraction failed (model={model}, provider={llm_key.provider}): {type(e).__name__}: {e}",
+            f"LLM extraction failed (model={model}): {type(e).__name__}: {e}",
             exc_info=True,
         )
         raise BadRequestError(f"LLM extraction failed: {type(e).__name__}: {e}")

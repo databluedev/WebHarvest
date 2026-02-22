@@ -23,8 +23,13 @@ from app.services.content import (
     extract_structured_data,
     extract_headings,
     extract_images,
+    extract_product_data,
     _clean_soup_light,
 )
+from app.services.table_extraction import extract_tables
+from app.services.selector_extraction import extract_by_css, extract_by_xpath, extract_by_selectors
+from app.services.content_filter import BM25ContentFilter, PruningContentFilter
+from app.services.markdown_utils import generate_citations, generate_fit_markdown
 from app.services.strategy_cache import (
     get_domain_strategy,
     record_strategy_result,
@@ -1039,6 +1044,7 @@ async def scrape_url(
     request: ScrapeRequest,
     proxy_manager=None,
     crawl_session=None,
+    hook_manager=None,
 ) -> ScrapeData:
     """
     Scrape a URL with parallel tier architecture for maximum speed.
@@ -1061,16 +1067,19 @@ async def scrape_url(
     if domain:
         await domain_throttle(domain)
 
-    # Circuit breaker — reject requests to domains with repeated failures
-    # Skip for hard sites: they have dedicated anti-detection strategies and
-    # are expected to sometimes block; the breaker would prematurely cut them off.
-    if domain and not _is_hard_site(url):
+    # Circuit breaker — fail fast if domain is hammered and unresponsive
+    if domain:
         from app.services.circuit_breaker import check_breaker, CircuitBreakerOpenError
-
         try:
             await check_breaker(domain)
         except CircuitBreakerOpenError:
+            if hook_manager:
+                await hook_manager.execute("on_error", url, "circuit_breaker_open")
             raise
+
+    # Fire before_goto hook (allows header/cookie injection)
+    if hook_manager:
+        await hook_manager.execute("before_goto", url, request.headers or {})
 
     use_cache = (
         not request.actions
@@ -1120,13 +1129,19 @@ async def scrape_url(
     strategy_data = await get_domain_strategy(url)
     starting_tier = get_starting_tier(strategy_data, hard_site)
 
+    network_data = None  # Populated when capture_network=True
+
     # Helper to unpack race results and update state
     def _unpack_http_result(result):
         """Unpack (html, status, headers) tuple."""
         return result[0], result[1], result[2]
 
     def _unpack_browser_result(result):
-        """Unpack (html, status, screenshot, action_screenshots, headers) tuple."""
+        """Unpack (html, status, screenshot, action_screenshots, headers[, network_data]) tuple."""
+        nonlocal network_data
+        # Handle 6-tuple with network capture data
+        if isinstance(result, tuple) and len(result) == 6:
+            network_data = result[5]
         return result[0], result[1], result[2], result[3], result[4]
 
     # === Tier 0: Strategy cache hit — try last known working strategy ===
@@ -1604,6 +1619,13 @@ async def scrape_url(
                 f"(hard_site={hard_site}, starting_tier={starting_tier}, "
                 f"best_html={len(raw_html_best) if raw_html_best else 0} chars)"
             )
+            # Record circuit breaker failure — domain may be down
+            if domain:
+                try:
+                    from app.services.circuit_breaker import record_failure
+                    await record_failure(domain)
+                except Exception:
+                    pass
             duration = time.time() - start_time
             scrape_duration_seconds.observe(duration)
             return ScrapeData(
@@ -1633,6 +1655,16 @@ async def scrape_url(
                 logger.info(f"Fallback screenshot rendered for {url}")
         except Exception as e:
             logger.debug(f"Fallback screenshot failed for {url}: {e}")
+
+    # Fire after_goto hook (page loaded successfully)
+    if hook_manager:
+        await hook_manager.execute("after_goto", url, raw_html, status_code)
+
+    # Fire before_extract hook (allows HTML mutation before extraction)
+    if hook_manager:
+        modified_html = await hook_manager.execute("before_extract", url, raw_html)
+        if modified_html and isinstance(modified_html, str):
+            raw_html = modified_html
 
     # === Parallel content extraction ===
     result_data: dict[str, Any] = {}
@@ -1749,6 +1781,7 @@ async def scrape_url(
         structured_data=result_data.get("structured_data"),
         headings=result_data.get("headings"),
         images=result_data.get("images"),
+        network_data=network_data,
         metadata=metadata,
     )
 
@@ -1758,22 +1791,17 @@ async def scrape_url(
         except Exception:
             pass
 
-    # Circuit breaker — record success/failure (skip hard sites)
-    if domain and not _is_hard_site(url):
-        if fetched:
-            try:
-                from app.services.circuit_breaker import record_success
+    # Record circuit breaker success — domain is responding
+    if domain and fetched:
+        try:
+            from app.services.circuit_breaker import record_success
+            await record_success(domain)
+        except Exception:
+            pass
 
-                await record_success(domain)
-            except Exception:
-                pass
-        else:
-            try:
-                from app.services.circuit_breaker import record_failure
-
-                await record_failure(domain)
-            except Exception:
-                pass
+    # Fire after_extract hook
+    if hook_manager:
+        await hook_manager.execute("after_extract", url, scrape_data)
 
     duration = time.time() - start_time
     scrape_duration_seconds.observe(duration)
@@ -2280,10 +2308,18 @@ async def _fetch_with_browser_stealth(
     action_screenshots = []
     status_code = 0
     response_headers: dict[str, str] = {}
+    network_capture_data = None
 
     async with browser_pool.get_page(
         proxy=proxy, use_firefox=use_firefox, target_url=url, stealth=stealth
     ) as page:
+        # Network capture — attach handler before navigation if requested
+        _net_handler = None
+        if getattr(request, "capture_network", False):
+            from app.services.network_capture import NetworkCaptureHandler
+            _net_handler = NetworkCaptureHandler(capture_bodies=True)
+            await _net_handler.attach(page)
+
         # Mobile viewport emulation (device preset or default iPhone 14)
         if getattr(request, "mobile", False) or getattr(request, "mobile_device", None):
             from app.services.mobile_presets import get_device_preset
@@ -2431,6 +2467,15 @@ async def _fetch_with_browser_stealth(
 
         raw_html = await page.content()
 
+        # Collect network capture data before page closes
+        if _net_handler:
+            capture = _net_handler.get_capture()
+            network_capture_data = capture.to_dict()
+            _net_handler.detach()
+
+    # Return 6-tuple when network capture is present, else standard 5-tuple
+    if network_capture_data:
+        return raw_html, status_code, screenshot_b64, action_screenshots, response_headers, network_capture_data
     return raw_html, status_code, screenshot_b64, action_screenshots, response_headers
 
 
@@ -3640,6 +3685,30 @@ def extract_content(
         result_data["links_detail"] = extract_links_detailed(raw_html, url)
     if "structured_data" in request.formats:
         result_data["structured_data"] = extract_structured_data(raw_html)
+
+    # Product data extraction — opt-in via "product_data" in formats
+    if "product_data" in request.formats:
+        _sd = result_data.get("structured_data") or extract_structured_data(raw_html)
+        product_data = extract_product_data(raw_html, _sd)
+        if product_data:
+            result_data["product_data"] = product_data
+
+    # Table extraction
+    if "tables" in request.formats:
+        result_data["tables"] = extract_tables(raw_html)
+
+    # CSS/XPath selector extraction
+    if getattr(request, "css_selector", None):
+        result_data["selector_data"] = {"css": extract_by_css(raw_html, request.css_selector)}
+    if getattr(request, "xpath", None):
+        sel_data = result_data.get("selector_data", {})
+        sel_data["xpath"] = extract_by_xpath(raw_html, request.xpath)
+        result_data["selector_data"] = sel_data
+    if getattr(request, "selectors", None):
+        sel_data = result_data.get("selector_data", {})
+        sel_data.update(extract_by_selectors(raw_html, request.selectors))
+        result_data["selector_data"] = sel_data
+
     if "headings" in request.formats:
         result_data["headings"] = extract_headings(raw_html)
     if "images" in request.formats:
@@ -3654,6 +3723,24 @@ def extract_content(
         elif action_screenshots:
             result_data["screenshot"] = action_screenshots[-1]
 
+    # Citations — opt-in via "citations" in formats
+    # Does NOT mutate markdown — puts citation text in separate field
+    if "citations" in request.formats and result_data.get("markdown"):
+        md = result_data["markdown"]
+        citations_result = generate_citations(md)
+        if citations_result.references_markdown:
+            result_data["citations"] = citations_result.references_markdown.split("\n")
+            result_data["markdown_with_citations"] = citations_result.markdown_with_citations
+
+    # Fit markdown (BM25 content filtering) — opt-in via "fit_markdown" in formats
+    if "fit_markdown" in request.formats and result_data.get("markdown"):
+        try:
+            fit_result = generate_fit_markdown(result_data["markdown"], raw_html)
+            if fit_result.fit_markdown and fit_result.fit_markdown != result_data["markdown"]:
+                result_data["fit_markdown"] = fit_result.fit_markdown
+        except Exception:
+            pass  # Non-critical — skip fit markdown on error
+
     metadata_dict = extract_metadata(raw_html, url, status_code, response_headers or {})
     metadata = PageMetadata(**metadata_dict)
 
@@ -3667,5 +3754,11 @@ def extract_content(
         structured_data=result_data.get("structured_data"),
         headings=result_data.get("headings"),
         images=result_data.get("images"),
+        product_data=result_data.get("product_data"),
+        selector_data=result_data.get("selector_data"),
+        tables=result_data.get("tables"),
+        fit_markdown=result_data.get("fit_markdown"),
+        citations=result_data.get("citations"),
+        markdown_with_citations=result_data.get("markdown_with_citations"),
         metadata=metadata,
     )

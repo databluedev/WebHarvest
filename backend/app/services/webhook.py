@@ -1,4 +1,4 @@
-"""Webhook delivery service with HMAC signing, retries, and delivery logging."""
+"""Webhook delivery service with retries and delivery logging."""
 
 import asyncio
 import hashlib
@@ -23,12 +23,12 @@ async def send_webhook(
     user_id: str | None = None,
     job_id: str | None = None,
 ) -> bool:
-    """POST JSON payload to a webhook URL with optional HMAC-SHA256 signing.
+    """POST JSON payload to a webhook URL.
 
     Args:
         url: The webhook endpoint URL.
         payload: JSON-serializable dict to send.
-        secret: Optional secret for HMAC-SHA256 signature.
+        secret: HMAC-SHA256 secret for signing the payload.
         max_retries: Number of retries on failure (default 3).
         timeout: Request timeout in seconds (default 10).
         user_id: Optional user ID for delivery logging.
@@ -49,12 +49,10 @@ async def send_webhook(
         "X-WebHarvest-Delivery": delivery_ts,
     }
 
-    # HMAC-SHA256 signature
+    # HMAC-SHA256 signature when secret is provided
     if secret:
         signature = hmac.new(
-            secret.encode("utf-8"),
-            body_bytes,
-            hashlib.sha256,
+            secret.encode("utf-8"), body_bytes, hashlib.sha256
         ).hexdigest()
         headers["X-WebHarvest-Signature"] = f"sha256={signature}"
 
@@ -161,9 +159,7 @@ async def send_webhook_test(url: str, secret: str | None = None) -> dict:
 
     if secret:
         signature = hmac.new(
-            secret.encode("utf-8"),
-            body_bytes,
-            hashlib.sha256,
+            secret.encode("utf-8"), body_bytes, hashlib.sha256
         ).hexdigest()
         headers["X-WebHarvest-Signature"] = f"sha256={signature}"
 

@@ -102,7 +102,14 @@ def process_crawl(self, job_id: str, config: dict):
 
         try:
             pages_crawled = 0
-            semaphore = asyncio.Semaphore(concurrency)
+            # Memory-adaptive semaphore: adjusts concurrency based on system memory
+            from app.services.memory_adaptive import MemoryAdaptiveSemaphore
+            semaphore = MemoryAdaptiveSemaphore(
+                base_limit=concurrency,
+                min_limit=1,
+                max_limit=concurrency * 2,
+            )
+            await semaphore.start_monitoring()
             cancelled = False
             loop = asyncio.get_running_loop()
 
@@ -190,13 +197,15 @@ def process_crawl(self, job_id: str, config: dict):
                         nonlocal _pinned_strategy, _pinned_tier
                         async with semaphore:
                             try:
-                                # Domain throttle
+                                # Domain throttle — respect robots.txt Crawl-Delay
                                 from urllib.parse import urlparse as _urlparse
                                 from app.services.scraper import domain_throttle
 
                                 _domain = _urlparse(url).netloc
                                 if _domain:
-                                    await domain_throttle(_domain, delay=0.1)
+                                    _crawl_delay = crawler.get_crawl_delay(url)
+                                    _delay = max(0.1, _crawl_delay or 0.0)
+                                    await domain_throttle(_domain, delay=_delay)
 
                                 fetch_result = await asyncio.wait_for(
                                     crawler.fetch_page_only(
@@ -369,6 +378,12 @@ def process_crawl(self, job_id: str, config: dict):
                             metadata["images"] = scrape_data.images
                         if scrape_data.links_detail and (not _user_formats or "links" in _user_formats):
                             metadata["links_detail"] = scrape_data.links_detail
+                        if scrape_data.product_data:
+                            metadata["product_data"] = scrape_data.product_data
+                        if scrape_data.tables and (not _user_formats or "tables" in _user_formats):
+                            metadata["tables"] = scrape_data.tables
+                        if scrape_data.selector_data:
+                            metadata["selector_data"] = scrape_data.selector_data
 
                         # LLM extraction if configured
                         extract_data = None
@@ -566,6 +581,11 @@ def process_crawl(self, job_id: str, config: dict):
                 except Exception:
                     pass
         finally:
+            # Stop memory monitoring
+            try:
+                await semaphore.stop_monitoring()
+            except Exception:
+                pass
             # Restore original exception handler
             try:
                 loop.set_exception_handler(_original_handler)

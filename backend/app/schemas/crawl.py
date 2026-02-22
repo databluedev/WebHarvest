@@ -31,8 +31,10 @@ class CrawlRequest(BaseModel):
     exclude_paths: list[str] | None = None
     allow_external_links: bool = False
     respect_robots_txt: bool = True
+    crawl_strategy: str = "bfs"  # "bfs", "dfs", or "bff" (best-first)
     scrape_options: ScrapeOptions | None = None
     use_proxy: bool = False
+    filter_faceted_urls: bool = True  # Deduplicate faceted/navigation URL variations
     webhook_url: str | None = None
     webhook_secret: str | None = None
 
@@ -62,6 +64,9 @@ class CrawlPageData(BaseModel):
     structured_data: dict | None = None
     headings: list[dict] | None = None
     images: list[dict] | None = None
+    product_data: dict | None = None
+    tables: list[dict] | None = None
+    selector_data: dict | None = None
     extract: dict[str, Any] | list[Any] | None = None
     metadata: PageMetadata | None = None
 

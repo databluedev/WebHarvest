@@ -153,6 +153,64 @@ def deduplicate_urls(urls: list[str]) -> list[str]:
     return list(seen.values())
 
 
+# Navigation/faceted params that don't change page content — safe to strip for crawl dedup
+_NAVIGATION_PARAMS = {
+    "page", "p", "pg", "offset", "start", "limit", "per_page",
+    "sort", "order", "orderby", "sortby", "dir", "direction",
+    "view", "display", "layout", "tab", "section",
+    "lang", "language", "locale", "hl",
+    "color", "size", "brand", "category", "price", "rating",
+    "filter", "filters", "facet", "facets",
+    "min_price", "max_price", "price_range",
+}
+
+
+def normalize_url_for_crawl(url: str) -> str:
+    """Normalize URL for crawl dedup — strips navigation/faceted params.
+
+    More aggressive than normalize_url() because crawl dedup cares about
+    content uniqueness, not URL identity.
+    """
+    base = normalize_url(url)
+    try:
+        parsed = urlparse(base)
+        query_params = parse_qs(parsed.query, keep_blank_values=True)
+        filtered = {
+            k: v for k, v in query_params.items()
+            if k.lower() not in _NAVIGATION_PARAMS
+        }
+        query = urlencode(filtered, doseq=True) if filtered else ""
+        return urlunparse((
+            parsed.scheme, parsed.netloc, parsed.path,
+            "", query, ""
+        ))
+    except Exception:
+        return base
+
+
+def _is_faceted_variation(url: str, base_url: str) -> bool:
+    """Check if url is a faceted/filtered variation of base_url.
+
+    Returns True if the only difference is faceted query params.
+    """
+    norm1 = normalize_url_for_crawl(url)
+    norm2 = normalize_url_for_crawl(base_url)
+    return norm1 == norm2
+
+
+def filter_faceted_urls(urls: list[str]) -> list[str]:
+    """Deduplicate URLs that differ only by faceted/navigation params.
+
+    Returns one URL per unique crawl-normalized form (first occurrence).
+    """
+    seen: dict[str, str] = {}
+    for url in urls:
+        key = normalize_url_for_crawl(url)
+        if key not in seen:
+            seen[key] = url
+    return list(seen.values())
+
+
 async def check_redis_seen(redis, job_id: str, url: str) -> bool:
     """Check if a URL has been seen for a given job using Redis SET.
 

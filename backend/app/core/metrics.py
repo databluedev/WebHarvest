@@ -89,10 +89,6 @@ db_pool_size = Gauge(
 # ---------------------------------------------------------------------------
 # Infrastructure gauges
 # ---------------------------------------------------------------------------
-circuit_breaker_open_total = Gauge(
-    "circuit_breaker_open_total",
-    "Number of domains with open circuit breakers",
-)
 redis_connection_status = Gauge(
     "redis_connection_status",
     "Redis connection status (1=connected, 0=disconnected)",
@@ -104,6 +100,11 @@ browser_pool_exhausted_total = Counter(
 dlq_entries_total = Counter(
     "dlq_entries_total",
     "Total number of tasks added to the Dead Letter Queue",
+)
+circuit_breaker_open_total = Counter(
+    "circuit_breaker_open_total",
+    "Total number of times a circuit breaker tripped open",
+    ["domain"],
 )
 
 

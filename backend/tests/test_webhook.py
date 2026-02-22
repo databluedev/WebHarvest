@@ -1,4 +1,4 @@
-"""Unit tests for app.services.webhook — delivery, HMAC signing, retries."""
+"""Unit tests for app.services.webhook — delivery, retries, HMAC."""
 
 import hashlib
 import hmac
@@ -10,18 +10,6 @@ import httpx
 import pytest
 
 from app.services.webhook import send_webhook
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _compute_expected_signature(payload: dict, secret: str) -> str:
-    """Compute the expected HMAC-SHA256 signature for a payload."""
-    body = json.dumps(payload, default=str, ensure_ascii=False).encode("utf-8")
-    sig = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
-    return f"sha256={sig}"
 
 
 # ---------------------------------------------------------------------------
@@ -70,105 +58,6 @@ class TestWebhookSuccess:
                 payload={"event": "test"},
             )
             assert result is True
-
-
-# ---------------------------------------------------------------------------
-# HMAC-SHA256 signature
-# ---------------------------------------------------------------------------
-
-
-class TestWebhookHMAC:
-    @pytest.mark.asyncio
-    async def test_hmac_signature_header_present(self):
-        """When a secret is provided, X-WebHarvest-Signature is set."""
-        mock_response = httpx.Response(
-            200, request=httpx.Request("POST", "https://hook.example.com")
-        )
-        captured_headers = {}
-
-        with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
-            instance = AsyncMock()
-
-            async def _capture_post(url, content, headers):
-                captured_headers.update(headers)
-                return mock_response
-
-            instance.post = _capture_post
-            instance.__aenter__ = AsyncMock(return_value=instance)
-            instance.__aexit__ = AsyncMock(return_value=False)
-            MockClient.return_value = instance
-
-            payload = {"event": "crawl.completed", "data": {"pages": 10}}
-            secret = "my-webhook-secret"
-            await send_webhook(
-                url="https://hook.example.com", payload=payload, secret=secret
-            )
-
-            assert "X-WebHarvest-Signature" in captured_headers
-            expected = _compute_expected_signature(payload, secret)
-            assert captured_headers["X-WebHarvest-Signature"] == expected
-
-    @pytest.mark.asyncio
-    async def test_no_signature_without_secret(self):
-        """When no secret is provided, the signature header is absent."""
-        mock_response = httpx.Response(
-            200, request=httpx.Request("POST", "https://hook.example.com")
-        )
-        captured_headers = {}
-
-        with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
-            instance = AsyncMock()
-
-            async def _capture_post(url, content, headers):
-                captured_headers.update(headers)
-                return mock_response
-
-            instance.post = _capture_post
-            instance.__aenter__ = AsyncMock(return_value=instance)
-            instance.__aexit__ = AsyncMock(return_value=False)
-            MockClient.return_value = instance
-
-            await send_webhook(
-                url="https://hook.example.com", payload={"event": "test"}
-            )
-            assert "X-WebHarvest-Signature" not in captured_headers
-
-    @pytest.mark.asyncio
-    async def test_signature_matches_body_bytes(self):
-        """The signature is computed over the exact JSON body bytes sent."""
-        mock_response = httpx.Response(
-            200, request=httpx.Request("POST", "https://hook.example.com")
-        )
-        captured_body = None
-        captured_headers = {}
-
-        with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
-            instance = AsyncMock()
-
-            async def _capture_post(url, content, headers):
-                nonlocal captured_body
-                captured_body = content
-                captured_headers.update(headers)
-                return mock_response
-
-            instance.post = _capture_post
-            instance.__aenter__ = AsyncMock(return_value=instance)
-            instance.__aexit__ = AsyncMock(return_value=False)
-            MockClient.return_value = instance
-
-            secret = "verify-me"
-            payload = {"event": "scrape.done", "url": "https://example.com"}
-            await send_webhook(
-                url="https://hook.example.com", payload=payload, secret=secret
-            )
-
-            # Recompute from captured body bytes
-            expected_sig = hmac.new(
-                secret.encode("utf-8"), captured_body, hashlib.sha256
-            ).hexdigest()
-            assert (
-                captured_headers["X-WebHarvest-Signature"] == f"sha256={expected_sig}"
-            )
 
 
 # ---------------------------------------------------------------------------
@@ -503,3 +392,116 @@ class TestWebhookPayload:
                 url="https://hook.example.com", payload={"event": "test"}
             )
             assert captured_headers["Content-Type"] == "application/json"
+
+
+# ---------------------------------------------------------------------------
+# HMAC signature
+# ---------------------------------------------------------------------------
+
+
+class TestWebhookHMAC:
+    @pytest.mark.asyncio
+    async def test_hmac_signature_present_when_secret_provided(self):
+        """X-WebHarvest-Signature header is present when secret is given."""
+        captured_headers = {}
+
+        with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+
+            async def _capture_post(url, content, headers):
+                captured_headers.update(headers)
+                return httpx.Response(200, request=httpx.Request("POST", url))
+
+            instance.post = _capture_post
+            instance.__aenter__ = AsyncMock(return_value=instance)
+            instance.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = instance
+
+            await send_webhook(
+                url="https://hook.example.com",
+                payload={"event": "test"},
+                secret="my-secret-key",
+            )
+            assert "X-WebHarvest-Signature" in captured_headers
+            assert captured_headers["X-WebHarvest-Signature"].startswith("sha256=")
+
+    @pytest.mark.asyncio
+    async def test_hmac_signature_is_correct(self):
+        """HMAC signature matches expected value for given secret and payload."""
+        captured_headers = {}
+        captured_body = None
+
+        with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+
+            async def _capture_post(url, content, headers):
+                nonlocal captured_body
+                captured_headers.update(headers)
+                captured_body = content
+                return httpx.Response(200, request=httpx.Request("POST", url))
+
+            instance.post = _capture_post
+            instance.__aenter__ = AsyncMock(return_value=instance)
+            instance.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = instance
+
+            secret = "test-secret-123"
+            payload = {"event": "crawl.completed", "job_id": "xyz"}
+            await send_webhook(
+                url="https://hook.example.com",
+                payload=payload,
+                secret=secret,
+            )
+
+            # Verify the signature
+            expected_sig = hmac.new(
+                secret.encode("utf-8"), captured_body, hashlib.sha256
+            ).hexdigest()
+            assert captured_headers["X-WebHarvest-Signature"] == f"sha256={expected_sig}"
+
+    @pytest.mark.asyncio
+    async def test_no_signature_without_secret(self):
+        """No X-WebHarvest-Signature header when secret is not provided."""
+        captured_headers = {}
+
+        with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+
+            async def _capture_post(url, content, headers):
+                captured_headers.update(headers)
+                return httpx.Response(200, request=httpx.Request("POST", url))
+
+            instance.post = _capture_post
+            instance.__aenter__ = AsyncMock(return_value=instance)
+            instance.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = instance
+
+            await send_webhook(
+                url="https://hook.example.com",
+                payload={"event": "test"},
+            )
+            assert "X-WebHarvest-Signature" not in captured_headers
+
+    @pytest.mark.asyncio
+    async def test_no_signature_with_none_secret(self):
+        """No X-WebHarvest-Signature when secret is explicitly None."""
+        captured_headers = {}
+
+        with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
+            instance = AsyncMock()
+
+            async def _capture_post(url, content, headers):
+                captured_headers.update(headers)
+                return httpx.Response(200, request=httpx.Request("POST", url))
+
+            instance.post = _capture_post
+            instance.__aenter__ = AsyncMock(return_value=instance)
+            instance.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = instance
+
+            await send_webhook(
+                url="https://hook.example.com",
+                payload={"event": "test"},
+                secret=None,
+            )
+            assert "X-WebHarvest-Signature" not in captured_headers

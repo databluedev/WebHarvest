@@ -65,6 +65,10 @@ class ScrapeRequest(BaseModel):
     )
     webhook_url: str | None = None  # Webhook URL for job completion notification
     webhook_secret: str | None = None  # HMAC secret for webhook signature
+    capture_network: bool = False  # Capture browser network requests/responses
+    css_selector: str | None = None  # CSS selector for targeted extraction
+    xpath: str | None = None  # XPath expression for targeted extraction
+    selectors: dict | None = None  # Multiple named selectors {name: {css/xpath: ...}}
 
 
 class PageMetadata(BaseModel):
@@ -95,6 +99,13 @@ class ScrapeData(BaseModel):
     structured_data: dict | None = None  # JSON-LD, OpenGraph, Twitter Cards
     headings: list[dict] | None = None  # heading hierarchy
     images: list[dict] | None = None  # all images with metadata
+    product_data: dict | None = None  # auto-extracted product info (schema.org/microdata/OG)
+    selector_data: dict | None = None  # CSS/XPath extraction results
+    tables: list[dict] | None = None  # Extracted tables
+    fit_markdown: str | None = None  # Pruned/filtered markdown
+    citations: list[str] | None = None  # Numbered reference citations
+    markdown_with_citations: str | None = None  # Markdown with inline citation numbers
+    network_data: dict | None = None  # Browser network capture data
     extract: dict[str, Any] | None = None
     metadata: PageMetadata
 

@@ -1,27 +1,52 @@
 import fnmatch
+import json
 import logging
 import re
 from urllib.parse import urlparse
 
 import httpx
-import redis.asyncio as aioredis
 from robotexclusionrulesparser import RobotExclusionRulesParser
 
-from app.config import settings
 from app.schemas.crawl import CrawlRequest, ScrapeOptions
 from app.schemas.scrape import ScrapeRequest
 from app.services.scraper import scrape_url, scrape_url_fetch_only
 
 logger = logging.getLogger(__name__)
 
+# Junk path segments — skip admin panels, auth flows, shopping carts, feeds
+_JUNK_PATH_SEGMENTS = {
+    "wp-admin",
+    "wp-login",
+    "wp-json",
+    "admin",
+    "login",
+    "logout",
+    "signup",
+    "register",
+    "cart",
+    "checkout",
+    "account",
+    "password",
+    "feed",
+    "rss",
+    "xmlrpc",
+    "cgi-bin",
+}
+
+# Redis key TTL for crawl state (2 hours — covers long crawls)
+_REDIS_TTL = 7200
+
 
 class WebCrawler:
-    """BFS web crawler with Redis-backed LIST frontier (Firecrawl-style).
+    """Web crawler with Redis-backed frontier for distributed Celery architecture.
 
-    The frontier uses a Redis LIST (RPUSH/LPOP) for plain FIFO BFS.
-    A companion SET tracks queued URLs (normalized) to prevent duplicate
-    insertions.  Deduplication relies solely on URL normalization — no
-    content fingerprinting.
+    Supports BFS, DFS, and Best-First traversal backed by Redis data structures:
+    - BFS = Redis LIST (RPUSH/LPOP) — queue behavior
+    - DFS = Redis LIST (LPUSH/LPOP) — stack behavior
+    - BFF = Redis ZSET (ZADD/ZPOPMIN) — scored priority queue
+
+    Falls back to in-memory deep_crawl strategies when Redis is unavailable
+    (CLI mode / local development).
     """
 
     @staticmethod
@@ -35,47 +60,46 @@ class WebCrawler:
         self.config = config
         self.base_url = config.url
         self.base_domain = urlparse(config.url).netloc
-        # Normalized domain for comparison (strip www. so www.x.com == x.com)
         self._base_domain_norm = self._strip_www(self.base_domain)
         self._robots_cache: dict[str, RobotExclusionRulesParser] = {}
-        self._redis: aioredis.Redis | None = None
+        self._crawl_delay_cache: dict[str, float | None] = {}
         self._proxy_manager = proxy_manager
         self._crawl_session = None
+        self._use_redis = False
+        self._redis = None
+        self._strategy = None  # In-memory fallback
 
-        # Redis keys for this crawl
-        self._frontier_key = f"crawl:{job_id}:frontier"   # LIST (FIFO queue)
-        self._queued_key = f"crawl:{job_id}:queued"        # SET  (dedup guard)
-        self._visited_key = f"crawl:{job_id}:visited"
-        self._depth_key = f"crawl:{job_id}:depth"
+        # Redis key prefixes for this job
+        self._key_frontier = f"crawl:{job_id}:frontier"
+        self._key_visited = f"crawl:{job_id}:visited"
+        self._key_depth = f"crawl:{job_id}:depth"
+
+        self._crawl_strategy = getattr(config, "crawl_strategy", "bfs")
 
     async def initialize(self):
-        """Set up Redis connection, initial frontier, and persistent browser session.
-
-        Frontier seeding strategy (Firecrawl-style):
-        1. Start URL — always first in the FIFO queue
-        2. Sitemap discovery — fetch robots.txt + sitemap.xml, append URLs
-        3. BFS link extraction fills the rest during crawl
-        """
-        # Create a fresh Redis connection for this crawl task
-        self._redis = aioredis.from_url(
-            settings.REDIS_URL,
-            encoding="utf-8",
-            decode_responses=True,
-        )
-
-        # Seed the frontier with the start URL (first in FIFO)
+        """Set up Redis frontier (or fallback), seed URLs, start browser session."""
         from app.services.dedup import normalize_url
-        start_norm = normalize_url(self.base_url)
-        await self._redis.rpush(self._frontier_key, start_norm)
-        await self._redis.sadd(self._queued_key, start_norm)
-        await self._redis.hset(self._depth_key, start_norm, 0)
-        # Set TTL on all keys (24 hours)
-        for key in [self._frontier_key, self._queued_key, self._visited_key, self._depth_key]:
-            await self._redis.expire(key, 86400)
 
-        # Sitemap-first seeding (Firecrawl pattern): discover URLs from
-        # sitemap.xml and robots.txt Sitemap: directives.  Runs before
-        # browser init so the frontier is rich from the start.
+        # Try to use Redis for distributed frontier
+        try:
+            from app.core.redis import redis_client
+            await redis_client.ping()
+            self._redis = redis_client
+            self._use_redis = True
+            logger.info(f"Crawl {self.job_id}: using Redis-backed frontier ({self._crawl_strategy})")
+        except Exception as e:
+            logger.warning(f"Crawl {self.job_id}: Redis unavailable ({e}), using in-memory frontier")
+            self._use_redis = False
+            self._init_memory_strategy()
+
+        # Seed the start URL
+        norm_start = normalize_url(self.base_url)
+        if self._use_redis:
+            await self._redis_add_urls([(norm_start, 0)])
+        else:
+            self._strategy.seed(self.base_url)
+
+        # Sitemap-first seeding
         await self._seed_from_sitemaps()
 
         # Create persistent browser session for this crawl
@@ -89,12 +113,80 @@ class WebCrawler:
                 proxy = self._proxy_manager.to_playwright(proxy_obj)
         await self._crawl_session.start(proxy=proxy, target_url=self.base_url)
 
-    async def _seed_from_sitemaps(self):
-        """Seed the crawl frontier from sitemap.xml (Firecrawl pattern).
+    def _init_memory_strategy(self):
+        """Initialize in-memory fallback strategy (CLI mode)."""
+        from app.services.deep_crawl.strategies import BFSStrategy, DFSStrategy, BestFirstStrategy
 
-        Discovers URLs from robots.txt Sitemap: directives and common sitemap
-        locations. URLs are appended to the BFS LIST frontier in discovery order.
-        """
+        strategy_kwargs = {
+            "max_depth": self.config.max_depth,
+            "max_pages": self.config.max_pages,
+            "include_external": self.config.allow_external_links,
+        }
+        if self._crawl_strategy == "dfs":
+            self._strategy = DFSStrategy(**strategy_kwargs)
+        elif self._crawl_strategy == "bff":
+            self._strategy = BestFirstStrategy(**strategy_kwargs)
+        else:
+            self._strategy = BFSStrategy(**strategy_kwargs)
+
+    # ------------------------------------------------------------------
+    # Redis frontier operations
+    # ------------------------------------------------------------------
+
+    async def _redis_add_urls(self, url_depth_pairs: list[tuple[str, int]]):
+        """Add URLs to Redis frontier with their depths."""
+        if not url_depth_pairs:
+            return
+        pipe = self._redis.pipeline()
+        for url, depth in url_depth_pairs:
+            if self._crawl_strategy == "bfs":
+                # Queue: RPUSH for FIFO
+                pipe.rpush(self._key_frontier, json.dumps({"url": url, "depth": depth}))
+            elif self._crawl_strategy == "dfs":
+                # Stack: LPUSH for LIFO
+                pipe.lpush(self._key_frontier, json.dumps({"url": url, "depth": depth}))
+            elif self._crawl_strategy == "bff":
+                # Priority queue: score = depth (lower depth = higher priority)
+                pipe.zadd(self._key_frontier, {json.dumps({"url": url, "depth": depth}): depth})
+            # Store depth mapping
+            pipe.hset(self._key_depth, url, depth)
+        # Set TTL on all keys
+        pipe.expire(self._key_frontier, _REDIS_TTL)
+        pipe.expire(self._key_depth, _REDIS_TTL)
+        pipe.expire(self._key_visited, _REDIS_TTL)
+        await pipe.execute()
+
+    async def _redis_pop_url(self) -> tuple[str, int] | None:
+        """Pop next URL from Redis frontier."""
+        if self._crawl_strategy == "bff":
+            # ZPOPMIN returns [(member, score)] or empty list
+            result = await self._redis.zpopmin(self._key_frontier, count=1)
+            if not result:
+                return None
+            member, _score = result[0]
+            data = json.loads(member)
+            return data["url"], data["depth"]
+        else:
+            # LPOP for both BFS (RPUSH+LPOP=queue) and DFS (LPUSH+LPOP=stack)
+            raw = await self._redis.lpop(self._key_frontier)
+            if not raw:
+                return None
+            data = json.loads(raw)
+            return data["url"], data["depth"]
+
+    async def _redis_frontier_size(self) -> int:
+        """Get current frontier size from Redis."""
+        if self._crawl_strategy == "bff":
+            return await self._redis.zcard(self._key_frontier)
+        else:
+            return await self._redis.llen(self._key_frontier)
+
+    # ------------------------------------------------------------------
+    # Public API (used by crawl_worker)
+    # ------------------------------------------------------------------
+
+    async def _seed_from_sitemaps(self):
+        """Seed the crawl frontier from sitemap.xml."""
         try:
             from app.services.mapper import _parse_sitemaps
             from app.services.dedup import normalize_url
@@ -105,104 +197,136 @@ class WebCrawler:
                 return
 
             added = 0
-            max_seed = self.config.max_pages * 5  # Cap to avoid huge frontiers
+            max_seed = self.config.max_pages * 5
+            seed_pairs = []
             for link in sitemap_links:
                 if added >= max_seed:
                     break
                 url = link.url
                 norm = normalize_url(url)
-                # Skip if already queued or visited
-                if await self._redis.sismember(self._queued_key, norm):
-                    continue
-                if await self.is_visited(norm):
-                    continue
+                if self._use_redis:
+                    if await self._redis.sismember(self._key_visited, norm):
+                        continue
+                else:
+                    if norm in self._visited:
+                        continue
                 if not self._should_crawl(url, depth=1):
                     continue
-
-                await self._redis.rpush(self._frontier_key, norm)
-                await self._redis.sadd(self._queued_key, norm)
-                await self._redis.hset(self._depth_key, norm, 1)
+                seed_pairs.append((norm, 1))
                 added += 1
 
-            if added:
+            if seed_pairs:
+                if self._use_redis:
+                    await self._redis_add_urls(seed_pairs)
+                else:
+                    await self._strategy.add_discovered_urls(
+                        [u for u, _ in seed_pairs], self.base_url, 1
+                    )
                 logger.info(
                     f"Sitemap seeding: added {added} URLs from "
                     f"{len(sitemap_links)} sitemap entries for {self.base_url}"
                 )
         except Exception as e:
             logger.warning(f"Sitemap seeding failed for {self.base_url}: {e}")
-            # Non-fatal — BFS still works via link extraction
 
     async def get_next_url(self) -> tuple[str, int] | None:
-        """Pop the next URL from the BFS frontier (FIFO). Returns (url, depth) or None."""
-        url = await self._redis.lpop(self._frontier_key)
-        if not url:
+        """Get next URL from the frontier."""
+        if self._use_redis:
+            return await self._redis_pop_url()
+
+        # In-memory fallback
+        batch = await self._strategy.get_next_urls()
+        if not batch:
             return None
-        depth = await self._redis.hget(self._depth_key, url)
-        return url, int(depth or 0)
+        item = batch[0]
+        if len(batch) > 1:
+            for extra in batch[1:]:
+                await self._strategy.add_discovered_urls(
+                    [extra.url], extra.parent_url or self.base_url, extra.depth
+                )
+        return item.url, item.depth
 
     async def mark_visited(self, url: str):
-        await self._redis.sadd(self._visited_key, url)
+        if self._use_redis:
+            await self._redis.sadd(self._key_visited, url)
+            await self._redis.expire(self._key_visited, _REDIS_TTL)
+        else:
+            self._visited.add(url)
+            self._strategy._state.visited.add(url)
+            self._strategy._state.pages_crawled += 1
 
     async def is_visited(self, url: str) -> bool:
-        return await self._redis.sismember(self._visited_key, url)
+        if self._use_redis:
+            return bool(await self._redis.sismember(self._key_visited, url))
+        return url in self._visited
 
     async def get_visited_count(self) -> int:
-        return await self._redis.scard(self._visited_key)
+        if self._use_redis:
+            return await self._redis.scard(self._key_visited)
+        return len(self._visited)
 
     async def get_frontier_size(self) -> int:
-        return await self._redis.llen(self._frontier_key)
+        if self._use_redis:
+            return await self._redis_frontier_size()
+        if hasattr(self._strategy, '_queue'):
+            return len(self._strategy._queue)
+        elif hasattr(self._strategy, '_stack'):
+            return len(self._strategy._stack)
+        elif hasattr(self._strategy, '_pqueue'):
+            return len(self._strategy._pqueue)
+        return 0
 
     async def add_to_frontier(self, urls: list[str], depth: int):
-        """Add discovered URLs to the BFS frontier (FIFO, no scoring).
-
-        Uses a companion SET (queued_key) for O(1) dedup so the same
-        normalized URL is never pushed twice into the LIST.
-        """
+        """Add discovered URLs to frontier with filtering and backpressure."""
         from app.services.dedup import normalize_url
 
+        # Backpressure check — cap frontier size
+        visited_count = await self.get_visited_count()
+        frontier_size = await self.get_frontier_size()
+        frontier_cap = self.config.max_pages * 5
+
+        if visited_count + frontier_size >= frontier_cap:
+            logger.info(
+                f"Backpressure: frontier full ({visited_count} visited + "
+                f"{frontier_size} queued >= {frontier_cap} cap), "
+                f"dropping {len(urls)} discovered URLs for {self.job_id}"
+            )
+            return
+
+        # Faceted URL filtering
+        if getattr(self.config, "filter_faceted_urls", True):
+            from app.services.dedup import filter_faceted_urls
+            urls = filter_faceted_urls(urls)
+
+        filtered = []
         for url in urls:
             norm = normalize_url(url)
-            # O(1) dedup via queued SET — skip if already enqueued
-            if await self._redis.sismember(self._queued_key, norm):
-                continue
             if await self.is_visited(norm):
                 continue
             if not self._should_crawl(url, depth):
                 continue
-            if self.config.respect_robots_txt and not await self._is_allowed_by_robots(
-                url
-            ):
+            if self.config.respect_robots_txt and not await self._is_allowed_by_robots(url):
                 continue
 
-            visited_count = await self.get_visited_count()
-            frontier_size = await self.get_frontier_size()
-            if visited_count + frontier_size >= self.config.max_pages * 5:
+            # Re-check backpressure after each URL
+            current_total = visited_count + frontier_size + len(filtered)
+            if current_total >= frontier_cap:
+                logger.info(
+                    f"Backpressure: frontier cap reached mid-batch, "
+                    f"added {len(filtered)}/{len(urls)} URLs for {self.job_id}"
+                )
                 break
+            filtered.append((norm, depth))
 
-            await self._redis.rpush(self._frontier_key, norm)
-            await self._redis.sadd(self._queued_key, norm)
-            await self._redis.hset(self._depth_key, norm, depth)
+        if not filtered:
+            return
 
-    # Paths that never have useful content — utility/chrome pages
-    _JUNK_PATH_SEGMENTS = {
-        "signin", "sign-in", "sign_in", "login", "log-in", "log_in",
-        "signup", "sign-up", "sign_up", "register", "registration",
-        "cart", "checkout", "basket", "bag", "payment", "order",
-        "account", "my-account", "myaccount", "profile", "settings",
-        "wishlist", "wish-list", "favorites", "favourites", "saved",
-        "help", "contact", "contact-us", "support", "faq", "faqs",
-        "privacy", "privacy-policy", "terms", "terms-of-service",
-        "terms-of-use", "legal", "disclaimer", "cookie-policy",
-        "language", "locale", "region", "country-selector",
-        "subscribe", "unsubscribe", "newsletter",
-        "compare", "comparison",
-        "returns", "return-policy", "refund", "shipping",
-        "sitemap", "sitemap.xml",
-        "feed", "rss", "atom",
-        "print", "share", "email-friend",
-        "404", "error", "not-found",
-    }
+        if self._use_redis:
+            await self._redis_add_urls(filtered)
+        else:
+            await self._strategy.add_discovered_urls(
+                [u for u, _ in filtered], self.base_url, depth
+            )
 
     def _should_crawl(self, url: str, depth: int) -> bool:
         """Check if a URL should be crawled based on config filters."""
@@ -219,6 +343,11 @@ class WebCrawler:
 
         # Skip non-HTTP schemes
         if parsed.scheme not in ("http", "https"):
+            return False
+
+        # Skip junk path segments (admin, login, cart, etc.)
+        path_parts = [p.lower() for p in parsed.path.split("/") if p]
+        if any(part in _JUNK_PATH_SEGMENTS for part in path_parts):
             return False
 
         # Skip common non-page extensions
@@ -240,12 +369,6 @@ class WebCrawler:
         }
         path_lower = parsed.path.lower()
         if any(path_lower.endswith(ext) for ext in skip_extensions):
-            return False
-
-        # Skip utility/chrome pages (sign in, cart, account, etc.)
-        # Check ALL path segments — catches /en/cart/, /user/login/, etc.
-        path_segments = [s.lower() for s in parsed.path.strip("/").split("/") if s]
-        if any(seg in self._JUNK_PATH_SEGMENTS for seg in path_segments):
             return False
 
         path = parsed.path
@@ -297,7 +420,29 @@ class WebCrawler:
                 pass  # Network error = allow all, cache empty parser
             self._robots_cache[domain] = parser
 
+            # Cache Crawl-Delay directive (polite scraping)
+            try:
+                delay = parser.get_crawl_delay("*")
+                if delay is not None:
+                    # Cap at 30s to avoid absurdly slow crawls
+                    self._crawl_delay_cache[domain] = min(float(delay), 30.0)
+                    logger.info(
+                        "Respecting Crawl-Delay: %.1fs for %s", delay, domain
+                    )
+            except Exception:
+                pass
+
         return self._robots_cache[domain].is_allowed("*", url)
+
+    def get_crawl_delay(self, url: str) -> float | None:
+        """Return the Crawl-Delay (seconds) from robots.txt for a URL's domain.
+
+        Returns None if no Crawl-Delay was specified. The value is cached
+        after the first robots.txt fetch for each domain.
+        """
+        parsed = urlparse(url)
+        domain = f"{parsed.scheme}://{parsed.netloc}"
+        return self._crawl_delay_cache.get(domain)
 
     async def scrape_page(self, url: str) -> dict:
         """Scrape a single page using the crawler's scrape options."""
@@ -414,17 +559,63 @@ class WebCrawler:
             fetch_result["request"] = request
         return fetch_result
 
+    def export_state(self) -> dict:
+        """Export crawl state for checkpoint/resume.
+
+        For Redis mode, serializes Redis state to JSON.
+        For in-memory mode, delegates to strategy.
+        """
+        if not self._use_redis and self._strategy:
+            return self._strategy.export_state()
+        # Redis mode: state is already persisted in Redis
+        return {
+            "job_id": self.job_id,
+            "strategy": self._crawl_strategy,
+            "use_redis": True,
+            "redis_keys": {
+                "frontier": self._key_frontier,
+                "visited": self._key_visited,
+                "depth": self._key_depth,
+            },
+        }
+
+    def restore_state(self, state_data: dict):
+        """Restore crawl state from checkpoint."""
+        if not self._use_redis and self._strategy:
+            self._strategy.restore_state(state_data)
+            self._visited = self._strategy._state.visited.copy()
+
     async def cleanup(self):
-        """Remove Redis keys, close browser session, and close the connection."""
+        """Close browser session and clean up Redis keys."""
         if self._crawl_session:
             try:
                 await self._crawl_session.stop()
             except Exception:
                 pass
             self._crawl_session = None
-        if self._redis:
-            await self._redis.delete(
-                self._frontier_key, self._queued_key, self._visited_key, self._depth_key
-            )
-            await self._redis.aclose()
-            self._redis = None
+
+        # Clean up Redis keys for this job
+        if self._use_redis and self._redis:
+            try:
+                await self._redis.delete(
+                    self._key_frontier,
+                    self._key_visited,
+                    self._key_depth,
+                )
+            except Exception:
+                pass
+
+    # ------------------------------------------------------------------
+    # In-memory fallback support
+    # ------------------------------------------------------------------
+
+    @property
+    def _visited(self) -> set[str]:
+        """In-memory visited set (only used in non-Redis mode)."""
+        if not hasattr(self, "_visited_set"):
+            self._visited_set: set[str] = set()
+        return self._visited_set
+
+    @_visited.setter
+    def _visited(self, value: set[str]):
+        self._visited_set = value
