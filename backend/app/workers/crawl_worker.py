@@ -232,8 +232,14 @@ def process_crawl(self, job_id: str, config: dict):
                                         _pinned_strategy = None
                                         _pinned_tier = None
 
+                                    # Don't queue blocked pages for extraction —
+                                    # they contain bot-detection garbage, not content.
+                                    if _is_blocked:
+                                        logger.warning(f"Skipping blocked page: {url}")
+                                        return None
+
                                     # Pin strategy from first success
-                                    if _pinned_strategy is None and not _is_blocked:
+                                    if _pinned_strategy is None:
                                         wt = fetch_result.get("winning_tier")
                                         if ws and wt is not None:
                                             _pinned_strategy = ws
@@ -320,14 +326,16 @@ def process_crawl(self, job_id: str, config: dict):
                             )
                             discovered_links = scrape_data.links or []
 
-                        # Skip pages that are completely empty (no text at all)
+                        # Skip thin/empty pages — real content pages have 50+ words.
+                        # Catches bot-detection pages ("continue shopping"),
+                        # session-expired interstitials, and empty renders.
                         md_text = (scrape_data.markdown or "").strip()
                         _word_count = len(md_text.split())
                         _skip = False
 
-                        if _word_count == 0:
+                        if _word_count < 50:
                             _skip = True
-                            logger.warning(f"Skipping empty page (0 words): {url}")
+                            logger.warning(f"Skipping thin page ({_word_count} words): {url}")
 
                         if _skip:
                             # Still harvest links for frontier expansion
