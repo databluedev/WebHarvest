@@ -761,8 +761,13 @@ def _extract_links_from_html(
                 if base_root != parsed_root:
                     continue
 
-        # Clean URL (remove fragments)
-        clean_url = parsed._replace(fragment="").geturl()
+        # Clean URL — preserve SPA-style hash routes (#!/... or #/...)
+        # but strip plain anchor fragments (#section-name)
+        frag = parsed.fragment
+        if frag and (frag.startswith("/") or frag.startswith("!/")):
+            clean_url = parsed.geturl()  # keep SPA route fragment
+        else:
+            clean_url = parsed._replace(fragment="").geturl()
 
         title = a_tag.get_text(strip=True) or None
 

@@ -106,6 +106,7 @@ class ScrapeData(BaseModel):
     citations: list[str] | None = None  # Numbered reference citations
     markdown_with_citations: str | None = None  # Markdown with inline citation numbers
     network_data: dict | None = None  # Browser network capture data
+    content_hash: str | None = None  # MD5 of markdown for content dedup
     extract: dict[str, Any] | None = None
     metadata: PageMetadata
 

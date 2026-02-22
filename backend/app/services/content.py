@@ -46,11 +46,12 @@ def _convert_via_sidecar(html: str) -> str | None:
         logger.debug(f"Go sidecar conversion failed: {e}")
     return None
 
-# Tags that are always junk — can't be rendered as meaningful markdown
+# Tags that are always junk — can't be rendered as meaningful markdown.
+# NOTE: "noscript" is intentionally KEPT — it contains fallback content
+# for lazy-loaded images and JS-disabled browsers.
 JUNK_TAGS = {
     "script",
     "style",
-    "noscript",
     "iframe",
     "svg",
     "path",
@@ -282,6 +283,34 @@ class WebHarvestConverter(MarkdownConverter):
         else:
             text = el.get_text()
         return f"\n```{lang}\n{text}\n```\n"
+
+    def convert_dl(self, el, text, *args, **kwargs):
+        """Preserve definition lists as structured markdown."""
+        return f"\n{text}\n"
+
+    def convert_dt(self, el, text, *args, **kwargs):
+        """Definition term — render as bold."""
+        return f"\n**{(text or '').strip()}**\n"
+
+    def convert_dd(self, el, text, *args, **kwargs):
+        """Definition description — render indented under the term."""
+        return f": {(text or '').strip()}\n"
+
+    def convert_time(self, el, text, *args, **kwargs):
+        """Preserve <time> datetime attribute alongside visible text."""
+        dt = el.get("datetime", "")
+        display = (text or "").strip()
+        if dt and dt != display:
+            return f"{display} ({dt})"
+        return display
+
+    def convert_details(self, el, text, *args, **kwargs):
+        """Preserve expandable <details> sections."""
+        return f"\n{text}\n"
+
+    def convert_summary(self, el, text, *args, **kwargs):
+        """Render <summary> as a bold header for the details block."""
+        return f"\n**{(text or '').strip()}**\n"
 
 
 def _is_inside_main_content(el: Tag) -> bool:
@@ -567,23 +596,33 @@ def apply_tag_filters(
 
 
 def _postprocess_markdown(markdown: str) -> str:
-    """Post-processing pipeline — minimal cleaning to preserve maximum data."""
-    # 1. Collapse 3+ newlines into 2
-    markdown = re.sub(r"\n{3,}", "\n\n", markdown)
-    # 2. Remove trailing whitespace on lines
-    markdown = re.sub(r"[ \t]+\n", "\n", markdown)
-    # 3. Remove excessive spaces (but preserve indentation)
-    markdown = re.sub(r"([^\n]) {3,}", r"\1 ", markdown)
+    """Post-processing pipeline — minimal cleaning to preserve maximum data.
 
-    # 4. Link clusters are PRESERVED — they are valid TOC, nav, reference lists
+    Code blocks (``` fenced) are protected from whitespace collapsing so that
+    indentation, ASCII art, and tabular data inside <pre> sections are preserved.
+    """
+    # Split into code-block and non-code-block segments
+    parts = re.split(r"(```[^\n]*\n.*?```)", markdown, flags=re.DOTALL)
+    cleaned = []
+    for i, part in enumerate(parts):
+        if i % 2 == 1:
+            # Inside a code fence — keep verbatim
+            cleaned.append(part)
+        else:
+            # Outside code — apply cleaning
+            part = re.sub(r"\n{3,}", "\n\n", part)
+            part = re.sub(r"[ \t]+\n", "\n", part)
+            part = re.sub(r"([^\n]) {3,}", r"\1 ", part)
+            cleaned.append(part)
+    markdown = "".join(cleaned)
 
-    # 5. Deduplicate repeated content (carousel slides, repeated sections)
+    # Deduplicate repeated content (carousel slides, repeated sections)
     markdown = _deduplicate_content(markdown)
 
-    # 6. Remove only truly empty headings (no content at all)
+    # Remove only truly empty headings (no content at all)
     markdown = re.sub(r"^#{1,6}\s*$", "", markdown, flags=re.MULTILINE)
 
-    # 7. Final collapse of excessive newlines
+    # Final collapse of excessive newlines
     markdown = re.sub(r"\n{3,}", "\n\n", markdown)
     return markdown.strip()
 
@@ -592,7 +631,7 @@ _CONVERTER = WebHarvestConverter(
     heading_style="ATX",
     bullets="-",
     newline_style="backslash",
-    strip=["script", "style", "noscript"],
+    strip=["script", "style"],
 )
 
 
@@ -645,9 +684,10 @@ def _clean_soup_light(html: str, base_url: str = "") -> BeautifulSoup:
     """
     soup = BeautifulSoup(html, "lxml")
 
-    # Only remove tags that can NEVER produce meaningful markdown
+    # Only remove tags that can NEVER produce meaningful markdown.
+    # "noscript" kept — contains fallback image URLs for lazy-loaded content.
     LIGHT_JUNK_TAGS = {
-        "script", "style", "noscript", "svg", "path", "meta", "link",
+        "script", "style", "svg", "path", "meta", "link",
         "canvas", "object", "embed", "source", "track", "template",
         "datalist", "iframe", "dialog", "select", "option",
     }
@@ -682,8 +722,9 @@ def _clean_soup_light(html: str, base_url: str = "") -> BeautifulSoup:
     return soup
 
 
-# Minimum words for a block to be kept (Crawl4AI default: 10)
-BLOCK_WORD_THRESHOLD = 10
+# Minimum words for a block to be kept (lowered from 10 to preserve
+# captions, bylines, short metadata, and CTAs)
+BLOCK_WORD_THRESHOLD = 4
 
 # Tags that contain valuable non-text content — never filtered by word count
 _VALUABLE_CHILDREN = {"img", "pre", "code", "table", "video", "audio", "picture"}
@@ -747,15 +788,25 @@ def _filter_thin_blocks(soup: BeautifulSoup) -> None:
             el.decompose()
 
 
-def _filter_external_images(soup: BeautifulSoup, base_url: str) -> None:
-    """Remove <img> tags whose src points to a different domain.
+# Well-known CDN domains that host legitimate content images
+_CDN_DOMAINS = {
+    "cloudfront.net", "amazonaws.com", "akamaihd.net", "akamaized.net",
+    "fastly.net", "cloudinary.com", "imgix.net", "shopify.com",
+    "squarespace-cdn.com", "wp.com", "githubusercontent.com",
+    "googleusercontent.com", "ggpht.com", "twimg.com", "fbcdn.net",
+    "pinimg.com", "media-amazon.com", "ssl-images-amazon.com",
+    "scene7.com", "unsplash.com", "pexels.com",
+}
 
-    Keeps images from the same domain and subdomains. This strips
-    tracking pixels, third-party ad images, and CDN decorations
-    while preserving the site's own content images.
+
+def _filter_external_images(soup: BeautifulSoup, base_url: str) -> None:
+    """Remove tracking-pixel <img> tags while keeping CDN-hosted content images.
+
+    Keeps images from the same domain, subdomains, and well-known CDN
+    domains. Only removes tiny tracking pixels (1x1) from unknown domains.
+    Preserves alt text as plain text when an external image is removed.
     """
     base_domain = urlparse(base_url).netloc
-    # Extract root domain (e.g., 'example.com' from 'www.example.com')
     base_parts = base_domain.split(".")
     root_domain = ".".join(base_parts[-2:]) if len(base_parts) >= 2 else base_domain
 
@@ -763,12 +814,23 @@ def _filter_external_images(soup: BeautifulSoup, base_url: str) -> None:
         src = img.get("src", "").strip()
         if not src or src.startswith("data:"):
             continue
-        # Resolve relative URLs
         absolute = urljoin(base_url, src)
         img_domain = urlparse(absolute).netloc
-        # Keep if same root domain (includes subdomains like cdn.example.com)
-        if img_domain and not img_domain.endswith(root_domain):
-            img.decompose()
+        # Keep same-domain images
+        if not img_domain or img_domain.endswith(root_domain):
+            continue
+        # Keep images from well-known CDN domains
+        if any(img_domain.endswith(cdn) for cdn in _CDN_DOMAINS):
+            continue
+        # For unknown external images, only remove if it looks like a tracking pixel
+        width = img.get("width", "")
+        height = img.get("height", "")
+        if width in ("1", "0") and height in ("1", "0"):
+            alt = img.get("alt", "").strip()
+            if alt:
+                img.replace_with(alt)
+            else:
+                img.decompose()
 
 
 def _strip_social_media_links(soup: BeautifulSoup) -> None:
@@ -900,19 +962,47 @@ def _deduplicate_content(markdown: str) -> str:
 
 
 def extract_links(html: str, base_url: str) -> list[str]:
-    """Extract all links from HTML, resolved to absolute URLs."""
+    """Extract all navigable links from HTML, resolved to absolute URLs.
+
+    Covers <a href>, <link rel=next/prev/canonical>, <form action>,
+    and data-href attributes used by SPAs.
+    """
     soup = BeautifulSoup(html, "lxml")
     links = set()
 
-    for a_tag in soup.find_all("a", href=True):
-        href = a_tag["href"].strip()
-        if href.startswith(("#", "mailto:", "tel:", "javascript:")):
-            continue
-        absolute = urljoin(base_url, href)
-        # Remove fragments
+    def _add(url: str) -> None:
+        url = url.strip()
+        if not url or url.startswith(("mailto:", "tel:", "javascript:", "data:")):
+            return
+        absolute = urljoin(base_url, url)
         parsed = urlparse(absolute)
-        clean_url = parsed._replace(fragment="").geturl()
-        links.add(clean_url)
+        frag = parsed.fragment
+        if frag and (frag.startswith("/") or frag.startswith("!/")):
+            links.add(absolute)  # SPA route fragment — keep
+        else:
+            links.add(parsed._replace(fragment="").geturl())
+
+    # Standard <a href>
+    for a_tag in soup.find_all("a", href=True):
+        _add(a_tag["href"])
+
+    # <link rel="next|prev|canonical"> — pagination and canonical hints
+    for link_tag in soup.find_all("link", href=True):
+        rel = " ".join(link_tag.get("rel", []))
+        if any(r in rel for r in ("next", "prev", "canonical")):
+            _add(link_tag["href"])
+
+    # <form action> — search and filter endpoints
+    for form in soup.find_all("form", action=True):
+        action = form["action"].strip()
+        if action and not action.startswith("javascript:"):
+            _add(action)
+
+    # data-href / data-url — SPA navigation attributes
+    for el in soup.find_all(attrs={"data-href": True}):
+        _add(el["data-href"])
+    for el in soup.find_all(attrs={"data-url": True}):
+        _add(el["data-url"])
 
     return sorted(links)
 
@@ -994,13 +1084,21 @@ def extract_structured_data(html: str) -> dict:
     if json_ld:
         result["json_ld"] = json_ld
 
-    # 2. OpenGraph tags
-    og = {}
+    # 2. OpenGraph tags (accumulate lists for keys that can repeat, e.g. og:image)
+    _OG_MULTI_KEYS = {"image", "image:url", "image:width", "image:height",
+                       "image:type", "image:alt", "video", "video:url",
+                       "video:type", "video:width", "video:height", "audio"}
+    og: dict = {}
     for meta in soup.find_all("meta"):
         prop = meta.get("property", "")
         if prop.startswith("og:"):
             key = prop[3:]
-            og[key] = meta.get("content", "")
+            content = meta.get("content", "")
+            if key in _OG_MULTI_KEYS:
+                og.setdefault(key, [])
+                og[key].append(content)
+            else:
+                og[key] = content
     if og:
         result["open_graph"] = og
 
@@ -1137,12 +1235,14 @@ def _parse_microdata_item(el: Tag) -> dict:
 
 
 def _extract_microdata_items(soup: BeautifulSoup) -> list[dict]:
-    """Extract all top-level microdata items (itemscope without itemprop parent)."""
+    """Extract all microdata items (both top-level and nested with itemprop).
+
+    Nested itemscopes (e.g. Offer inside Product) are parsed recursively
+    by _parse_microdata_item, but we also collect them at top level so
+    product extraction can merge Offer data that lives in a nested scope.
+    """
     items = []
     for el in soup.find_all(attrs={"itemscope": True}):
-        # Only top-level: skip nested itemscopes that have itemprop
-        if el.get("itemprop"):
-            continue
         items.append(_parse_microdata_item(el))
     return items
 
@@ -1339,7 +1439,7 @@ def extract_product_data(html: str, structured_data: dict | None = None) -> dict
 
     product: dict = {}
 
-    # 1. JSON-LD Product (highest priority)
+    # 1. JSON-LD Product (highest priority) — merge ALL matching objects
     if structured_data:
         for item in structured_data.get("json_ld", []):
             items = item if isinstance(item, list) else [item]
@@ -1350,7 +1450,6 @@ def extract_product_data(html: str, structured_data: dict | None = None) -> dict
                 types = t if isinstance(t, list) else [t]
                 if any(tp in _SCHEMA_PRODUCT_TYPES for tp in types):
                     _merge_jsonld_product(product, obj)
-                    break
                 # Check @graph
                 for graph_item in obj.get("@graph", []):
                     if isinstance(graph_item, dict):
@@ -1358,16 +1457,14 @@ def extract_product_data(html: str, structured_data: dict | None = None) -> dict
                         gtypes = gt if isinstance(gt, list) else [gt]
                         if any(gtp in _SCHEMA_PRODUCT_TYPES for gtp in gtypes):
                             _merge_jsonld_product(product, graph_item)
-                            break
 
-    # 2. Microdata (fills gaps)
+    # 2. Microdata (fills gaps) — merge ALL matching items
     soup = BeautifulSoup(html, "lxml")
     microdata_items = _extract_microdata_items(soup)
     for item in microdata_items:
         item_type = item.get("@type", "")
         if "Product" in item_type or "product" in item_type.lower():
             _merge_microdata_product(product, item)
-            break
 
     # 3. OpenGraph (fills remaining gaps)
     if structured_data:
@@ -1405,17 +1502,32 @@ def extract_headings(html: str) -> list[dict]:
     return headings
 
 
+def _parse_srcset(srcset: str, base_url: str) -> list[dict]:
+    """Parse srcset attribute into list of {url, descriptor} dicts."""
+    entries = []
+    for part in srcset.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        tokens = part.split()
+        if tokens:
+            url = urljoin(base_url, tokens[0])
+            desc = tokens[1] if len(tokens) > 1 else ""
+            entries.append({"url": url, "descriptor": desc})
+    return entries
+
+
 def extract_images(html: str, base_url: str) -> list[dict]:
-    """Extract all images with their metadata."""
+    """Extract all images with their metadata, including srcset and picture sources."""
     soup = BeautifulSoup(html, "lxml")
     images = []
 
     for img in soup.find_all("img"):
-        src = img.get("src", "")
+        src = img.get("src") or img.get("data-src") or ""
         if not src:
             continue
         absolute_src = urljoin(base_url, src)
-        image_data = {
+        image_data: dict = {
             "src": absolute_src,
             "alt": img.get("alt", ""),
         }
@@ -1428,7 +1540,26 @@ def extract_images(html: str, base_url: str) -> list[dict]:
         loading = img.get("loading")
         if loading:
             image_data["loading"] = loading
+        # Responsive image sources
+        srcset = img.get("srcset") or img.get("data-srcset") or ""
+        if srcset:
+            image_data["srcset"] = _parse_srcset(srcset, base_url)
         images.append(image_data)
+
+    # <picture><source> elements
+    for picture in soup.find_all("picture"):
+        for source in picture.find_all("source"):
+            srcset = source.get("srcset") or ""
+            if srcset:
+                media = source.get("media", "")
+                img_type = source.get("type", "")
+                for entry in _parse_srcset(srcset, base_url):
+                    images.append({
+                        "src": entry["url"],
+                        "alt": "",
+                        "media": media,
+                        "type": img_type,
+                    })
 
     return images
 
@@ -1530,6 +1661,10 @@ def extract_metadata(
         useful_headers = {}
         for key in [
             "content-type",
+            "content-length",
+            "content-encoding",
+            "transfer-encoding",
+            "link",
             "server",
             "x-powered-by",
             "cache-control",

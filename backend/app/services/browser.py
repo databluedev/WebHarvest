@@ -1472,11 +1472,25 @@ class CrawlSession:
 
         Auto-recovers if the context was closed by a race cancellation or crash.
         Uses a lock so only one coroutine recreates the context at a time.
+        Clears per-page storage (localStorage, sessionStorage, Service Worker caches)
+        to avoid stale cached content across pages.
         """
         if not self._context:
             raise RuntimeError("CrawlSession not started")
         try:
-            return await self._context.new_page()
+            page = await self._context.new_page()
+            # Clear per-page storage to avoid stale PWA/SW caches
+            try:
+                await page.evaluate("""() => {
+                    try { localStorage.clear(); } catch(e) {}
+                    try { sessionStorage.clear(); } catch(e) {}
+                    if ('caches' in self) {
+                        caches.keys().then(names => names.forEach(n => caches.delete(n)));
+                    }
+                }""")
+            except Exception:
+                pass
+            return page
         except Exception as e:
             # Context died (e.g. race cancellation TargetClosedError) — recreate it
             logger.warning(f"CrawlSession context dead, recreating: {e}")

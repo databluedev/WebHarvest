@@ -13,7 +13,9 @@ from app.services.scraper import scrape_url, scrape_url_fetch_only
 
 logger = logging.getLogger(__name__)
 
-# Junk path segments — skip admin panels, auth flows, shopping carts, feeds
+# Junk path segments — skip admin panels, auth flows, shopping carts, feeds.
+# Only EXACT path segments are matched (not substrings), so
+# "/admin-guide/quickstart" is allowed while "/admin/dashboard" is blocked.
 _JUNK_PATH_SEGMENTS = {
     "wp-admin",
     "wp-login",
@@ -189,7 +191,7 @@ class WebCrawler:
         """Seed the crawl frontier from sitemap.xml."""
         try:
             from app.services.mapper import _parse_sitemaps
-            from app.services.dedup import normalize_url
+            from app.services.dedup import normalize_url_for_crawl
 
             sitemap_links = await _parse_sitemaps(self.base_url)
             if not sitemap_links:
@@ -203,7 +205,7 @@ class WebCrawler:
                 if added >= max_seed:
                     break
                 url = link.url
-                norm = normalize_url(url)
+                norm = normalize_url_for_crawl(url)
                 if self._use_redis:
                     if await self._redis.sismember(self._key_visited, norm):
                         continue
@@ -283,7 +285,7 @@ class WebCrawler:
         # Backpressure check — cap frontier size
         visited_count = await self.get_visited_count()
         frontier_size = await self.get_frontier_size()
-        frontier_cap = self.config.max_pages * 5
+        frontier_cap = self.config.max_pages * 20
 
         if visited_count + frontier_size >= frontier_cap:
             logger.info(
@@ -346,6 +348,7 @@ class WebCrawler:
             return False
 
         # Skip junk path segments (admin, login, cart, etc.)
+        # Set membership = exact segment match: "/admin" blocked, "/admin-guide" allowed
         path_parts = [p.lower() for p in parsed.path.split("/") if p]
         if any(part in _JUNK_PATH_SEGMENTS for part in path_parts):
             return False

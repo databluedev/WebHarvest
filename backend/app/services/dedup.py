@@ -118,16 +118,23 @@ def normalize_url(url: str) -> str:
     # Strip index.html / index.htm (same page as directory)
     path = re.sub(r"/index\.html?$", "", path) or "/"
 
+    # Param names that commonly hold content IDs (not session tokens) — never strip
+    _CONTENT_ID_PARAMS = {
+        "id", "product_id", "productid", "item_id", "itemid", "sku",
+        "asin", "isbn", "upc", "ean", "article_id", "articleid",
+        "post_id", "postid", "doc_id", "docid", "ref", "variant",
+        "variant_id", "variantid", "catalog_id", "catalogid",
+    }
+
     # Sort and filter query params
     query_params = parse_qs(parsed.query, keep_blank_values=True)
     filtered_params = {}
     for k, v in sorted(query_params.items()):
         if k.lower() in _TRACKING_PARAMS:
             continue
-        # Strip params whose values look like session IDs / UUIDs / base64 blobs
-        # e.g. pd_rd_r=523a5d20-f146-4d48-bd40-6aea62e24c55
-        #      content-id=amzn1.sym.c3eaad03-bed6-4045-8b97-...
-        if v and _SESSION_VALUE_RE.search(v[0]):
+        # Strip params whose values look like session IDs / UUIDs / base64 blobs,
+        # but preserve params whose names indicate content identifiers
+        if k.lower() not in _CONTENT_ID_PARAMS and v and _SESSION_VALUE_RE.search(v[0]):
             continue
         filtered_params[k] = v
     query = urlencode(filtered_params, doseq=True) if filtered_params else ""
@@ -153,15 +160,16 @@ def deduplicate_urls(urls: list[str]) -> list[str]:
     return list(seen.values())
 
 
-# Navigation/faceted params that don't change page content — safe to strip for crawl dedup
+# Navigation/pagination params that don't change page content — safe to strip
+# for crawl dedup.  Content-bearing params (color, size, brand, category,
+# price, rating, filter, facet, min_price, max_price, price_range) are
+# intentionally NOT included — they produce different product variants on
+# e-commerce sites and must be preserved.
 _NAVIGATION_PARAMS = {
     "page", "p", "pg", "offset", "start", "limit", "per_page",
     "sort", "order", "orderby", "sortby", "dir", "direction",
     "view", "display", "layout", "tab", "section",
     "lang", "language", "locale", "hl",
-    "color", "size", "brand", "category", "price", "rating",
-    "filter", "filters", "facet", "facets",
-    "min_price", "max_price", "price_range",
 }
 
 

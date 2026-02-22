@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import hashlib
 import logging
 import random
 import re
@@ -884,6 +885,21 @@ def _looks_blocked(html: str) -> bool:
         if amazon_signals >= 2:
             return True
 
+    # Generic soft-404 detection — short pages with "not found" patterns
+    if len(body_text) < 500:
+        soft_404_patterns = [
+            "page not found", "page doesn't exist", "page does not exist",
+            "this page isn't available", "this page is not available",
+            "no longer available", "has been removed", "has been deleted",
+            "404 - not found", "404 not found", "error 404",
+            "sorry, we couldn't find", "sorry, we could not find",
+            "the page you requested", "the page you were looking for",
+            "nothing here", "content not found",
+        ]
+        if sum(1 for p in soft_404_patterns if p in body_text) >= 1:
+            logger.warning(f"_looks_blocked: soft-404 detected ({len(body_text)} chars)")
+            return True
+
     return False
 
 
@@ -1694,7 +1710,7 @@ async def scrape_url(
                 await page.wait_for_timeout(500)
                 await _wait_for_images(page)
                 screenshot_bytes = await page.screenshot(
-                    type="jpeg", quality=80, full_page=True
+                    type="png", full_page=True
                 )
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
                 logger.info(f"Fallback screenshot rendered for {url}")
@@ -2196,7 +2212,7 @@ async def _fetch_with_curl_cffi_multi(
 
     def _validate_http(result):
         html, sc, _ = result
-        return bool(html) and sc < 400 and not _looks_blocked(html)
+        return bool(html) and sc < 400 and not _looks_blocked(html) and not _looks_noscript_block(html)
 
     best_html = ""
     best_result = ("", 0, {})
@@ -2239,7 +2255,8 @@ async def _fetch_with_curl_cffi_multi(
                 f"{race.winner_name} succeeded for {url} ({len(race.winner_result[0])} chars)"
             )
             return race.winner_result
-        if race.best_html and len(race.best_html) > len(best_html):
+        # Prefer batch2 result if it has more content OR if best_result is empty
+        if race.best_html and (not best_html or len(race.best_html) > len(best_html)):
             best_result = race.best_result
 
     return best_result
@@ -2507,7 +2524,7 @@ async def _fetch_with_browser_stealth(
         if "screenshot" in request.formats:
             await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
-                type="jpeg", quality=80, full_page=True
+                type="png", full_page=True
             )
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
@@ -2663,7 +2680,7 @@ async def _fetch_with_browser_session(
         if "screenshot" in request.formats:
             await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
-                type="jpeg", quality=80, full_page=True
+                type="png", full_page=True
             )
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
@@ -2860,7 +2877,7 @@ async def _fetch_with_google_search_chain(
         if "screenshot" in request.formats:
             await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
-                type="jpeg", quality=80, full_page=True
+                type="png", full_page=True
             )
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
@@ -3080,7 +3097,7 @@ async def _fetch_with_advanced_prewarm(
         if "screenshot" in request.formats:
             await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
-                type="jpeg", quality=80, full_page=True
+                type="png", full_page=True
             )
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
@@ -3799,6 +3816,14 @@ def extract_content(
         except Exception:
             pass  # Non-critical — skip fit markdown on error
 
+    # Content hash for dedup — MD5 of normalized markdown text
+    content_hash = None
+    md_text = result_data.get("markdown", "")
+    if md_text:
+        # Normalize whitespace for consistent hashing
+        normalized = re.sub(r"\s+", " ", md_text).strip().lower()
+        content_hash = hashlib.md5(normalized.encode("utf-8", errors="replace")).hexdigest()
+
     metadata_dict = extract_metadata(raw_html, url, status_code, response_headers or {})
     metadata = PageMetadata(**metadata_dict)
 
@@ -3818,5 +3843,6 @@ def extract_content(
         fit_markdown=result_data.get("fit_markdown"),
         citations=result_data.get("citations"),
         markdown_with_citations=result_data.get("markdown_with_citations"),
+        content_hash=content_hash,
         metadata=metadata,
     )

@@ -322,27 +322,30 @@ def process_crawl(self, job_id: str, config: dict):
                             fetch_result = item["fetch_result"]
                             req = fetch_result["request"]
 
-                            scrape_data = await loop.run_in_executor(
-                                _extraction_executor,
-                                extract_content,
-                                fetch_result.get("raw_html", ""),
-                                url,
-                                req,
-                                fetch_result.get("status_code", 0),
-                                fetch_result.get("response_headers") or {},
-                                fetch_result.get("screenshot_b64"),
-                                fetch_result.get("action_screenshots", []),
+                            scrape_data = await asyncio.wait_for(
+                                loop.run_in_executor(
+                                    _extraction_executor,
+                                    extract_content,
+                                    fetch_result.get("raw_html", ""),
+                                    url,
+                                    req,
+                                    fetch_result.get("status_code", 0),
+                                    fetch_result.get("response_headers") or {},
+                                    fetch_result.get("screenshot_b64"),
+                                    fetch_result.get("action_screenshots", []),
+                                ),
+                                timeout=60,  # Per-page extraction timeout
                             )
                             discovered_links = scrape_data.links or []
 
-                        # Skip thin/empty pages — real content pages have 50+ words.
-                        # Catches bot-detection pages ("continue shopping"),
-                        # session-expired interstitials, and empty renders.
+                        # Skip truly empty pages — catches bot-detection
+                        # interstitials and blank renders, but preserves thin
+                        # landing pages, category indexes, and short content.
                         md_text = (scrape_data.markdown or "").strip()
                         _word_count = len(md_text.split())
                         _skip = False
 
-                        if _word_count < 50:
+                        if _word_count < 15:
                             _skip = True
                             logger.warning(f"Skipping thin page ({_word_count} words): {url}")
 
@@ -384,6 +387,14 @@ def process_crawl(self, job_id: str, config: dict):
                             metadata["tables"] = scrape_data.tables
                         if scrape_data.selector_data:
                             metadata["selector_data"] = scrape_data.selector_data
+                        if scrape_data.fit_markdown:
+                            metadata["fit_markdown"] = scrape_data.fit_markdown
+                        if scrape_data.citations:
+                            metadata["citations"] = scrape_data.citations
+                        if scrape_data.markdown_with_citations:
+                            metadata["markdown_with_citations"] = scrape_data.markdown_with_citations
+                        if scrape_data.content_hash:
+                            metadata["content_hash"] = scrape_data.content_hash
 
                         # LLM extraction if configured
                         extract_data = None

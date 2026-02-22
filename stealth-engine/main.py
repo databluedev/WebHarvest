@@ -36,6 +36,7 @@ class ScrapeRequest(BaseModel):
 class ScrapeResponse(BaseModel):
     html: str = ""
     status_code: int = 0
+    final_url: str | None = None
     screenshot: str | None = None
     action_screenshots: list[str] = []
     response_headers: dict[str, str] = {}
@@ -729,6 +730,9 @@ async def _deep_discover_nav_links(page) -> tuple[str | None, list[str]]:
 async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
     """Scrape using Patchright Chromium."""
     context = None
+    page = None
+    status_code = 0
+    resp_headers: dict = {}
     try:
         context, page = await stealth_pool.acquire_chromium_page(
             proxy=req.proxy, mobile=req.mobile,
@@ -773,6 +777,12 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
             if solved:
                 status_code = 200
                 resp_headers = {}  # Original headers are stale after redirect
+                # Wait for the real page to load after CF redirect
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(1000)
 
         # Progressive scroll to trigger lazy-loaded content
         try:
@@ -801,6 +811,20 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
         if req.actions:
             action_screenshots = await execute_actions(page, req.actions)
 
+        # Dismiss cookie consent banners before screenshot/capture
+        try:
+            banner_btn = await page.query_selector(
+                'button:has-text("Accept All"), button:has-text("Accept all"), '
+                'button:has-text("Accept"), button:has-text("I agree"), '
+                'button:has-text("Got it"), button:has-text("OK"), '
+                '.cookie-accept, #cookie-accept, [data-testid="cookie-accept"]'
+            )
+            if banner_btn:
+                await banner_btn.click()
+                await page.wait_for_timeout(500)
+        except Exception:
+            pass
+
         # Screenshot
         screenshot_b64 = None
         if req.screenshot:
@@ -808,12 +832,14 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
             ss = await page.screenshot(type="png", full_page=True)
             screenshot_b64 = base64.b64encode(ss).decode()
 
+        final_url = page.url
         html = await page.content()
         logger.info("Chromium got %d chars HTML for %s (status=%d)", len(html), req.url, status_code)
 
         return ScrapeResponse(
             html=html,
             status_code=status_code,
+            final_url=final_url,
             screenshot=screenshot_b64,
             action_screenshots=action_screenshots,
             response_headers=resp_headers,
@@ -823,8 +849,28 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
         )
     except Exception as e:
         logger.error("Chromium scrape failed for %s: %s", req.url, e)
+        # Capture partial content if page loaded anything before the error
+        partial_html = ""
+        try:
+            if page:
+                partial_html = await page.content()
+        except Exception:
+            pass
+        if partial_html and len(partial_html) > 200:
+            logger.info("Chromium returning partial content (%d chars) for %s", len(partial_html), req.url)
+            return ScrapeResponse(
+                html=partial_html, status_code=status_code or 0,
+                final_url=page.url if page else None,
+                response_headers=resp_headers if resp_headers else {},
+                success=True, error=f"partial: {e}",
+            )
         return ScrapeResponse(success=False, error=str(e))
     finally:
+        if page:
+            try:
+                await page.close()
+            except Exception:
+                pass
         if context:
             try:
                 await context.close()
@@ -835,6 +881,9 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
 async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
     """Scrape using Camoufox Firefox."""
     browser = None
+    page = None
+    status_code = 0
+    resp_headers: dict = {}
     try:
         browser, context, page = await stealth_pool.acquire_firefox_page(
             proxy=req.proxy, mobile=req.mobile,
@@ -878,6 +927,12 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
             if solved:
                 status_code = 200
                 resp_headers = {}  # Original headers are stale after redirect
+                # Wait for the real page to load after CF redirect
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(1000)
 
         # Progressive scroll to trigger lazy-loaded content
         try:
@@ -906,6 +961,20 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
         if req.actions:
             action_screenshots = await execute_actions(page, req.actions)
 
+        # Dismiss cookie consent banners before screenshot/capture
+        try:
+            banner_btn = await page.query_selector(
+                'button:has-text("Accept All"), button:has-text("Accept all"), '
+                'button:has-text("Accept"), button:has-text("I agree"), '
+                'button:has-text("Got it"), button:has-text("OK"), '
+                '.cookie-accept, #cookie-accept, [data-testid="cookie-accept"]'
+            )
+            if banner_btn:
+                await banner_btn.click()
+                await page.wait_for_timeout(500)
+        except Exception:
+            pass
+
         # Screenshot
         screenshot_b64 = None
         if req.screenshot:
@@ -913,12 +982,14 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
             ss = await page.screenshot(type="png", full_page=True)
             screenshot_b64 = base64.b64encode(ss).decode()
 
+        final_url = page.url
         html = await page.content()
         logger.info("Firefox got %d chars HTML for %s (status=%d)", len(html), req.url, status_code)
 
         return ScrapeResponse(
             html=html,
             status_code=status_code,
+            final_url=final_url,
             screenshot=screenshot_b64,
             action_screenshots=action_screenshots,
             response_headers=resp_headers,
@@ -928,8 +999,28 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
         )
     except Exception as e:
         logger.error("Firefox scrape failed for %s: %s", req.url, e)
+        # Capture partial content if page loaded anything before the error
+        partial_html = ""
+        try:
+            if page:
+                partial_html = await page.content()
+        except Exception:
+            pass
+        if partial_html and len(partial_html) > 200:
+            logger.info("Firefox returning partial content (%d chars) for %s", len(partial_html), req.url)
+            return ScrapeResponse(
+                html=partial_html, status_code=status_code or 0,
+                final_url=page.url if page else None,
+                response_headers=resp_headers if resp_headers else {},
+                success=True, error=f"partial: {e}",
+            )
         return ScrapeResponse(success=False, error=str(e))
     finally:
+        if page:
+            try:
+                await page.close()
+            except Exception:
+                pass
         if browser:
             try:
                 await browser.close()
