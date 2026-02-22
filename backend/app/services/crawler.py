@@ -430,7 +430,11 @@ class WebCrawler:
         pinned_strategy: str | None = None,
         pinned_tier: int | None = None,
     ) -> dict | None:
-        """Fetch-only phase for pipeline mode — returns raw data without extraction."""
+        """Fetch-only phase for pipeline mode — returns raw data without extraction.
+
+        Always uses browser (min_tier=2) so crawl_session and stealth engine
+        race each other. HTTP tiers are skipped — crawls need full JS rendering.
+        """
         opts = self.config.scrape_options or ScrapeOptions()
         # Exclude "screenshot" so needs_browser=False → fast HTTP tiers can run.
         # Screenshots are captured separately by the crawl worker consumer.
@@ -455,6 +459,7 @@ class WebCrawler:
             crawl_session=self._crawl_session,
             pinned_strategy=pinned_strategy,
             pinned_tier=pinned_tier,
+            min_tier=2,  # Skip HTTP tiers — always use browser for crawls
         )
         if fetch_result:
             fetch_result["request"] = request

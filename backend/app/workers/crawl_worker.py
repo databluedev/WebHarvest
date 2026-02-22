@@ -135,15 +135,12 @@ def process_crawl(self, job_id: str, config: dict):
             # Producer-consumer pipeline queue
             extract_queue = asyncio.Queue(maxsize=concurrency * 2)
             extract_done = asyncio.Event()
-            # Always use the persistent crawl session browser for crawls.
-            # Browser rendering captures JS-rendered content, SPAs, and
-            # dynamic pages that HTTP fetches miss entirely.  The crawl
-            # session reuses tabs so it's fast enough for bulk crawling.
-            _pinned_strategy: str | None = "crawl_session"
-            _pinned_tier: int | None = 2
-            logger.warning(
-                f"Crawl {job_id}: pinned to browser (crawl_session tier 2) for full JS rendering"
-            )
+            # No pinned strategy — every page races crawl_session vs stealth
+            # engine (Tier 2) so whichever is fastest and not blocked wins.
+            # HTTP tiers (0-1) are skipped because we always want full
+            # browser rendering for crawls.
+            _pinned_strategy: str | None = None
+            _pinned_tier: int | None = None
 
             async def fetch_producer():
                 """BFS loop: fetch pages, put raw results on extract_queue."""

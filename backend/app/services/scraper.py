@@ -3126,6 +3126,7 @@ async def scrape_url_fetch_only(
     crawl_session=None,
     pinned_strategy: str | None = None,
     pinned_tier: int | None = None,
+    min_tier: int = 0,
 ) -> dict | None:
     """Fetch phase only — returns raw HTML + metadata without content extraction.
 
@@ -3134,6 +3135,9 @@ async def scrape_url_fetch_only(
 
     When pinned_strategy/pinned_tier are set (from a previous crawl page success),
     tries the pinned strategy first before falling through to the normal tier cascade.
+
+    min_tier: Skip tiers below this value. Set to 2 for browser-only crawling
+    (skips HTTP tiers 0-1).
     """
     from app.services.document import detect_document_type
 
@@ -3170,7 +3174,7 @@ async def scrape_url_fetch_only(
     winning_tier = None
 
     strategy_data = await get_domain_strategy(url)
-    starting_tier = get_starting_tier(strategy_data, hard_site)
+    starting_tier = max(get_starting_tier(strategy_data, hard_site), min_tier)
 
     # Custom headers/cookies for HTTP strategies
     _custom_h = getattr(request, "headers", None)
