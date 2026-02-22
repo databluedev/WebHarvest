@@ -463,34 +463,49 @@ export default function CrawlStatusPage() {
       return;
     }
 
+    let cancelled = false;
+    let es: EventSource | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const startPolling = () => {
+      if (cancelled || interval) return;
+      interval = setInterval(() => {
+        if (!cancelled) fetchStatus(1);
+      }, 2000);
+    };
+
     const token = api.getToken();
     if (!token) return;
 
     const { API_BASE_URL } = require("@/lib/api");
-    const url = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
+    const sseUrl = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
 
     try {
-      const es = new EventSource(url);
+      es = new EventSource(sseUrl);
       es.onmessage = (event) => {
+        if (cancelled) return;
         try {
           const data = JSON.parse(event.data);
           fetchStatus(1);
           if (data.done || ["completed", "failed", "cancelled"].includes(data.status)) {
             setPolling(false);
-            es.close();
           }
         } catch {}
       };
       es.onerror = () => {
-        es.close();
-        const interval = setInterval(() => fetchStatus(1), 2000);
-        return () => clearInterval(interval);
+        es?.close();
+        es = null;
+        startPolling();
       };
-      return () => es.close();
     } catch {
-      const interval = setInterval(() => fetchStatus(1), 2000);
-      return () => clearInterval(interval);
+      startPolling();
     }
+
+    return () => {
+      cancelled = true;
+      es?.close();
+      if (interval) clearInterval(interval);
+    };
   }, [polling, status?.status]);
 
   const fetchStatus = useCallback(async (page: number) => {
