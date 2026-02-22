@@ -43,24 +43,25 @@ import {
   Bug,
   RefreshCw,
   Square,
+  Terminal,
 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────
 
 type Endpoint = "scrape" | "crawl" | "search" | "map";
 
-const ENDPOINTS: { id: Endpoint; label: string; icon: any }[] = [
-  { id: "scrape", label: "Scrape", icon: Crosshair },
-  { id: "search", label: "Search", icon: Satellite },
-  { id: "map", label: "Map", icon: Network },
-  { id: "crawl", label: "Crawl", icon: Bug },
+const ENDPOINTS: { id: Endpoint; label: string; icon: any; desc: string }[] = [
+  { id: "scrape", label: "Scrape", icon: Crosshair, desc: "Single page extraction" },
+  { id: "search", label: "Search", icon: Satellite, desc: "Web search + scrape" },
+  { id: "map", label: "Map", icon: Network, desc: "Discover all URLs" },
+  { id: "crawl", label: "Crawl", icon: Bug, desc: "Multi-page BFS crawl" },
 ];
 
 const ACTION_LABELS: Record<Endpoint, string> = {
-  scrape: "Start scraping",
-  crawl: "Start crawling",
-  search: "Start searching",
-  map: "Start mapping",
+  scrape: "Execute Scrape",
+  crawl: "Execute Crawl",
+  search: "Execute Search",
+  map: "Execute Map",
 };
 
 const PLACEHOLDERS: Record<Endpoint, string> = {
@@ -123,7 +124,7 @@ function formatDate(dateStr: string): { date: string; time: string } {
 }
 
 const formatIcons: Record<string, { icon: any; label: string }> = {
-  markdown: { icon: FileText, label: "Markdown" },
+  markdown: { icon: FileText, label: "MD" },
   html: { icon: Code, label: "HTML" },
   links: { icon: Link2, label: "Links" },
   screenshot: { icon: Camera, label: "Screenshot" },
@@ -176,7 +177,7 @@ const InlineResultCard = memo(function InlineResultCard({
     { id: "html", label: "HTML", icon: Code, available: hasHtml },
     { id: "screenshot", label: "Screenshot", icon: Camera, available: hasScreenshot },
     { id: "links", label: "Links", icon: Link2, available: hasLinks },
-    { id: "structured", label: "Structured", icon: Braces, available: hasStructured },
+    { id: "structured", label: "JSON", icon: Braces, available: hasStructured },
     { id: "headings", label: "Headings", icon: List, available: hasHeadings },
     { id: "images", label: "Images", icon: ImageIcon, available: hasImages },
     { id: "extract", label: "AI Extract", icon: Sparkles, available: hasExtract },
@@ -220,54 +221,51 @@ const InlineResultCard = memo(function InlineResultCard({
   const statusCode = page.metadata?.status_code;
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card/60 overflow-hidden transition-all duration-200">
-      {/* Header */}
+    <div className="border border-white/10 hover:border-white/15 transition-all">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-3 w-full px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+        className="flex items-center gap-5 w-full px-8 py-5 hover:bg-white/[0.02] transition-colors text-left"
       >
-        <span className="text-[12px] text-muted-foreground font-mono w-6 shrink-0 text-right tabular-nums">
-          {index + 1}
+        <span className="text-[14px] text-white/30 font-mono w-8 shrink-0 text-right tabular-nums font-bold">
+          {String(index + 1).padStart(2, "0")}
         </span>
         {page.url && (
           <img
             src={`https://www.google.com/s2/favicons?domain=${getDomain(page.url)}&sz=32`}
             alt=""
-            className="h-4 w-4 rounded-sm shrink-0"
+            className="h-5 w-5 shrink-0"
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
           />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium truncate">{page.url || "Unknown URL"}</p>
+          <p className="text-[15px] font-mono font-medium truncate text-[#f0f0f0]">{page.url || "Unknown URL"}</p>
           {page.metadata?.title && (
-            <p className="text-[12px] text-muted-foreground truncate mt-0.5">{page.metadata.title}</p>
+            <p className="text-[13px] text-white/40 truncate mt-1">{page.metadata.title}</p>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
           {wordCount > 0 && (
-            <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md">
+            <span className="text-[12px] font-mono text-white/30 bg-white/[0.04] px-3 py-1 border border-white/[0.06]">
               {wordCount.toLocaleString()} words
             </span>
           )}
           {statusCode && (
             <span className={cn(
-              "text-[11px] font-bold px-2 py-0.5 rounded-md",
+              "text-[12px] font-mono font-bold px-3 py-1 border",
               statusCode >= 200 && statusCode < 400
-                ? "bg-emerald-500/10 text-emerald-400"
-                : "bg-red-500/10 text-red-400"
+                ? "bg-emerald-500/[0.06] text-emerald-400 border-emerald-500/15"
+                : "bg-red-500/10 text-red-400 border-red-500/20"
             )}>
               {statusCode}
             </span>
           )}
-          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          {expanded ? <ChevronUp className="h-4 w-4 text-white/30" /> : <ChevronDown className="h-4 w-4 text-white/30" />}
         </div>
       </button>
 
-      {/* Expanded content */}
       {expanded && (
-        <div className="border-t border-border/40">
-          {/* Tab bar */}
-          <div className="flex items-center gap-1 px-3 py-2 border-b border-border/30 bg-muted/20 overflow-x-auto">
+        <div className="border-t border-white/[0.08]">
+          <div className="flex items-center border-b border-white/[0.08] bg-white/[0.01]">
             {availableTabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -278,10 +276,10 @@ const InlineResultCard = memo(function InlineResultCard({
                     if (tab.id === "screenshot" && !screenshotData && !screenshotLoading) loadScreenshot();
                   }}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all whitespace-nowrap",
+                    "flex items-center gap-2 px-6 py-3.5 text-[12px] font-mono uppercase tracking-[0.15em] transition-all border-b-2 -mb-[1px]",
                     activeTab === tab.id
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      ? "border-emerald-500 text-emerald-400 bg-emerald-500/[0.03]"
+                      : "border-transparent text-white/30 hover:text-white/60"
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -291,112 +289,95 @@ const InlineResultCard = memo(function InlineResultCard({
             })}
             <div className="flex-1" />
             {activeTab !== "screenshot" && (
-              <button onClick={copyContent} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all">
+              <button onClick={copyContent} className="flex items-center gap-2 px-5 py-3.5 text-[12px] font-mono text-white/25 hover:text-white/60 transition-all">
                 {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                <span>{copied ? "Copied" : "Copy"}</span>
               </button>
             )}
           </div>
 
-          {/* Tab content */}
-          <div className="p-4">
+          <div className="p-6">
             {activeTab === "markdown" && hasMarkdown && (
-              <pre className="max-h-80 overflow-auto text-[13px] text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4 leading-relaxed">
+              <pre className="max-h-72 overflow-auto text-[14px] text-white/50 whitespace-pre-wrap font-mono bg-black/40 p-6 leading-[1.8] border border-white/[0.06]">
                 {page.markdown}
               </pre>
             )}
-
             {activeTab === "html" && hasHtml && (
-              <pre className="max-h-80 overflow-auto text-[12px] text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4">
+              <pre className="max-h-72 overflow-auto text-[13px] text-white/50 whitespace-pre-wrap font-mono bg-black/40 p-6 border border-white/[0.06]">
                 {page.html}
               </pre>
             )}
-
             {activeTab === "screenshot" && hasScreenshot && (
               <div className="flex justify-center">
                 {screenshotData ? (
-                  <img
-                    src={`data:image/jpeg;base64,${screenshotData}`}
-                    alt={`Screenshot of ${page.url}`}
-                    className="max-w-full rounded-lg border border-border/50 shadow-lg"
-                    style={{ maxHeight: "500px" }}
-                  />
+                  <img src={`data:image/jpeg;base64,${screenshotData}`} alt={`Screenshot of ${page.url}`} className="max-w-full border border-white/10" style={{ maxHeight: "500px" }} />
                 ) : screenshotLoading ? (
-                  <div className="flex items-center gap-2 py-8 text-muted-foreground">
+                  <div className="flex items-center gap-3 py-8 text-white/40">
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    <span className="text-sm font-medium">Loading screenshot...</span>
+                    <span className="text-[13px] font-mono uppercase tracking-wider">Loading...</span>
                   </div>
                 ) : (
-                  <button
-                    onClick={loadScreenshot}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
-                  >
-                    <Camera className="h-4 w-4" />
-                    Load Screenshot
+                  <button onClick={loadScreenshot} className="flex items-center gap-2 px-5 py-3 text-[13px] font-mono uppercase tracking-wider border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all">
+                    <Camera className="h-4 w-4" /> Load Screenshot
                   </button>
                 )}
               </div>
             )}
-
             {activeTab === "links" && hasLinks && (
-              <div className="space-y-2 max-h-80 overflow-auto">
+              <div className="space-y-2 max-h-72 overflow-auto">
                 {page.links_detail ? (
                   <>
-                    <div className="flex gap-4 text-[13px] pb-2 border-b border-border/30">
-                      <span className="font-medium">{page.links_detail.total} total</span>
+                    <div className="flex gap-4 text-[13px] font-mono pb-3 border-b border-white/[0.08]">
+                      <span className="text-white/50">{page.links_detail.total} total</span>
                       {page.links_detail.internal && <span className="text-blue-400">{page.links_detail.internal.count} internal</span>}
                       {page.links_detail.external && <span className="text-amber-400">{page.links_detail.external.count} external</span>}
                     </div>
                     {page.links_detail.internal?.links?.map((link: any, i: number) => (
-                      <a key={`i-${i}`} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-[12px] text-primary hover:underline truncate">{link.url}</a>
+                      <a key={`i-${i}`} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-[13px] font-mono text-emerald-400 hover:text-emerald-300 truncate">{link.url}</a>
                     ))}
                     {page.links_detail.external?.links?.map((link: any, i: number) => (
-                      <a key={`e-${i}`} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-[12px] text-amber-400/80 hover:underline truncate">{link.url}</a>
+                      <a key={`e-${i}`} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-[13px] font-mono text-amber-400/80 hover:text-amber-400 truncate">{link.url}</a>
                     ))}
                   </>
                 ) : page.links?.map((link: string, i: number) => (
-                  <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="block text-[12px] text-primary hover:underline truncate">{link}</a>
+                  <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="block text-[13px] font-mono text-emerald-400 hover:text-emerald-300 truncate">{link}</a>
                 ))}
               </div>
             )}
-
             {activeTab === "structured" && hasStructured && (
-              <pre className="max-h-80 overflow-auto text-[12px] font-mono bg-muted/30 rounded-lg p-4">
+              <pre className="max-h-72 overflow-auto text-[13px] font-mono bg-black/40 p-6 text-amber-400/60 border border-white/[0.06]">
                 {JSON.stringify(page.structured_data, null, 2)}
               </pre>
             )}
-
             {activeTab === "headings" && hasHeadings && (
-              <div className="space-y-1 max-h-80 overflow-auto">
+              <div className="space-y-1.5 max-h-72 overflow-auto">
                 {page.headings.map((h: any, i: number) => (
-                  <div key={i} className="flex items-center gap-2 text-[13px]" style={{ paddingLeft: `${(h.level - 1) * 16}px` }}>
-                    <span className="text-[10px] font-bold text-primary/60 bg-primary/10 px-1.5 py-0.5 rounded shrink-0">H{h.level}</span>
-                    <span className={h.level === 1 ? "font-semibold" : "text-muted-foreground"}>{h.text}</span>
+                  <div key={i} className="flex items-center gap-3 text-[13px]" style={{ paddingLeft: `${(h.level - 1) * 16}px` }}>
+                    <span className="text-[10px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 shrink-0">H{h.level}</span>
+                    <span className={h.level === 1 ? "font-medium text-[#f0f0f0]" : "text-white/50"}>{h.text}</span>
                   </div>
                 ))}
               </div>
             )}
-
             {activeTab === "images" && hasImages && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-80 overflow-auto">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-72 overflow-auto">
                 {page.images.map((img: any, i: number) => (
-                  <div key={i} className="border border-border/40 rounded-lg overflow-hidden bg-muted/20">
-                    <div className="aspect-video bg-muted/30 flex items-center justify-center">
+                  <div key={i} className="border border-white/[0.08] overflow-hidden bg-black/20">
+                    <div className="aspect-video bg-black/30 flex items-center justify-center">
                       <img src={img.src} alt={img.alt || ""} className="max-w-full max-h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                     </div>
                     <div className="p-2">
-                      <p className="text-[11px] text-muted-foreground truncate">{img.src.split("/").pop()}</p>
+                      <p className="text-[11px] font-mono text-white/30 truncate">{img.src.split("/").pop()}</p>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-
             {activeTab === "extract" && hasExtract && (
-              <pre className="max-h-80 overflow-auto text-[13px] whitespace-pre-wrap font-mono bg-muted/30 rounded-lg p-4">
+              <pre className="max-h-72 overflow-auto text-[13px] whitespace-pre-wrap font-mono bg-black/40 p-6 text-emerald-400/70 border border-white/[0.06]">
                 {JSON.stringify(page.extract, null, 2)}
               </pre>
             )}
-
           </div>
         </div>
       )}
@@ -410,13 +391,11 @@ function PlaygroundContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // State-based endpoint switching — NO router navigation for instant feel
   const [activeEndpoint, setActiveEndpoint] = useState<Endpoint>(() => {
     const ep = searchParams.get("endpoint") as Endpoint;
     return ENDPOINTS.find((e) => e.id === ep) ? ep : "scrape";
   });
 
-  // Sync if navigated via sidebar Link
   useEffect(() => {
     const ep = searchParams.get("endpoint") as Endpoint;
     if (ep && ENDPOINTS.find((e) => e.id === ep) && ep !== activeEndpoint) {
@@ -427,11 +406,9 @@ function PlaygroundContent() {
   const switchEndpoint = useCallback((ep: Endpoint) => {
     setActiveEndpoint(ep);
     setError("");
-    // Update URL silently without triggering Next.js navigation
     window.history.replaceState(null, "", `/playground?endpoint=${ep}`);
   }, []);
 
-  // ── Shared state ──
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -450,12 +427,8 @@ function PlaygroundContent() {
   const [extractPrompt, setExtractPrompt] = useState("");
   const [headersText, setHeadersText] = useState("");
   const [cookiesText, setCookiesText] = useState("");
-
-  // ── Recent runs ──
   const [recentJobs, setRecentJobs] = useState<any[]>([]);
   const [jobsLoaded, setJobsLoaded] = useState(false);
-
-  // ── Crawl state ──
   const [maxPages, setMaxPages] = useState(10);
   const [maxDepth, setMaxDepth] = useState(3);
   const [includePaths, setIncludePaths] = useState("");
@@ -463,13 +436,9 @@ function PlaygroundContent() {
   const [concurrency, setConcurrency] = useState(3);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
-
-  // ── Search state ──
   const [searchQuery, setSearchQuery] = useState("");
   const [numResults, setNumResults] = useState(5);
   const [engine, setEngine] = useState("duckduckgo");
-
-  // ── Map state ──
   const [mapSearch, setMapSearch] = useState("");
   const [mapLimit, setMapLimit] = useState(100);
   const [includeSubdomains, setIncludeSubdomains] = useState(false);
@@ -477,16 +446,9 @@ function PlaygroundContent() {
   const [mapResult, setMapResult] = useState<any>(null);
   const [copied, setCopied] = useState(false);
 
-  // ── Active job tracking (inline progress) ──
   const [activeJob, setActiveJob] = useState<{
-    id: string;
-    type: Endpoint;
-    status: string;
-    target: string;
-    total: number;
-    completed: number;
-    data?: any[];
-    error?: string;
+    id: string; type: Endpoint; status: string; target: string;
+    total: number; completed: number; data?: any[]; error?: string;
   } | null>(null);
   const sseRef = useRef<EventSource | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -498,7 +460,6 @@ function PlaygroundContent() {
       .catch(() => setJobsLoaded(true));
   }, [router]);
 
-  // ── Fetch job status (unified for all types) ──
   const fetchJobStatus = useCallback(async (jobId: string, jobType: Endpoint) => {
     try {
       let res: any;
@@ -510,133 +471,46 @@ function PlaygroundContent() {
       }
       setActiveJob((prev) => {
         if (!prev || prev.id !== jobId) return prev;
-        const completed = res.completed_pages ?? res.completed_results ?? res.completed_urls ?? prev.completed;
-        const total = res.total_pages || res.total_results || res.total_urls || res.total || prev.total;
-        const data = res.data || res.links || prev.data;
-        return {
-          ...prev,
-          status: res.status || prev.status,
-          completed: completed,
-          total: total,
-          data: data,
-          error: res.error,
-        };
+        return { ...prev, status: res.status || prev.status, completed: res.completed_pages ?? res.completed_results ?? res.completed_urls ?? prev.completed, total: res.total_pages || res.total_results || res.total_urls || res.total || prev.total, data: res.data || res.links || prev.data, error: res.error };
       });
       return res.status;
     } catch { return null; }
   }, []);
 
-  // ── SSE / polling for active job ──
   useEffect(() => {
     if (!activeJob || ["completed", "failed", "cancelled"].includes(activeJob.status)) return;
-
-    const jobId = activeJob.id;
-    const jobType = activeJob.type;
-
-    // Try SSE first
+    const jobId = activeJob.id; const jobType = activeJob.type;
     try {
-      const sseUrl = api.getSSEUrl(jobId);
-      const es = new EventSource(sseUrl);
-      sseRef.current = es;
-
-      es.onmessage = async () => {
-        const status = await fetchJobStatus(jobId, jobType);
-        if (status && ["completed", "failed", "cancelled"].includes(status)) {
-          es.close();
-          sseRef.current = null;
-          // Refresh recent runs
-          api.getUsageHistory({ per_page: 9 }).then((r) => setRecentJobs(r.jobs || [])).catch(() => {});
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
-        sseRef.current = null;
-        // Fallback to polling
-        const interval = setInterval(async () => {
-          const status = await fetchJobStatus(jobId, jobType);
-          if (status && ["completed", "failed", "cancelled"].includes(status)) {
-            clearInterval(interval);
-            pollRef.current = null;
-            api.getUsageHistory({ per_page: 9 }).then((r) => setRecentJobs(r.jobs || [])).catch(() => {});
-          }
-        }, 2000);
-        pollRef.current = interval;
-      };
-    } catch {
-      // SSE not available, use polling
-      const interval = setInterval(async () => {
-        const status = await fetchJobStatus(jobId, jobType);
-        if (status && ["completed", "failed", "cancelled"].includes(status)) {
-          clearInterval(interval);
-          pollRef.current = null;
-          api.getUsageHistory({ per_page: 9 }).then((r) => setRecentJobs(r.jobs || [])).catch(() => {});
-        }
-      }, 2000);
-      pollRef.current = interval;
-    }
-
-    // Also do an immediate fetch
+      const es = new EventSource(api.getSSEUrl(jobId)); sseRef.current = es;
+      es.onmessage = async () => { const s = await fetchJobStatus(jobId, jobType); if (s && ["completed","failed","cancelled"].includes(s)) { es.close(); sseRef.current = null; api.getUsageHistory({ per_page: 9 }).then(r => setRecentJobs(r.jobs||[])).catch(()=>{}); } };
+      es.onerror = () => { es.close(); sseRef.current = null; const iv = setInterval(async () => { const s = await fetchJobStatus(jobId, jobType); if (s && ["completed","failed","cancelled"].includes(s)) { clearInterval(iv); pollRef.current = null; api.getUsageHistory({ per_page: 9 }).then(r => setRecentJobs(r.jobs||[])).catch(()=>{}); } }, 2000); pollRef.current = iv; };
+    } catch { const iv = setInterval(async () => { const s = await fetchJobStatus(jobId, jobType); if (s && ["completed","failed","cancelled"].includes(s)) { clearInterval(iv); pollRef.current = null; api.getUsageHistory({ per_page: 9 }).then(r => setRecentJobs(r.jobs||[])).catch(()=>{}); } }, 2000); pollRef.current = iv; }
     fetchJobStatus(jobId, jobType);
-
-    return () => {
-      if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    };
+    return () => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   }, [activeJob?.id, activeJob?.status, fetchJobStatus]);
 
-  const dismissJob = useCallback(() => {
-    if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    setActiveJob(null);
-  }, []);
+  const dismissJob = useCallback(() => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } setActiveJob(null); }, []);
+  const handleDownloadActiveJob = useCallback(() => { if (!activeJob) return; handleDownload({ id: activeJob.id, type: activeJob.type }); }, [activeJob]);
 
-  const handleDownloadActiveJob = useCallback(() => {
-    if (!activeJob) return;
-    handleDownload({ id: activeJob.id, type: activeJob.type });
-  }, [activeJob]);
+  useEffect(() => { if (mobile && devicePresets.length === 0) { api.getDevicePresets().then((res) => setDevicePresets(res.devices || [])).catch(() => {}); } }, [mobile]);
 
-  useEffect(() => {
-    if (mobile && devicePresets.length === 0) {
-      api.getDevicePresets().then((res) => setDevicePresets(res.devices || [])).catch(() => {});
-    }
-  }, [mobile]);
-
-  const toggleFormat = (format: string) => {
-    setFormats((prev) =>
-      prev.includes(format) ? prev.filter((f) => f !== format) : [...prev, format]
-    );
-  };
-
-  const formatSummary = formats.length === 0
-    ? "No format"
-    : formats.length === 1
-    ? formats[0].charAt(0).toUpperCase() + formats[0].slice(1).replace("_", " ")
-    : `${formats.length} formats`;
+  const toggleFormat = (format: string) => setFormats((prev) => prev.includes(format) ? prev.filter((f) => f !== format) : [...prev, format]);
+  const formatSummary = formats.length === 0 ? "None" : formats.length === 1 ? formats[0].charAt(0).toUpperCase() + formats[0].slice(1).replace("_", " ") : `${formats.length} formats`;
 
   const handleGetCode = () => {
     let code = "";
     const fullUrl = url.startsWith("http") ? url : `https://${url}`;
     switch (activeEndpoint) {
-      case "scrape":
-        code = `curl -X POST /v1/scrape \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"url": "${fullUrl}", "formats": ${JSON.stringify(formats)}}'`;
-        break;
-      case "crawl":
-        code = `curl -X POST /v1/crawl \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"url": "${fullUrl}", "max_pages": ${maxPages}, "max_depth": ${maxDepth}}'`;
-        break;
-      case "search":
-        code = `curl -X POST /v1/search \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"query": "${searchQuery}", "num_results": ${numResults}, "engine": "${engine}"}'`;
-        break;
-      case "map":
-        code = `curl -X POST /v1/map \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"url": "${fullUrl}", "limit": ${mapLimit}}'`;
-        break;
+      case "scrape": code = `curl -X POST /v1/scrape \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"url": "${fullUrl}", "formats": ${JSON.stringify(formats)}}'`; break;
+      case "crawl": code = `curl -X POST /v1/crawl \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"url": "${fullUrl}", "max_pages": ${maxPages}, "max_depth": ${maxDepth}}'`; break;
+      case "search": code = `curl -X POST /v1/search \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"query": "${searchQuery}", "num_results": ${numResults}, "engine": "${engine}"}'`; break;
+      case "map": code = `curl -X POST /v1/map \\\n  -H "Authorization: Bearer YOUR_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"url": "${fullUrl}", "limit": ${mapLimit}}'`; break;
     }
     navigator.clipboard.writeText(code);
   };
 
   const handleAction = async () => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       switch (activeEndpoint) {
         case "scrape": {
@@ -654,20 +528,12 @@ function PlaygroundContent() {
           if (!url.trim()) return;
           const fullUrl = url.startsWith("http") ? url : `https://${url}`;
           const params: any = { url: fullUrl, max_pages: maxPages, max_depth: maxDepth, concurrency };
-          // Always send scrape_options with formats so the worker knows what to store
           params.scrape_options = { formats, only_main_content: onlyMainContent, wait_for: waitFor || undefined };
           if (mobile) { params.scrape_options.mobile = true; if (mobileDevice) params.scrape_options.mobile_device = mobileDevice; }
-          // Always send include/exclude paths (visible outside Advanced panel)
           if (includePaths.trim()) params.include_paths = includePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
           if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
-          if (showAdvanced) {
-            if (webhookUrl.trim()) params.webhook_url = webhookUrl.trim();
-            if (webhookSecret.trim()) params.webhook_secret = webhookSecret.trim();
-            if (useProxy) params.use_proxy = true;
-          }
-          if (extractEnabled && extractPrompt.trim()) {
-            params.scrape_options = { ...params.scrape_options, extract: { prompt: extractPrompt.trim() } };
-          }
+          if (showAdvanced) { if (webhookUrl.trim()) params.webhook_url = webhookUrl.trim(); if (webhookSecret.trim()) params.webhook_secret = webhookSecret.trim(); if (useProxy) params.use_proxy = true; }
+          if (extractEnabled && extractPrompt.trim()) params.scrape_options = { ...params.scrape_options, extract: { prompt: extractPrompt.trim() } };
           const res = await api.startCrawl(params);
           if (res.success && res.job_id) setActiveJob({ id: res.job_id, type: "crawl", status: "running", target: fullUrl, total: maxPages, completed: 0 });
           break;
@@ -690,45 +556,46 @@ function PlaygroundContent() {
           break;
         }
       }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err: any) { setError(err.message); } finally { setLoading(false); }
   };
 
-  const isDisabled = loading || (
-    activeEndpoint === "search" ? !searchQuery.trim() :
-    !url.trim()
-  );
-
+  const isDisabled = loading || (activeEndpoint === "search" ? !searchQuery.trim() : !url.trim());
   const hasRuns = recentJobs.length > 0;
-
-  const copyMapUrls = () => {
-    if (!mapResult?.links) return;
-    navigator.clipboard.writeText(mapResult.links.map((l: any) => l.url).join("\n"));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
+  const copyMapUrls = () => { if (!mapResult?.links) return; navigator.clipboard.writeText(mapResult.links.map((l: any) => l.url).join("\n")); setCopied(true); setTimeout(() => setCopied(false), 2000); };
   const ActiveIcon = ENDPOINTS.find((e) => e.id === activeEndpoint)?.icon || Crosshair;
+  const pct = activeJob && activeJob.total > 0 ? Math.round((activeJob.completed / activeJob.total) * 100) : 0;
 
   return (
     <SidebarProvider>
       <div className="flex h-screen">
         <Sidebar />
-        <main className="flex-1 overflow-auto bg-background">
+        <main className="flex-1 overflow-auto bg-[#050505]">
           <MobileMenuButton />
           <div className="min-h-screen flex flex-col">
-            <div className={cn(
-              "flex-1 flex flex-col w-full max-w-5xl mx-auto px-6 lg:px-8",
-              !hasRuns && jobsLoaded ? "justify-center" : "pt-8"
-            )}>
+            <div className="flex-1 flex flex-col relative">
+              {/* Grid background */}
+              <div className="absolute inset-0 opacity-[0.025]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "40px 40px" }} />
 
-              {/* ── Mode Switcher ── */}
-              <div className={cn(hasRuns ? "pb-8" : "pb-10")}>
-                <div className="flex justify-center">
-                  <div className="inline-flex items-center gap-1 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-md p-1.5 shadow-lg shadow-black/10">
+              <div className={cn("relative z-10 flex-1 flex flex-col w-full max-w-[1200px] mx-auto px-8 lg:px-12", !hasRuns && jobsLoaded ? "justify-center" : "pt-10")}>
+
+                {/* ── Page Header ── */}
+                <div className={cn(hasRuns ? "pb-8" : "pb-10")}>
+                  <div className="flex items-start justify-between mb-8">
+                    <div>
+                      <div className="inline-block border border-emerald-500/30 text-emerald-400 text-[11px] font-mono uppercase tracking-[0.25em] px-4 py-1.5 mb-5">Interactive Console</div>
+                      <h1 className="text-[36px] font-display font-extrabold tracking-tight text-[#f0f0f0] uppercase">
+                        {activeEndpoint === "scrape" && "Scrape"}
+                        {activeEndpoint === "search" && "Search"}
+                        {activeEndpoint === "map" && "Map"}
+                        {activeEndpoint === "crawl" && "Crawl"}
+                        <span className="text-white/20 ml-3">the web.</span>
+                      </h1>
+                    </div>
+                    <span className="text-[11px] font-mono text-white/20 uppercase tracking-[0.2em] border border-white/[0.08] px-4 py-2 mt-2">v1/{activeEndpoint}</span>
+                  </div>
+
+                  {/* Mode Switcher */}
+                  <div className="flex items-center border-b border-white/10">
                     {ENDPOINTS.map((ep) => {
                       const isActive = activeEndpoint === ep.id;
                       return (
@@ -736,10 +603,8 @@ function PlaygroundContent() {
                           key={ep.id}
                           onClick={() => switchEndpoint(ep.id)}
                           className={cn(
-                            "flex items-center gap-2 rounded-xl px-5 py-2.5 text-[15px] font-semibold transition-all duration-200",
-                            isActive
-                              ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                            "flex items-center gap-3 px-7 py-4 text-[13px] font-mono uppercase tracking-[0.15em] transition-all border-b-2 -mb-[1px]",
+                            isActive ? "border-emerald-500 text-emerald-400" : "border-transparent text-white/25 hover:text-white/60"
                           )}
                         >
                           <ep.icon className="h-[18px] w-[18px]" />
@@ -749,627 +614,391 @@ function PlaygroundContent() {
                     })}
                   </div>
                 </div>
-              </div>
 
-              {/* ── URL Input Section ── */}
-              <section className={cn(
-                "max-w-2xl w-full mx-auto relative z-20",
-                hasRuns ? "mb-10" : "mb-6"
-              )}>
-                <div className="rounded-2xl border border-primary/15 bg-card/80 backdrop-blur-sm p-5 shadow-xl shadow-primary/5">
+                {/* ── Command Input ── */}
+                <section className={cn("w-full relative z-20", hasRuns ? "mb-10" : "mb-8")}>
+                  <div className="flex items-center gap-3 mb-5">
+                    <span className="text-[12px] font-mono uppercase tracking-[0.25em] text-white/30">{activeEndpoint === "search" ? "Search Query" : "Target URL"}</span>
+                    <div className="h-px flex-1 bg-white/[0.06]" />
+                    <span className="text-[11px] font-mono text-white/15">POST /v1/{activeEndpoint}</span>
+                  </div>
 
-                  {/* Input */}
-                  <div className="flex items-center gap-0 rounded-xl bg-background border border-border/50 px-5 h-14 mb-4 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/25 transition-all">
-                    {activeEndpoint !== "search" ? (
-                      <span className="text-base text-muted-foreground shrink-0 select-none font-mono">https://</span>
-                    ) : (
-                      <Search className="h-5 w-5 text-muted-foreground shrink-0 mr-2" />
-                    )}
-                    <input
-                      type="text"
-                      value={activeEndpoint === "search" ? searchQuery : url}
-                      onChange={(e) => {
-                        if (activeEndpoint === "search") setSearchQuery(e.target.value);
-                        else setUrl(e.target.value.replace(/^https?:\/\//, ""));
-                      }}
-                      onKeyDown={(e) => e.key === "Enter" && !isDisabled && handleAction()}
-                      placeholder={PLACEHOLDERS[activeEndpoint]}
-                      className={cn(
-                        "flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground/50",
-                        activeEndpoint !== "search" && "ml-1"
+                  <div className="border border-white/10">
+                    <div className="flex items-center h-[72px] px-8">
+                      {activeEndpoint !== "search" ? (
+                        <>
+                          <span className="text-emerald-500/60 font-mono text-[20px] mr-3 font-bold select-none">$</span>
+                          <span className="text-white/25 font-mono text-[18px] shrink-0 select-none">https://</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-emerald-500/60 font-mono text-[20px] mr-3 font-bold select-none">$</span>
+                          <Search className="h-5 w-5 text-white/25 shrink-0 mr-2" />
+                        </>
                       )}
-                    />
-                    <ActiveIcon className="h-5 w-5 shrink-0 ml-2 text-primary/40" />
-                  </div>
-
-                  {/* No format warning */}
-                  {formats.length === 0 && activeEndpoint !== "map" && (
-                    <div className="flex items-center gap-2 mb-3 px-1">
-                      <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                      <p className="text-[13px] text-amber-400 font-medium">
-                        No format selected — only metadata will be returned
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Controls Row */}
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setShowAdvanced(!showAdvanced)}
-                        className={cn(
-                          "h-10 w-10 rounded-lg grid place-items-center transition-all duration-200",
-                          showAdvanced ? "bg-primary/15 text-primary" : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted"
-                        )}
-                        title="Settings"
-                      >
-                        <SlidersHorizontal className="h-[18px] w-[18px]" />
-                      </button>
-
-                      <button onClick={() => router.push("/docs")} className="h-10 w-10 rounded-lg bg-muted/60 grid place-items-center text-muted-foreground hover:text-foreground hover:bg-muted transition-all" title="API Docs">
-                        <FileCode className="h-[18px] w-[18px]" />
-                      </button>
-
-                      {activeEndpoint !== "map" && (
-                        <div className="relative">
-                          <button
-                            onClick={() => setShowFormatSelector(!showFormatSelector)}
-                            className="flex items-center gap-2 h-10 rounded-lg bg-muted/60 px-3.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                          >
-                            <FileText className="h-[18px] w-[18px]" />
-                            <span>{formatSummary}</span>
-                            <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-                          </button>
-                          <FormatSelector
-                            open={showFormatSelector}
-                            onClose={() => setShowFormatSelector(false)}
-                            selectedFormats={formats}
-                            onToggleFormat={toggleFormat}
-                            htmlMode={htmlMode}
-                            onHtmlModeChange={setHtmlMode}
-                            screenshotMode={screenshotMode}
-                            onScreenshotModeChange={setScreenshotMode}
-                          />
-                        </div>
-                      )}
+                      <input
+                        type="text"
+                        value={activeEndpoint === "search" ? searchQuery : url}
+                        onChange={(e) => { if (activeEndpoint === "search") setSearchQuery(e.target.value); else setUrl(e.target.value.replace(/^https?:\/\//, "")); }}
+                        onKeyDown={(e) => e.key === "Enter" && !isDisabled && handleAction()}
+                        placeholder={PLACEHOLDERS[activeEndpoint]}
+                        className="flex-1 bg-transparent text-[20px] font-mono text-[#f0f0f0] outline-none placeholder:text-white/10 ml-1 font-medium"
+                      />
+                      <ActiveIcon className="h-5 w-5 shrink-0 ml-3 text-emerald-500/30" />
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <button onClick={handleGetCode} className="flex items-center gap-2 h-10 rounded-lg px-4 text-sm font-medium text-muted-foreground hover:text-foreground border border-border/50 hover:bg-muted/50 transition-all">
-                        <Code className="h-[18px] w-[18px]" />
-                        <span className="hidden sm:inline">Get code</span>
-                      </button>
-
-                      <button
-                        onClick={handleAction}
-                        disabled={isDisabled}
-                        className="flex items-center gap-2 h-11 rounded-lg px-6 text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-primary/15"
-                      >
-                        {loading ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <>{ACTION_LABELS[activeEndpoint]}</>}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {error && (
-                  <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 px-5 py-3 text-base text-red-400 font-medium animate-scale-in">
-                    {error}
-                  </div>
-                )}
-              </section>
-
-              {/* ── Advanced Settings (ALL endpoint settings consolidated here) ── */}
-              {showAdvanced && (
-                <section className="max-w-2xl mx-auto w-full mb-8 animate-scale-in">
-                  <div className="rounded-2xl border border-border/40 bg-card/60 p-5 space-y-5">
-                    <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                      <SlidersHorizontal className="h-[18px] w-[18px]" /> Settings
-                    </h3>
-
-                    {/* Search-specific */}
-                    {activeEndpoint === "search" && (
-                      <div className="space-y-4 pb-4 border-b border-border/30">
-                        <div className="space-y-2">
-                          <label className="text-[13px] font-semibold text-primary/70 uppercase tracking-widest">Search Engine</label>
-                          <div className="flex gap-2">
-                            {["duckduckgo", "brave", "google"].map((eng) => (
-                              <button key={eng} onClick={() => setEngine(eng)} className={cn("px-4 py-2 rounded-lg text-sm font-semibold transition-all", engine === eng ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground")}>
-                                {eng === "duckduckgo" ? "DuckDuckGo" : eng === "brave" ? "Brave" : "Google (BYOK)"}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[13px] font-semibold text-primary/70 uppercase tracking-widest">Results: {numResults}</label>
-                          <input type="range" min={1} max={10} value={numResults} onChange={(e) => setNumResults(parseInt(e.target.value))} className="w-full" />
-                        </div>
+                    {formats.length === 0 && activeEndpoint !== "map" && (
+                      <div className="flex items-center gap-2 px-8 pb-3">
+                        <div className="h-2 w-2 bg-amber-400" />
+                        <p className="text-[12px] font-mono text-amber-400 uppercase tracking-wider">No format selected — metadata only</p>
                       </div>
                     )}
 
-                    {/* Crawl-specific */}
-                    {activeEndpoint === "crawl" && (
-                      <div className="space-y-4 pb-4 border-b border-border/30">
-                        <div className="grid grid-cols-3 gap-4">
-                          <div className="space-y-2">
-                            <label className="text-[13px] font-semibold text-primary/70 uppercase tracking-widest">Page Limit</label>
-                            <Input type="number" value={maxPages} onChange={(e) => setMaxPages(parseInt(e.target.value) || 100)} min={1} max={10000} className="h-11" />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[13px] font-semibold text-primary/70 uppercase tracking-widest">Link Depth</label>
-                            <Input type="number" value={maxDepth} onChange={(e) => setMaxDepth(parseInt(e.target.value) || 3)} min={1} max={20} className="h-11" />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[13px] font-semibold text-primary/70 uppercase tracking-widest">Concurrency</label>
-                            <Input type="number" value={concurrency} onChange={(e) => setConcurrency(parseInt(e.target.value) || 3)} min={1} max={10} className="h-11" />
-                          </div>
-                        </div>
-                        <div className="space-y-3">
-                          <div className="space-y-2">
-                            <label className="text-[15px] text-foreground">Include Paths <span className="text-muted-foreground text-sm">(comma-separated)</span></label>
-                            <Input placeholder="/blog/*, /docs/*" value={includePaths} onChange={(e) => setIncludePaths(e.target.value)} className="h-11" />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[15px] text-foreground">Exclude Paths <span className="text-muted-foreground text-sm">(comma-separated)</span></label>
-                            <Input placeholder="/admin/*, /login" value={excludePaths} onChange={(e) => setExcludePaths(e.target.value)} className="h-11" />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Map-specific */}
-                    {activeEndpoint === "map" && (
-                      <div className="space-y-4 pb-4 border-b border-border/30">
-                        <div className="space-y-2">
-                          <label className="text-[13px] font-semibold text-primary/70 uppercase tracking-widest">Filter by keyword</label>
-                          <Input placeholder="e.g. blog, pricing, docs" value={mapSearch} onChange={(e) => setMapSearch(e.target.value)} className="h-11" />
-                        </div>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="space-y-2">
-                            <label className="text-[13px] font-semibold text-primary/70 uppercase tracking-widest">Max URLs</label>
-                            <Input type="number" value={mapLimit} onChange={(e) => setMapLimit(parseInt(e.target.value) || 100)} className="h-11" />
-                          </div>
-                          <div className="flex items-end justify-center pb-1">
-                            <button onClick={() => setIncludeSubdomains(!includeSubdomains)} className={cn("px-4 py-2 rounded-lg text-sm font-semibold transition-all", includeSubdomains ? "bg-primary text-primary-foreground" : "bg-muted/60 text-muted-foreground")}>
-                              Subdomains {includeSubdomains ? "On" : "Off"}
+                    <div className="flex items-center justify-between px-8 py-4 border-t border-white/[0.08]">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setShowAdvanced(!showAdvanced)} className={cn("h-11 w-11 grid place-items-center transition-all border", showAdvanced ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-white/[0.03] text-white/30 hover:text-white/60 border-transparent hover:border-white/10")} title="Settings">
+                          <SlidersHorizontal className="h-[18px] w-[18px]" />
+                        </button>
+                        <button onClick={() => router.push("/docs")} className="h-11 w-11 grid place-items-center bg-white/[0.03] text-white/30 hover:text-white/60 border border-transparent hover:border-white/10 transition-all" title="API Docs">
+                          <FileCode className="h-[18px] w-[18px]" />
+                        </button>
+                        {activeEndpoint !== "map" && (
+                          <div className="relative">
+                            <button onClick={() => setShowFormatSelector(!showFormatSelector)} className="flex items-center gap-2.5 h-11 px-5 text-[12px] font-mono uppercase tracking-[0.15em] bg-white/[0.03] text-white/30 hover:text-white/60 border border-transparent hover:border-white/10 transition-all">
+                              <FileText className="h-4 w-4" /> {formatSummary} <ChevronDown className="h-3 w-3 opacity-40" />
                             </button>
-                          </div>
-                          <div className="flex items-end justify-center pb-1">
-                            <button onClick={() => setUseSitemap(!useSitemap)} className={cn("px-4 py-2 rounded-lg text-sm font-semibold transition-all", useSitemap ? "bg-primary text-primary-foreground" : "bg-muted/60 text-muted-foreground")}>
-                              Sitemap {useSitemap ? "On" : "Off"}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Common settings (not for map) */}
-                    {activeEndpoint !== "map" && (
-                      <>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[15px] text-foreground">Main content only</label>
-                            <button onClick={() => setOnlyMainContent(!onlyMainContent)} className={cn("px-4 py-1.5 rounded-md text-sm font-semibold transition-all", onlyMainContent ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>{onlyMainContent ? "On" : "Off"}</button>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <label className="text-[15px] text-foreground">Use Proxy</label>
-                            <button onClick={() => setUseProxy(!useProxy)} className={cn("px-4 py-1.5 rounded-md text-sm font-semibold transition-all", useProxy ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>{useProxy ? "On" : "Off"}</button>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <label className="text-[15px] text-foreground">Mobile Emulation</label>
-                            <button onClick={() => setMobile(!mobile)} className={cn("px-4 py-1.5 rounded-md text-sm font-semibold transition-all", mobile ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>{mobile ? "On" : "Off"}</button>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[15px] text-foreground">Wait after load (ms)</label>
-                            <Input type="number" value={waitFor} onChange={(e) => setWaitFor(parseInt(e.target.value) || 0)} placeholder="0" className="h-10" />
-                          </div>
-                        </div>
-
-                        {mobile && devicePresets.length > 0 && (
-                          <select value={mobileDevice} onChange={(e) => setMobileDevice(e.target.value)} className="w-full h-11 text-sm">
-                            <option value="">Default mobile</option>
-                            {devicePresets.map((d: any) => (<option key={d.id} value={d.id}>{d.name} ({d.width}x{d.height})</option>))}
-                          </select>
-                        )}
-                      </>
-                    )}
-
-                    {/* Webhooks */}
-                    <div className="space-y-3 pt-3 border-t border-border/30">
-                      <div className="space-y-2">
-                        <label className="text-[15px] text-foreground">Webhook URL</label>
-                        <Input placeholder="https://your-server.com/webhook" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} className="h-11" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[15px] text-foreground">Webhook Secret</label>
-                        <Input placeholder="your-secret-key" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)} className="h-11" />
-                      </div>
-                    </div>
-
-                    {/* Headers / Cookies */}
-                    {activeEndpoint === "scrape" && (
-                      <div className="space-y-3 pt-3 border-t border-border/30">
-                        <div className="space-y-2">
-                          <label className="text-[15px] text-foreground">Custom Headers (JSON)</label>
-                          <textarea className="flex w-full rounded-lg border border-input bg-background px-4 py-3 text-sm font-mono placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px] resize-none" placeholder='{"Authorization": "Bearer ..."}' value={headersText} onChange={(e) => setHeadersText(e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[15px] text-foreground">Cookies (JSON)</label>
-                          <textarea className="flex w-full rounded-lg border border-input bg-background px-4 py-3 text-sm font-mono placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px] resize-none" placeholder='{"session_id": "abc123"}' value={cookiesText} onChange={(e) => setCookiesText(e.target.value)} />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* AI Extraction */}
-                    <div className="space-y-3 pt-3 border-t border-border/30">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[15px] font-medium text-foreground flex items-center gap-2">
-                          <Sparkles className="h-[18px] w-[18px] text-primary" /> AI Extraction (BYOK)
-                        </label>
-                        <button onClick={() => setExtractEnabled(!extractEnabled)} className={cn("px-4 py-1.5 rounded-md text-sm font-semibold transition-all", extractEnabled ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>{extractEnabled ? "On" : "Off"}</button>
-                      </div>
-                      {extractEnabled && (
-                        <textarea
-                          className="flex w-full rounded-lg border border-input bg-background px-4 py-3 text-base placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[80px] resize-none"
-                          placeholder="e.g., Extract the product name, price, and description"
-                          value={extractPrompt}
-                          onChange={(e) => setExtractPrompt(e.target.value)}
-                        />
-                      )}
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              {/* ── Active Job Progress ── */}
-              {activeJob && (
-                <section className={cn(
-                  "mx-auto w-full mb-8 animate-scale-in",
-                  activeJob.data && activeJob.data.length > 0 ? "max-w-5xl" : "max-w-2xl"
-                )}>
-                  <div className="rounded-2xl border border-primary/20 bg-card/80 backdrop-blur-sm overflow-hidden shadow-lg shadow-primary/5">
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-border/30">
-                      <div className="flex items-center gap-3 min-w-0">
-                        {activeJob.status === "running" ? (
-                          <div className="h-9 w-9 rounded-lg bg-primary/15 grid place-items-center shrink-0">
-                            <Loader2 className="h-5 w-5 text-primary animate-spin" />
-                          </div>
-                        ) : activeJob.status === "completed" ? (
-                          <div className="h-9 w-9 rounded-lg bg-emerald-500/15 grid place-items-center shrink-0">
-                            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                          </div>
-                        ) : (
-                          <div className="h-9 w-9 rounded-lg bg-red-500/15 grid place-items-center shrink-0">
-                            <XCircle className="h-5 w-5 text-red-400" />
+                            <FormatSelector open={showFormatSelector} onClose={() => setShowFormatSelector(false)} selectedFormats={formats} onToggleFormat={toggleFormat} htmlMode={htmlMode} onHtmlModeChange={setHtmlMode} screenshotMode={screenshotMode} onScreenshotModeChange={setScreenshotMode} />
                           </div>
                         )}
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base font-bold capitalize">{activeJob.type}</span>
-                            <span className={cn(
-                              "text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full",
-                              activeJob.status === "running" ? "bg-primary/15 text-primary" :
-                              activeJob.status === "completed" ? "bg-emerald-500/15 text-emerald-400" :
-                              "bg-red-500/15 text-red-400"
-                            )}>
-                              {activeJob.status === "running" ? "In progress" : activeJob.status}
-                            </span>
-                          </div>
-                          <p className="text-[13px] text-muted-foreground truncate mt-0.5">{activeJob.target}</p>
-                        </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {activeJob.status === "running" && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                await api.cancelJob(activeJob.id);
-                                setActiveJob((prev: any) => prev ? { ...prev, status: "cancelled" } : null);
-                              } catch {}
-                            }}
-                            className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
-                            title="Stop job"
-                          >
-                            <Square className="h-3.5 w-3.5" />
-                            Stop
-                          </button>
-                        )}
-                        <button
-                          onClick={dismissJob}
-                          className="h-8 w-8 rounded-lg grid place-items-center text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all"
-                          title="Dismiss"
-                        >
-                          <X className="h-4 w-4" />
+                      <div className="flex items-center gap-3">
+                        <button onClick={handleGetCode} className="flex items-center gap-2 h-11 px-5 text-[12px] font-mono uppercase tracking-[0.15em] text-white/30 hover:text-white/60 border border-white/10 hover:bg-white/[0.03] transition-all">
+                          <Code className="h-4 w-4" /> cURL
+                        </button>
+                        <button onClick={handleAction} disabled={isDisabled} className="flex items-center gap-3 h-12 px-8 text-[13px] font-mono font-bold uppercase tracking-[0.15em] bg-white text-black hover:bg-emerald-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                          {loading ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <>{ACTION_LABELS[activeEndpoint]} <ArrowRight className="h-4 w-4" /></>}
                         </button>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Progress */}
-                    <div className="px-5 py-4 space-y-3">
-                      {/* Progress bar */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-semibold text-foreground">
-                            {activeJob.completed} <span className="text-muted-foreground font-medium">of</span> {activeJob.total > 0 ? activeJob.total : "—"} <span className="text-muted-foreground font-medium">completed</span>
-                          </span>
-                          <span className="font-bold text-primary tabular-nums">
-                            {activeJob.total > 0 ? Math.round((activeJob.completed / activeJob.total) * 100) : 0}%
-                          </span>
-                        </div>
-                        <div className="h-2.5 rounded-full bg-muted/80 overflow-hidden">
-                          <div
-                            className={cn(
-                              "h-full rounded-full transition-all duration-500 ease-out",
-                              activeJob.status === "completed" ? "bg-emerald-500" :
-                              activeJob.status === "failed" ? "bg-red-500" :
-                              "bg-primary"
+                  {error && (
+                    <div className="mt-4 border border-red-500/20 bg-red-500/[0.05] px-8 py-4 text-[13px] font-mono text-red-400">
+                      <span className="text-red-500/60 mr-2 font-bold">ERR</span>{error}
+                    </div>
+                  )}
+                </section>
+
+                {/* ── Advanced Settings ── */}
+                {showAdvanced && (
+                  <section className="w-full mb-10 animate-fade-in">
+                    <div className="border border-white/10">
+                      <div className="flex items-center gap-3 px-8 py-4 border-b border-white/[0.08]">
+                        <SlidersHorizontal className="h-4 w-4 text-white/30" />
+                        <span className="text-[12px] font-mono text-white/30 uppercase tracking-[0.2em]">Configuration</span>
+                      </div>
+                      <div className="p-8 space-y-6">
+                        {activeEndpoint === "search" && (
+                          <div className="space-y-5 pb-5 border-b border-white/[0.08]">
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Engine</label>
+                              <div className="flex gap-2">
+                                {["duckduckgo", "brave", "google"].map((eng) => (
+                                  <button key={eng} onClick={() => setEngine(eng)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", engine === eng ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40 hover:bg-white/[0.08] hover:text-white/70")}>
+                                    {eng === "duckduckgo" ? "DuckDuckGo" : eng === "brave" ? "Brave" : "Google (BYOK)"}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Results: <span className="text-amber-400">{numResults}</span></label>
+                              <input type="range" min={1} max={10} value={numResults} onChange={(e) => setNumResults(parseInt(e.target.value))} className="w-full" />
+                            </div>
+                          </div>
+                        )}
+                        {activeEndpoint === "crawl" && (
+                          <div className="space-y-5 pb-5 border-b border-white/[0.08]">
+                            <div className="grid grid-cols-3 gap-4">
+                              {[
+                                { label: "Page Limit", value: maxPages, set: setMaxPages, max: 10000 },
+                                { label: "Link Depth", value: maxDepth, set: setMaxDepth, max: 20 },
+                                { label: "Concurrency", value: concurrency, set: setConcurrency, max: 10 },
+                              ].map((f) => (
+                                <div key={f.label} className="space-y-2">
+                                  <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">{f.label}</label>
+                                  <Input type="number" value={f.value} onChange={(e) => f.set(parseInt(e.target.value) || 1)} min={1} max={f.max} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] text-[14px]" />
+                                </div>
+                              ))}
+                            </div>
+                            <div className="space-y-3">
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-mono text-white/50 uppercase tracking-wider">Include Paths <span className="text-white/20">(comma-separated)</span></label>
+                                <Input placeholder="/blog/*, /docs/*" value={includePaths} onChange={(e) => setIncludePaths(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] placeholder:text-white/15 text-[14px]" />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-mono text-white/50 uppercase tracking-wider">Exclude Paths <span className="text-white/20">(comma-separated)</span></label>
+                                <Input placeholder="/admin/*, /login" value={excludePaths} onChange={(e) => setExcludePaths(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] placeholder:text-white/15 text-[14px]" />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {activeEndpoint === "map" && (
+                          <div className="space-y-5 pb-5 border-b border-white/[0.08]">
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Filter Keyword</label>
+                              <Input placeholder="blog, pricing, docs" value={mapSearch} onChange={(e) => setMapSearch(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] placeholder:text-white/15 text-[14px]" />
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="space-y-2">
+                                <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Max URLs</label>
+                                <Input type="number" value={mapLimit} onChange={(e) => setMapLimit(parseInt(e.target.value) || 100)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] text-[14px]" />
+                              </div>
+                              <div className="flex items-end justify-center pb-1">
+                                <button onClick={() => setIncludeSubdomains(!includeSubdomains)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", includeSubdomains ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Subdomains {includeSubdomains ? "ON" : "OFF"}</button>
+                              </div>
+                              <div className="flex items-end justify-center pb-1">
+                                <button onClick={() => setUseSitemap(!useSitemap)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", useSitemap ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Sitemap {useSitemap ? "ON" : "OFF"}</button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {activeEndpoint !== "map" && (
+                          <>
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                              {[
+                                { label: "Main content only", val: onlyMainContent, set: setOnlyMainContent },
+                                { label: "Use Proxy", val: useProxy, set: setUseProxy },
+                                { label: "Mobile Emulation", val: mobile, set: setMobile },
+                              ].map((f) => (
+                                <div key={f.label} className="flex items-center justify-between">
+                                  <label className="text-[13px] font-mono text-white/60">{f.label}</label>
+                                  <button onClick={() => f.set(!f.val)} className={cn("px-4 py-1.5 text-[11px] font-mono font-bold uppercase tracking-[0.2em] transition-all", f.val ? "bg-white text-black" : "bg-white/[0.04] text-white/30")}>{f.val ? "ON" : "OFF"}</button>
+                                </div>
+                              ))}
+                              <div className="space-y-2">
+                                <label className="text-[13px] font-mono text-white/60">Wait after load (ms)</label>
+                                <Input type="number" value={waitFor} onChange={(e) => setWaitFor(parseInt(e.target.value) || 0)} placeholder="0" className="h-10 font-mono bg-transparent border-white/10 text-[#ededed] text-sm placeholder:text-white/15" />
+                              </div>
+                            </div>
+                            {mobile && devicePresets.length > 0 && (
+                              <select value={mobileDevice} onChange={(e) => setMobileDevice(e.target.value)} className="w-full h-11 text-[13px] font-mono bg-transparent border border-white/10 text-white/70 px-4">
+                                <option value="">Default mobile</option>
+                                {devicePresets.map((d: any) => (<option key={d.id} value={d.id}>{d.name} ({d.width}x{d.height})</option>))}
+                              </select>
                             )}
-                            style={{ width: `${activeJob.total > 0 ? Math.min(100, (activeJob.completed / activeJob.total) * 100) : 0}%` }}
-                          />
+                          </>
+                        )}
+                        <div className="space-y-3 pt-4 border-t border-white/[0.08]">
+                          <label className="text-[11px] font-mono text-white/25 uppercase tracking-[0.2em]">Webhooks</label>
+                          <Input placeholder="https://your-server.com/webhook" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] placeholder:text-white/15 text-[14px]" />
+                          <Input placeholder="webhook-secret" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] placeholder:text-white/15 text-[14px]" />
                         </div>
-                      </div>
-
-                      {/* Counter pills */}
-                      {activeJob.status === "running" && activeJob.completed > 0 && (
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-[13px] font-bold">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            {activeJob.completed} done
+                        {activeEndpoint === "scrape" && (
+                          <div className="space-y-3 pt-4 border-t border-white/[0.08]">
+                            <label className="text-[11px] font-mono text-white/25 uppercase tracking-[0.2em]">Headers & Cookies</label>
+                            <textarea className="w-full border border-white/10 bg-transparent px-5 py-3 text-[13px] font-mono text-white/70 placeholder:text-white/15 focus:outline-none focus:border-emerald-500/30 min-h-[60px] resize-none" placeholder='{"Authorization": "Bearer ..."}' value={headersText} onChange={(e) => setHeadersText(e.target.value)} />
+                            <textarea className="w-full border border-white/10 bg-transparent px-5 py-3 text-[13px] font-mono text-white/70 placeholder:text-white/15 focus:outline-none focus:border-emerald-500/30 min-h-[60px] resize-none" placeholder='{"session_id": "abc123"}' value={cookiesText} onChange={(e) => setCookiesText(e.target.value)} />
                           </div>
-                          {activeJob.total > 0 && activeJob.total - activeJob.completed > 0 && (
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/60 text-muted-foreground text-[13px] font-medium">
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              {activeJob.total - activeJob.completed} remaining
-                            </div>
+                        )}
+                        <div className="space-y-3 pt-4 border-t border-white/[0.08]">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[13px] font-mono text-white/60 flex items-center gap-2">
+                              <Sparkles className="h-4 w-4 text-amber-400" /> AI Extraction (BYOK)
+                            </label>
+                            <button onClick={() => setExtractEnabled(!extractEnabled)} className={cn("px-4 py-1.5 text-[11px] font-mono font-bold uppercase tracking-[0.2em] transition-all", extractEnabled ? "bg-white text-black" : "bg-white/[0.04] text-white/30")}>{extractEnabled ? "ON" : "OFF"}</button>
+                          </div>
+                          {extractEnabled && (
+                            <textarea className="w-full border border-white/10 bg-transparent px-5 py-3 text-[14px] font-mono text-white/70 placeholder:text-white/15 focus:outline-none focus:border-emerald-500/30 min-h-[80px] resize-none" placeholder="Extract product name, price, and description" value={extractPrompt} onChange={(e) => setExtractPrompt(e.target.value)} />
                           )}
                         </div>
-                      )}
-
-                      {/* Error message */}
-                      {activeJob.error && (
-                        <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm text-red-400 font-medium">
-                          {activeJob.error}
-                        </div>
-                      )}
-
-                      {/* Completed actions */}
-                      {activeJob.status === "completed" && (
-                        <div className="flex items-center gap-3 pt-1">
-                          <button
-                            onClick={handleDownloadActiveJob}
-                            className="flex items-center gap-2 h-10 rounded-lg px-5 text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-md shadow-primary/15"
-                          >
-                            <Download className="h-[18px] w-[18px]" />
-                            Download JSON
-                          </button>
-                          <Link
-                            href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })}
-                            className="flex items-center gap-2 h-10 rounded-lg px-5 text-sm font-medium border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
-                          >
-                            <ExternalLink className="h-[18px] w-[18px]" />
-                            View full results
-                          </Link>
-                        </div>
-                      )}
-
-                      {(activeJob.status === "failed" || activeJob.status === "cancelled") && (
-                        <div className="flex items-center gap-3 pt-1">
-                          <button
-                            onClick={async () => {
-                              try {
-                                const res = await api.retryJob(activeJob.id);
-                                setActiveJob({
-                                  id: res.new_job_id,
-                                  type: activeJob.type,
-                                  status: "running",
-                                  target: activeJob.target,
-                                  completed: 0,
-                                  total: activeJob.total || 0,
-                                  data: [],
-                                  error: undefined,
-                                });
-                              } catch {}
-                            }}
-                            className="flex items-center gap-2 h-10 rounded-lg px-5 text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-md shadow-primary/15"
-                          >
-                            <RefreshCw className="h-[18px] w-[18px]" />
-                            Retry
-                          </button>
-                          <Link
-                            href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })}
-                            className="flex items-center gap-2 h-10 rounded-lg px-5 text-sm font-medium border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all"
-                          >
-                            <ExternalLink className="h-[18px] w-[18px]" />
-                            View details
-                          </Link>
-                        </div>
-                      )}
+                      </div>
                     </div>
+                  </section>
+                )}
 
-                    {/* ── Inline Results ── */}
-                    {activeJob.data && activeJob.data.length > 0 && activeJob.type !== "map" && (
-                      <div className="border-t border-border/30">
-                        <div className="px-5 py-3 flex items-center justify-between bg-muted/10">
-                          <div className="flex items-center gap-2">
-                            <Globe className="h-4 w-4 text-primary" />
-                            <span className="text-[13px] font-bold text-foreground">
-                              {activeJob.data.length} {activeJob.data.length === 1 ? "result" : "results"}
-                            </span>
+                {/* ── Active Job ── */}
+                {activeJob && (
+                  <section className="w-full mb-10 animate-fade-in">
+                    <div className={cn("border overflow-hidden", activeJob.status === "completed" ? "border-emerald-500/20" : activeJob.status === "failed" || activeJob.status === "cancelled" ? "border-red-500/20" : "border-white/10")}>
+                      <div className={cn("h-[2px]", activeJob.status === "completed" ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : activeJob.status === "failed" ? "bg-red-500" : "bg-emerald-500/50")} />
+
+                      <div className="flex items-center justify-between px-8 py-5 border-b border-white/[0.08]">
+                        <div className="flex items-center gap-5">
+                          <div className={cn("h-11 w-11 border grid place-items-center", activeJob.status === "completed" ? "border-emerald-500/20 bg-emerald-500/[0.04]" : activeJob.status === "failed" ? "border-red-500/20 bg-red-500/[0.04]" : "border-emerald-500/10 bg-emerald-500/[0.04]")}>
+                            {activeJob.status === "running" ? <Loader2 className="h-5 w-5 text-emerald-500 animate-spin" /> : activeJob.status === "completed" ? <CheckCircle2 className="h-5 w-5 text-emerald-400" /> : <XCircle className="h-5 w-5 text-red-400" />}
                           </div>
+                          <div>
+                            <div className="flex items-center gap-4">
+                              <span className="text-[18px] font-bold uppercase tracking-[0.1em] text-[#f0f0f0]">{activeJob.type}</span>
+                              <span className={cn("text-[11px] font-mono uppercase tracking-[0.25em] px-3 py-1 border", activeJob.status === "running" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/15" : activeJob.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/15" : "bg-red-500/10 text-red-400 border-red-500/20")}>
+                                {activeJob.status === "running" ? "Running" : activeJob.status}
+                              </span>
+                            </div>
+                            <span className="text-[14px] font-mono text-white/35 mt-1 block">{activeJob.target}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
                           {activeJob.status === "running" && (
-                            <div className="flex items-center gap-1.5 text-[12px] text-primary font-medium">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Live
-                            </div>
+                            <button onClick={async () => { try { await api.cancelJob(activeJob.id); setActiveJob((p: any) => p ? { ...p, status: "cancelled" } : null); } catch {} }} className="h-9 px-3 flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-all"><Square className="h-3.5 w-3.5" /> Stop</button>
                           )}
-                        </div>
-                        <div className="px-4 pb-4 space-y-2 max-h-[600px] overflow-auto">
-                          {activeJob.data.map((page: any, i: number) => (
-                            <InlineResultCard
-                              key={page.id || page.url || i}
-                              page={page}
-                              index={i}
-                              jobId={activeJob.id}
-                            />
-                          ))}
+                          <button onClick={dismissJob} className="h-9 w-9 grid place-items-center text-white/20 hover:text-white/50 hover:bg-white/[0.04] transition-all"><X className="h-4 w-4" /></button>
                         </div>
                       </div>
-                    )}
 
-                    {/* Map inline results (URL list only) */}
-                    {activeJob.data && activeJob.data.length > 0 && activeJob.type === "map" && (
-                      <div className="border-t border-border/30">
-                        <div className="px-5 py-3 flex items-center gap-2 bg-muted/10">
-                          <Network className="h-4 w-4 text-primary" />
-                          <span className="text-[13px] font-bold text-foreground">
-                            {activeJob.data.length} URLs discovered
-                          </span>
+                      <div className="px-8 py-5">
+                        <div className="flex items-center justify-between text-[13px] font-mono mb-3">
+                          <span className="text-white/50">{activeJob.completed} <span className="text-white/20">/</span> {activeJob.total > 0 ? activeJob.total : "—"} pages</span>
+                          <span className="text-emerald-400 font-bold text-[20px]">{pct}%</span>
                         </div>
-                        <div className="max-h-[400px] overflow-auto">
-                          {activeJob.data.map((link: any, i: number) => (
-                            <div key={i} className="flex items-center justify-between px-5 py-2.5 hover:bg-muted/30 group transition-colors">
-                              <a
-                                href={link.url || link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[13px] text-primary hover:underline truncate"
-                              >
-                                {link.url || link}
-                              </a>
-                              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                            </div>
-                          ))}
+                        <div className="h-1.5 bg-white/[0.06] overflow-hidden">
+                          <div className={cn("h-full transition-all duration-500", activeJob.status === "completed" ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : activeJob.status === "failed" ? "bg-red-500" : "bg-emerald-500")} style={{ width: `${activeJob.total > 0 ? Math.min(100, (activeJob.completed / activeJob.total) * 100) : 0}%` }} />
                         </div>
-                      </div>
-                    )}
-                  </div>
-                </section>
-              )}
-
-              {/* ── Map Results ── */}
-              {activeEndpoint === "map" && mapResult && (
-                <section className="max-w-2xl mx-auto mb-8 animate-float-in">
-                  <div className="rounded-2xl border border-primary/15 bg-card/60 overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-border/30">
-                      <div className="flex items-center gap-2.5">
-                        <Network className="h-5 w-5 text-primary" />
-                        <span className="text-base font-semibold">Discovered URLs</span>
-                        <Badge variant="outline" className="border-primary/20 text-primary text-sm">{mapResult.total}</Badge>
-                      </div>
-                      <button onClick={copyMapUrls} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all">
-                        {copied ? <Check className="h-[18px] w-[18px] text-emerald-400" /> : <Copy className="h-[18px] w-[18px]" />}
-                        Copy All
-                      </button>
-                    </div>
-                    <div className="max-h-[400px] overflow-auto">
-                      {mapResult.links?.map((link: any, i: number) => (
-                        <div key={i} className="flex items-center justify-between px-5 py-3 hover:bg-muted/30 group transition-colors">
-                          <div className="min-w-0 flex-1">
-                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-[15px] text-primary hover:underline truncate block">{link.url}</a>
-                            {link.title && <p className="text-[13px] text-muted-foreground truncate">{link.title}</p>}
+                        {activeJob.error && <div className="mt-4 border border-red-500/20 bg-red-500/[0.05] px-6 py-3 text-[13px] font-mono text-red-400"><span className="text-red-500/60 mr-2 font-bold">ERR</span>{activeJob.error}</div>}
+                        {activeJob.status === "completed" && (
+                          <div className="flex items-center gap-3 mt-5">
+                            <button onClick={handleDownloadActiveJob} className="flex items-center gap-2 h-11 px-6 text-[13px] font-mono font-bold uppercase tracking-[0.15em] bg-white text-black hover:bg-emerald-400 transition-all"><Download className="h-4 w-4" /> Export JSON</button>
+                            <Link href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })} className="flex items-center gap-2 h-11 px-6 text-[13px] font-mono uppercase tracking-[0.15em] border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all"><ExternalLink className="h-4 w-4" /> View Details</Link>
                           </div>
-                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="opacity-0 group-hover:opacity-100 ml-2 transition-opacity">
-                            <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                          </a>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </section>
-              )}
+                        )}
+                        {(activeJob.status === "failed" || activeJob.status === "cancelled") && (
+                          <div className="flex items-center gap-3 mt-5">
+                            <button onClick={async () => { try { const res = await api.retryJob(activeJob.id); setActiveJob({ id: res.new_job_id, type: activeJob.type, status: "running", target: activeJob.target, completed: 0, total: activeJob.total || 0, data: [], error: undefined }); } catch {} }} className="flex items-center gap-2 h-11 px-6 text-[13px] font-mono font-bold uppercase tracking-[0.15em] bg-white text-black hover:bg-emerald-400 transition-all"><RefreshCw className="h-4 w-4" /> Retry</button>
+                            <Link href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })} className="flex items-center gap-2 h-11 px-6 text-[13px] font-mono uppercase tracking-[0.15em] border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all"><ExternalLink className="h-4 w-4" /> Details</Link>
+                          </div>
+                        )}
+                      </div>
 
-              {/* ── Recent Runs ── */}
-              {hasRuns && (
-                <section className="max-w-5xl mx-auto pb-10" style={{ animationDelay: "0.1s" }}>
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                      <h2 className="text-xl font-bold tracking-tight">Recent Runs</h2>
-                      <div className="h-px flex-1 bg-gradient-to-r from-border to-transparent min-w-[40px]" />
-                    </div>
-                    <Link href="/jobs" className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 font-medium">
-                      View all <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
-                    {recentJobs.map((job) => {
-                      const jobUrl = getJobUrl(job);
-                      const domain = getDomain(jobUrl);
-                      const TypeIcon = getTypeIcon(job.type);
-                      const { date, time } = job.created_at ? formatDate(job.created_at) : { date: "", time: "" };
-                      const jobFormats: string[] = job.config?.formats || [];
-                      const isCompleted = job.status === "completed";
-
-                      return (
-                        <div key={job.id} className="rounded-xl border border-border/50 bg-card/70 hover:bg-card transition-all duration-200 group overflow-hidden">
-                          <div className="h-[2px] bg-primary" />
-
-                          <Link href={getJobDetailPath(job)}>
-                            <div className="flex items-center justify-between px-5 pt-4 pb-3">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                {jobUrl && !jobUrl.includes("URLs") && (
-                                  <img src={getFavicon(jobUrl)} alt="" className="h-5 w-5 rounded-sm shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                                )}
-                                <span className="text-base font-semibold truncate">{domain || "No URL"}</span>
-                              </div>
-                              <ExternalLink className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors shrink-0" />
+                      {activeJob.data && activeJob.data.length > 0 && activeJob.type !== "map" && (
+                        <div className="border-t border-white/[0.08]">
+                          <div className="px-8 py-4 flex items-center justify-between bg-white/[0.01]">
+                            <div className="flex items-center gap-3">
+                              <Globe className="h-4 w-4 text-emerald-500/60" />
+                              <span className="text-[12px] font-mono font-bold text-white/40 uppercase tracking-[0.2em]">{activeJob.data.length} {activeJob.data.length === 1 ? "result" : "results"}</span>
                             </div>
+                            {activeJob.status === "running" && <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400/60 uppercase tracking-[0.2em]"><div className="h-2 w-2 bg-emerald-400 animate-pulse" /> Live</div>}
+                          </div>
+                          <div className="px-6 pb-6 space-y-2 max-h-[600px] overflow-auto">
+                            {activeJob.data.map((page: any, i: number) => <InlineResultCard key={page.id || page.url || i} page={page} index={i} jobId={activeJob.id} />)}
+                          </div>
+                        </div>
+                      )}
+                      {activeJob.data && activeJob.data.length > 0 && activeJob.type === "map" && (
+                        <div className="border-t border-white/[0.08]">
+                          <div className="px-8 py-4 flex items-center gap-3 bg-white/[0.01]">
+                            <Network className="h-4 w-4 text-emerald-500/60" />
+                            <span className="text-[12px] font-mono font-bold text-white/40 uppercase tracking-[0.2em]">{activeJob.data.length} URLs</span>
+                          </div>
+                          <div className="max-h-[400px] overflow-auto">
+                            {activeJob.data.map((link: any, i: number) => (
+                              <div key={i} className="flex items-center justify-between px-8 py-3 hover:bg-white/[0.02] group transition-colors border-b border-white/[0.04] last:border-0">
+                                <a href={link.url || link} target="_blank" rel="noopener noreferrer" className="text-[14px] font-mono text-emerald-400 hover:text-emerald-300 truncate">{link.url || link}</a>
+                                <ExternalLink className="h-3.5 w-3.5 text-white/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-3" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
 
-                            <div className="px-5 pb-4 space-y-2.5">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <TypeIcon className="h-[18px] w-[18px] text-primary" />
-                                  <span className="text-[13px] font-bold uppercase tracking-wider text-primary">{job.type}</span>
+                {/* ── Map Results ── */}
+                {activeEndpoint === "map" && mapResult && (
+                  <section className="w-full mb-10 animate-fade-in">
+                    <div className="border border-white/10 overflow-hidden">
+                      <div className="h-[2px] bg-gradient-to-r from-emerald-600 to-emerald-400" />
+                      <div className="flex items-center justify-between px-8 py-4 border-b border-white/[0.08]">
+                        <div className="flex items-center gap-3">
+                          <Network className="h-5 w-5 text-emerald-500/60" />
+                          <span className="text-[14px] font-mono font-bold text-white/60 uppercase tracking-[0.15em]">Sitemap</span>
+                          <span className="text-[14px] font-mono text-emerald-400 font-bold">{mapResult.total}</span>
+                        </div>
+                        <button onClick={copyMapUrls} className="flex items-center gap-2 px-4 py-2 text-[12px] font-mono uppercase tracking-wider border border-white/10 text-white/30 hover:text-white/60 hover:bg-white/[0.03] transition-all">
+                          {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />} Copy All
+                        </button>
+                      </div>
+                      <div className="max-h-[400px] overflow-auto">
+                        {mapResult.links?.map((link: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between px-8 py-3 hover:bg-white/[0.02] group transition-colors border-b border-white/[0.04] last:border-0">
+                            <div className="min-w-0 flex-1">
+                              <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-[14px] font-mono text-emerald-400 hover:text-emerald-300 truncate block">{link.url}</a>
+                              {link.title && <p className="text-[12px] text-white/25 truncate">{link.title}</p>}
+                            </div>
+                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="opacity-0 group-hover:opacity-100 ml-3 transition-opacity"><ExternalLink className="h-3.5 w-3.5 text-white/20" /></a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {/* ── Recent Runs ── */}
+                {hasRuns && (
+                  <section className="w-full pb-12">
+                    <div className="flex items-center justify-between mb-8">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[12px] font-mono text-white/30 uppercase tracking-[0.25em]">Recent Activity</span>
+                        <div className="h-px flex-1 bg-white/[0.06] min-w-[60px]" />
+                      </div>
+                      <Link href="/jobs" className="text-[12px] font-mono text-white/25 hover:text-white/50 transition-colors uppercase tracking-[0.2em] flex items-center gap-2">View All <ArrowRight className="h-3.5 w-3.5" /></Link>
+                    </div>
+                    <div className="grid gap-px md:grid-cols-2 lg:grid-cols-3 bg-white/[0.06]">
+                      {recentJobs.map((job) => {
+                        const jobUrl = getJobUrl(job);
+                        const domain = getDomain(jobUrl);
+                        const TypeIcon = getTypeIcon(job.type);
+                        const { date, time } = job.created_at ? formatDate(job.created_at) : { date: "", time: "" };
+                        const jobFormats: string[] = job.config?.formats || [];
+                        const isCompleted = job.status === "completed";
+                        return (
+                          <div key={job.id} className="bg-[#050505] group">
+                            <Link href={getJobDetailPath(job)} className="block p-8 hover:bg-white/[0.02] transition-all">
+                              <div className="flex items-center justify-between mb-5">
+                                <div className="flex items-center gap-2.5">
+                                  <TypeIcon className="h-4 w-4 text-emerald-500/50" />
+                                  <span className="text-[11px] font-mono font-bold uppercase tracking-[0.25em] text-emerald-500/50">{job.type}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <div className={cn("h-2 w-2 rounded-full", job.status === "completed" ? "bg-emerald-400" : job.status === "failed" ? "bg-red-400" : job.status === "running" ? "bg-amber-400 animate-pulse" : "bg-muted-foreground")} />
-                                  <span className="text-[13px] font-medium text-muted-foreground capitalize">{job.status === "completed" ? "Done" : job.status}</span>
+                                  <div className={cn("h-2.5 w-2.5", job.status === "completed" ? "bg-emerald-400" : job.status === "failed" ? "bg-red-400" : job.status === "running" ? "bg-amber-400 animate-pulse" : "bg-white/20")} />
+                                  <span className="text-[11px] font-mono text-white/25 uppercase tracking-wider">{job.status === "completed" ? "Done" : job.status}</span>
                                 </div>
                               </div>
-
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Clock className="h-4 w-4" />
-                                <span className="text-[13px] font-medium">{date} {time}</span>
+                              <div className="flex items-center gap-3 mb-4">
+                                {jobUrl && !jobUrl.includes("URLs") && <img src={getFavicon(jobUrl)} alt="" className="h-5 w-5 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+                                <span className="text-[16px] font-mono font-medium text-white/70 truncate">{domain || "—"}</span>
                               </div>
-
+                              <div className="flex items-center gap-2 text-white/20 mb-4">
+                                <Clock className="h-3.5 w-3.5" />
+                                <span className="text-[12px] font-mono">{date} {time}</span>
+                              </div>
                               {jobFormats.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                <div className="flex flex-wrap gap-1.5">
                                   {jobFormats.slice(0, 4).map((fmt: string) => {
                                     const fmtInfo = formatIcons[fmt];
-                                    const FmtIcon = fmtInfo?.icon || FileText;
-                                    return (
-                                      <span key={fmt} className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                        <FmtIcon className="h-3 w-3" /> {fmtInfo?.label || fmt}
-                                      </span>
-                                    );
+                                    return <span key={fmt} className="px-2.5 py-1 text-[10px] font-mono text-white/20 uppercase tracking-[0.2em] border border-white/[0.06]">{fmtInfo?.label || fmt}</span>;
                                   })}
-                                  {jobFormats.length > 4 && <span className="text-[11px] text-muted-foreground font-medium self-center">+{jobFormats.length - 4}</span>}
+                                  {jobFormats.length > 4 && <span className="text-[10px] font-mono text-white/15 self-center">+{jobFormats.length - 4}</span>}
                                 </div>
                               )}
-                            </div>
-                          </Link>
+                            </Link>
+                            {isCompleted && (
+                              <div className="px-8 pb-6">
+                                <button onClick={(e) => { e.preventDefault(); handleDownload(job); }} className="flex items-center justify-center gap-2.5 w-full py-3 text-[11px] font-mono font-bold uppercase tracking-[0.2em] border border-emerald-500/15 text-emerald-500/50 hover:bg-emerald-500/[0.06] hover:text-emerald-400 hover:border-emerald-500/25 transition-all">
+                                  <Download className="h-3.5 w-3.5" /> Export
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
 
-                          {isCompleted && (
-                            <div className="px-5 pb-4 pt-0">
-                              <button onClick={(e) => { e.preventDefault(); handleDownload(job); }} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-bold transition-all border border-primary/20 text-primary hover:bg-primary/10">
-                                <Download className="h-[18px] w-[18px]" /> Download JSON
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
-
-              {/* Empty state */}
-              {!hasRuns && jobsLoaded && (
-                <div className="text-center py-4 animate-fade-in">
-                  <p className="text-base text-muted-foreground font-medium">Your runs will appear here</p>
-                </div>
-              )}
-
+                {!hasRuns && jobsLoaded && (
+                  <div className="text-center py-6"><p className="text-[14px] font-mono text-white/25 uppercase tracking-[0.2em]">No runs yet</p></div>
+                )}
+              </div>
             </div>
             <Footer />
           </div>
@@ -1380,9 +1009,5 @@ function PlaygroundContent() {
 }
 
 export default function PlaygroundPage() {
-  return (
-    <Suspense fallback={null}>
-      <PlaygroundContent />
-    </Suspense>
-  );
+  return (<Suspense fallback={null}><PlaygroundContent /></Suspense>);
 }
