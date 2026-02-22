@@ -2,11 +2,7 @@
 
 import { useState, useEffect, useCallback, memo, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { PageLayout } from "@/components/layout/page-layout";
 import { ExportDropdown } from "@/components/ui/export-dropdown";
 import { api } from "@/lib/api";
 import {
@@ -104,13 +100,13 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
     : 0;
 
   return (
-    <Card className="overflow-hidden">
+    <div className="border border-white/10 bg-white/[0.02] overflow-hidden">
       {/* Header - always visible */}
       <div
-        className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+        className="flex items-center gap-3 p-4 cursor-pointer hover:bg-white/[0.03] transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
-        <span className="text-xs text-muted-foreground font-mono w-6 shrink-0 text-right">
+        <span className="text-xs text-white/30 font-mono w-6 shrink-0 text-right">
           {index + 1}
         </span>
         <div className="min-w-0 flex-1">
@@ -119,7 +115,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
               href={page.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-primary hover:underline truncate flex items-center gap-1"
+              className="text-sm text-emerald-400 hover:text-emerald-300 truncate flex items-center gap-1"
               onClick={(e) => e.stopPropagation()}
             >
               {page.url}
@@ -127,53 +123,52 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
             </a>
           </div>
           {page.metadata?.title && (
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            <p className="text-xs text-white/40 mt-0.5 truncate">
               {page.metadata.title}
             </p>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {hasScreenshot && (
-            <Badge variant="outline" className="text-xs gap-1">
+            <span className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2 py-0.5 text-[11px] font-mono text-white/50">
               <Camera className="h-3 w-3" />
-            </Badge>
+            </span>
           )}
           {wordCount > 0 && (
-            <Badge variant="outline" className="text-xs">
+            <span className="inline-flex items-center rounded-md border border-white/20 px-2 py-0.5 text-[11px] font-mono text-white/50">
               {wordCount.toLocaleString()} words
-            </Badge>
+            </span>
           )}
           {readingTime > 0 && (
-            <Badge variant="outline" className="text-xs gap-1">
+            <span className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2 py-0.5 text-[11px] font-mono text-white/50">
               <Clock className="h-3 w-3" />
               {readingTime}m
-            </Badge>
+            </span>
           )}
-          <Badge
-            variant="outline"
-            className={`text-xs ${
+          <span
+            className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-mono ${
               page.metadata?.status_code === 200
-                ? "border-green-500/50 text-green-400"
+                ? "border-emerald-500/30 text-emerald-400"
                 : page.metadata?.status_code >= 400
-                ? "border-red-500/50 text-red-400"
-                : ""
+                ? "border-red-500/30 text-red-400"
+                : "border-white/20 text-white/50"
             }`}
           >
             {page.metadata?.status_code || "?"}
-          </Badge>
+          </span>
           {expanded ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            <ChevronUp className="h-4 w-4 text-white/40" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <ChevronDown className="h-4 w-4 text-white/40" />
           )}
         </div>
       </div>
 
       {/* Expanded content */}
       {expanded && (
-        <div className="border-t border-border">
+        <div className="border-t border-white/10">
           {/* Tab bar */}
-          <div className="flex gap-1 p-2 border-b border-border bg-muted/20 overflow-x-auto">
+          <div className="flex gap-1 p-2 border-b border-white/10 bg-white/[0.02] overflow-x-auto">
             {availableTabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -182,8 +177,8 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                     activeTab === tab.id
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      ? "bg-white text-black"
+                      : "text-white/40 hover:text-white/70"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -196,7 +191,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
           {/* Tab content */}
           <div className="p-4">
             {activeTab === "markdown" && hasMarkdown && (
-              <pre className="max-h-96 overflow-auto text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-md p-4">
+              <pre className="max-h-96 overflow-auto text-xs text-white/70 whitespace-pre-wrap font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-4">
                 {page.markdown}
               </pre>
             )}
@@ -204,19 +199,19 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
             {activeTab === "html" && hasHtml && (
               <div>
                 {htmlData ? (
-                  <pre className="max-h-96 overflow-auto text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-md p-4">
+                  <pre className="max-h-96 overflow-auto text-xs text-white/70 whitespace-pre-wrap font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-4">
                     {htmlData}
                   </pre>
                 ) : htmlLoading ? (
-                  <div className="flex items-center gap-2 py-8 text-muted-foreground justify-center">
+                  <div className="flex items-center gap-2 py-8 text-white/40 justify-center">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="text-sm">Loading HTML...</span>
                   </div>
                 ) : (
-                  <Button variant="outline" size="sm" onClick={() => loadDetail("html")} className="gap-2">
+                  <button onClick={() => loadDetail("html")} className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm border border-white/20 text-white/50 hover:text-white transition-colors">
                     <Code className="h-4 w-4" />
                     Load HTML
-                  </Button>
+                  </button>
                 )}
               </div>
             )}
@@ -227,19 +222,19 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                   <img
                     src={`data:image/jpeg;base64,${screenshotData}`}
                     alt={`Screenshot of ${page.url}`}
-                    className="max-w-full rounded-md border border-border shadow-lg"
+                    className="max-w-full rounded-md border border-white/10 shadow-lg"
                     style={{ maxHeight: "600px" }}
                   />
                 ) : screenshotLoading ? (
-                  <div className="flex items-center gap-2 py-8 text-muted-foreground">
+                  <div className="flex items-center gap-2 py-8 text-white/40">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="text-sm">Loading screenshot...</span>
                   </div>
                 ) : (
-                  <Button variant="outline" size="sm" onClick={() => loadDetail("screenshot")} className="gap-2">
+                  <button onClick={() => loadDetail("screenshot")} className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm border border-white/20 text-white/50 hover:text-white transition-colors">
                     <Camera className="h-4 w-4" />
                     Load Screenshot
-                  </Button>
+                  </button>
                 )}
               </div>
             )}
@@ -249,22 +244,22 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                 {page.links_detail && (
                   <div className="flex gap-4 text-sm">
                     <div className="flex items-center gap-1.5">
-                      <Link2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{page.links_detail.total}</span>
-                      <span className="text-muted-foreground">total</span>
+                      <Link2 className="h-4 w-4 text-white/40" />
+                      <span className="font-medium text-white">{page.links_detail.total}</span>
+                      <span className="text-white/40">total</span>
                     </div>
                     {page.links_detail.internal && (
                       <div className="flex items-center gap-1.5">
                         <ArrowDownLeft className="h-4 w-4 text-blue-400" />
-                        <span className="font-medium">{page.links_detail.internal.count}</span>
-                        <span className="text-muted-foreground">internal</span>
+                        <span className="font-medium text-white">{page.links_detail.internal.count}</span>
+                        <span className="text-white/40">internal</span>
                       </div>
                     )}
                     {page.links_detail.external && (
                       <div className="flex items-center gap-1.5">
                         <ArrowUpRight className="h-4 w-4 text-orange-400" />
-                        <span className="font-medium">{page.links_detail.external.count}</span>
-                        <span className="text-muted-foreground">external</span>
+                        <span className="font-medium text-white">{page.links_detail.external.count}</span>
+                        <span className="text-white/40">external</span>
                       </div>
                     )}
                   </div>
@@ -272,7 +267,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
 
                 {page.links_detail?.internal?.links?.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Internal Links</h4>
+                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Internal Links</h4>
                     <div className="space-y-1 max-h-64 overflow-auto">
                       {page.links_detail.internal.links.map((link: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
@@ -281,12 +276,12 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                             href={link.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-primary hover:underline truncate"
+                            className="text-emerald-400 hover:text-emerald-300 truncate"
                           >
                             {link.url}
                           </a>
                           {link.text && (
-                            <span className="text-muted-foreground truncate shrink-0 max-w-48">
+                            <span className="text-white/40 truncate shrink-0 max-w-48">
                               &quot;{link.text}&quot;
                             </span>
                           )}
@@ -298,7 +293,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
 
                 {page.links_detail?.external?.links?.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">External Links</h4>
+                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">External Links</h4>
                     <div className="space-y-1 max-h-64 overflow-auto">
                       {page.links_detail.external.links.map((link: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
@@ -307,12 +302,12 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                             href={link.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-primary hover:underline truncate"
+                            className="text-emerald-400 hover:text-emerald-300 truncate"
                           >
                             {link.url}
                           </a>
                           {link.text && (
-                            <span className="text-muted-foreground truncate shrink-0 max-w-48">
+                            <span className="text-white/40 truncate shrink-0 max-w-48">
                               &quot;{link.text}&quot;
                             </span>
                           )}
@@ -331,7 +326,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                           href={link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-primary hover:underline"
+                          className="text-emerald-400 hover:text-emerald-300"
                         >
                           {link}
                         </a>
@@ -346,23 +341,23 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
               <div className="space-y-4">
                 {page.structured_data.json_ld && (
                   <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
+                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2 flex items-center gap-1.5">
                       <Braces className="h-3.5 w-3.5" />
                       JSON-LD (Schema.org)
                     </h4>
-                    <pre className="max-h-64 overflow-auto text-xs font-mono bg-muted/30 rounded-md p-3">
+                    <pre className="max-h-64 overflow-auto text-xs font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-3 text-white/70">
                       {JSON.stringify(page.structured_data.json_ld, null, 2)}
                     </pre>
                   </div>
                 )}
                 {page.structured_data.open_graph && (
                   <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">OpenGraph</h4>
+                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">OpenGraph</h4>
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(page.structured_data.open_graph).map(([key, val]) => (
                         <div key={key} className="text-xs">
-                          <span className="text-muted-foreground">og:{key}:</span>{" "}
-                          <span className="font-mono">{String(val)}</span>
+                          <span className="text-white/40">og:{key}:</span>{" "}
+                          <span className="font-mono text-white/70">{String(val)}</span>
                         </div>
                       ))}
                     </div>
@@ -370,12 +365,12 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                 )}
                 {page.structured_data.twitter_card && (
                   <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Twitter Card</h4>
+                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Twitter Card</h4>
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(page.structured_data.twitter_card).map(([key, val]) => (
                         <div key={key} className="text-xs">
-                          <span className="text-muted-foreground">twitter:{key}:</span>{" "}
-                          <span className="font-mono">{String(val)}</span>
+                          <span className="text-white/40">twitter:{key}:</span>{" "}
+                          <span className="font-mono text-white/70">{String(val)}</span>
                         </div>
                       ))}
                     </div>
@@ -383,11 +378,11 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                 )}
                 {page.structured_data.meta_tags && (
                   <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Meta Tags</h4>
+                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Meta Tags</h4>
                     <div className="space-y-1 max-h-48 overflow-auto">
                       {Object.entries(page.structured_data.meta_tags).map(([key, val]) => (
                         <div key={key} className="text-xs font-mono">
-                          <span className="text-muted-foreground">{key}:</span> {String(val)}
+                          <span className="text-white/40">{key}:</span> <span className="text-white/70">{String(val)}</span>
                         </div>
                       ))}
                     </div>
@@ -404,10 +399,10 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                     className="flex items-center gap-2 text-xs"
                     style={{ paddingLeft: `${(h.level - 1) * 16}px` }}
                   >
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                    <span className="inline-flex items-center rounded-md border border-white/20 px-1.5 py-0 text-[10px] font-mono text-white/50 shrink-0">
                       H{h.level}
-                    </Badge>
-                    <span className={h.level === 1 ? "font-semibold" : ""}>{h.text}</span>
+                    </span>
+                    <span className={`text-white/70 ${h.level === 1 ? "font-semibold" : ""}`}>{h.text}</span>
                   </div>
                 ))}
               </div>
@@ -416,8 +411,8 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
             {activeTab === "images" && hasImages && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {page.images.map((img: any, i: number) => (
-                  <div key={i} className="border border-border rounded-md overflow-hidden">
-                    <div className="aspect-video bg-muted flex items-center justify-center">
+                  <div key={i} className="border border-white/10 bg-[#0a0a0a] overflow-hidden">
+                    <div className="aspect-video flex items-center justify-center">
                       <img
                         src={img.src}
                         alt={img.alt || ""}
@@ -428,11 +423,11 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                       />
                     </div>
                     <div className="p-2">
-                      <p className="text-xs text-muted-foreground truncate" title={img.src}>
+                      <p className="text-xs text-white/40 truncate" title={img.src}>
                         {img.src.split("/").pop()}
                       </p>
                       {img.alt && (
-                        <p className="text-xs truncate mt-0.5">{img.alt}</p>
+                        <p className="text-xs text-white/70 truncate mt-0.5">{img.alt}</p>
                       )}
                     </div>
                   </div>
@@ -441,7 +436,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
             )}
 
             {activeTab === "extract" && hasExtract && (
-              <pre className="max-h-96 overflow-auto text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-md p-4">
+              <pre className="max-h-96 overflow-auto text-xs text-white/70 whitespace-pre-wrap font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-4">
                 {JSON.stringify(page.extract, null, 2)}
               </pre>
             )}
@@ -449,7 +444,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 });
 
@@ -614,374 +609,361 @@ export default function CrawlStatusPage() {
   }, [allData, searchFilter, statusFilter, sortBy]);
 
   return (
-    <SidebarProvider>
-    <div className="flex h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto bg-background">
-        <MobileMenuButton />
-        <div className="p-8 max-w-5xl mx-auto">
-          <div className="mb-6 flex items-center gap-4">
-            <Link href="/crawl">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Crawl Results</h1>
-              <p className="text-sm text-muted-foreground font-mono">{jobId}</p>
-            </div>
+    <PageLayout activePage="">
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10 py-10">
+        <div className="mb-6 flex items-center gap-4">
+          <Link href="/crawl">
+            <button className="border border-white/20 p-2 text-white/50 hover:text-white hover:border-white/40 transition-colors">
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          </Link>
+          <div>
+            <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono text-white">Crawl Results</h1>
+            <p className="text-[13px] text-white/40 font-mono">{jobId}</p>
           </div>
+        </div>
 
-          {error && (
-            <Card className="border-destructive mb-6">
-              <CardContent className="p-4">
-                <p className="text-sm text-red-400">{error}</p>
-              </CardContent>
-            </Card>
-          )}
+        {error && (
+          <div className="border border-red-500/30 bg-red-500/10 mb-6 p-4">
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
 
-          {!status && !error && (
-            <div className="flex flex-col items-center justify-center py-24">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
-              <p className="text-sm text-muted-foreground">Loading crawl status...</p>
-            </div>
-          )}
+        {!status && !error && (
+          <div className="flex flex-col items-center justify-center py-24">
+            <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-4" />
+            <p className="text-sm text-white/40">Loading crawl status...</p>
+          </div>
+        )}
 
-          {status && (
-            <>
-              {/* Status Card */}
-              <Card className="mb-6">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <Badge
-                        variant={
-                          status.status === "completed"
-                            ? "success"
-                            : status.status === "failed"
-                            ? "destructive"
-                            : "warning"
-                        }
-                        className="text-sm px-3 py-1"
-                      >
-                        {isRunning && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
-                        {status.status === "running" ? "Crawling..." : status.status}
-                      </Badge>
-                    </div>
-                    <div className="flex gap-2">
-                      {isRunning && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={handleCancel}
-                          className="gap-1.5"
-                        >
-                          <StopCircle className="h-4 w-4" />
-                          Stop
-                        </Button>
-                      )}
-                      {totalResults > 0 && (
-                        <ExportDropdown onExport={handleExport} />
-                      )}
-                    </div>
+        {status && (
+          <>
+            {/* Status Card */}
+            <div className="border border-white/10 bg-white/[0.02] mb-6">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`inline-flex items-center rounded-md border px-3 py-1 text-sm font-medium ${
+                        status.status === "completed"
+                          ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10"
+                          : status.status === "failed"
+                          ? "border-red-500/30 text-red-400 bg-red-500/10"
+                          : "border-amber-500/30 text-amber-400 bg-amber-500/10"
+                      }`}
+                    >
+                      {isRunning && <Loader2 className="h-3 w-3 animate-spin mr-1.5" />}
+                      {status.status === "running" ? "Crawling..." : status.status}
+                    </span>
                   </div>
+                  <div className="flex gap-2">
+                    {isRunning && (
+                      <button
+                        onClick={handleCancel}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-red-500/30 text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+                      >
+                        <StopCircle className="h-4 w-4" />
+                        Stop
+                      </button>
+                    )}
+                    {totalResults > 0 && (
+                      <ExportDropdown onExport={handleExport} />
+                    )}
+                  </div>
+                </div>
 
-                  {/* Progress */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {status.completed_pages} page{status.completed_pages !== 1 ? "s" : ""}{" "}
-                        scraped
-                        {isRunning && status.total_pages > 0 && (
-                          <span> of {status.total_pages} max</span>
-                        )}
-                      </span>
-                      {isRunning && progressPercent > 0 && (
-                        <span className="text-muted-foreground">{progressPercent}%</span>
+                {/* Progress */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-white/50 text-[12px] font-mono">
+                      {status.completed_pages} page{status.completed_pages !== 1 ? "s" : ""}{" "}
+                      scraped
+                      {isRunning && status.total_pages > 0 && (
+                        <span> of {status.total_pages} max</span>
                       )}
+                    </span>
+                    {isRunning && progressPercent > 0 && (
+                      <span className="text-white/50 text-[12px] font-mono">{progressPercent}%</span>
+                    )}
+                  </div>
+                  {(isRunning || status.completed_pages > 0) && (
+                    <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          isRunning
+                            ? "bg-amber-500"
+                            : status.status === "completed"
+                            ? "bg-emerald-500"
+                            : "bg-red-500"
+                        }`}
+                        style={{
+                          width: isFinished
+                            ? "100%"
+                            : `${Math.max(progressPercent, status.completed_pages > 0 ? 5 : 0)}%`,
+                        }}
+                      />
                     </div>
-                    {(isRunning || status.completed_pages > 0) && (
-                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            isRunning
-                              ? "bg-yellow-500"
-                              : status.status === "completed"
-                              ? "bg-green-500"
-                              : "bg-red-500"
-                          }`}
-                          style={{
-                            width: isFinished
-                              ? "100%"
-                              : `${Math.max(progressPercent, status.completed_pages > 0 ? 5 : 0)}%`,
-                          }}
-                        />
+                  )}
+                </div>
+
+                {/* Stats row */}
+                {totalResults > 0 && (
+                  <div className="flex gap-6 mt-4 pt-4 border-t border-white/10 text-[12px] text-white/50 font-mono">
+                    <div className="flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5" />
+                      <span>{totalResults} pages</span>
+                    </div>
+                    {screenshotCount > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <Camera className="h-3.5 w-3.5" />
+                        <span>{screenshotCount} screenshots</span>
+                      </div>
+                    )}
+                    {totalWords > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5" />
+                        <span>{totalWords.toLocaleString()} total words</span>
                       </div>
                     )}
                   </div>
+                )}
 
-                  {/* Stats row */}
-                  {totalResults > 0 && (
-                    <div className="flex gap-6 mt-4 pt-4 border-t border-border text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1.5">
-                        <FileText className="h-3.5 w-3.5" />
-                        <span>{totalResults} pages</span>
-                      </div>
-                      {screenshotCount > 0 && (
-                        <div className="flex items-center gap-1.5">
-                          <Camera className="h-3.5 w-3.5" />
-                          <span>{screenshotCount} screenshots</span>
-                        </div>
-                      )}
-                      {totalWords > 0 && (
-                        <div className="flex items-center gap-1.5">
-                          <FileText className="h-3.5 w-3.5" />
-                          <span>{totalWords.toLocaleString()} total words</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {status.error && (
-                    <div className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-red-400">
-                      {status.error}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Filter Bar */}
-              {allData.length > 0 && (
-                <div className="mb-4 flex flex-wrap items-center gap-3">
-                  <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Filter by URL..."
-                      value={searchFilter}
-                      onChange={(e) => setSearchFilter(e.target.value)}
-                      className="pl-9 h-9"
-                    />
+                {status.error && (
+                  <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+                    {status.error}
                   </div>
-                  <div className="flex gap-1">
-                    {(["all", "success", "error"] as const).map((f) => (
-                      <button
-                        key={f}
-                        onClick={() => setStatusFilter(f)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                          statusFilter === f
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {f === "all" ? "All" : f === "success" ? "Success" : "Errors"}
-                      </button>
-                    ))}
-                  </div>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
-                    className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+                )}
+              </div>
+            </div>
+
+            {/* Filter Bar */}
+            {allData.length > 0 && (
+              <div className="mb-4 flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+                  <input
+                    placeholder="Filter by URL..."
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                    className="w-full h-9 pl-9 pr-3 rounded-md bg-transparent border border-white/10 text-white font-mono text-sm placeholder:text-white/30 outline-none focus:border-white/30 transition-colors"
+                  />
+                </div>
+                <div className="flex gap-1">
+                  {(["all", "success", "error"] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setStatusFilter(f)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                        statusFilter === f
+                          ? "bg-white text-black"
+                          : "bg-white/[0.03] text-white/40 hover:text-white/70"
+                      }`}
+                    >
+                      {f === "all" ? "All" : f === "success" ? "Success" : "Errors"}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="h-9 rounded-md bg-[#0a0a0a] border border-white/10 text-white font-mono px-3 text-xs outline-none"
+                >
+                  <option value="index">Sort: Original</option>
+                  <option value="url">Sort: URL</option>
+                  <option value="words">Sort: Words</option>
+                </select>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setViewMode("cards")}
+                    className={`p-1.5 rounded-md transition-colors ${
+                      viewMode === "cards"
+                        ? "bg-white text-black"
+                        : "text-white/40 hover:text-white"
+                    }`}
+                    title="Card view"
                   >
-                    <option value="index">Sort: Original</option>
-                    <option value="url">Sort: URL</option>
-                    <option value="words">Sort: Words</option>
-                  </select>
-                  <div className="flex gap-1">
+                    <LayoutGrid className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("table")}
+                    className={`p-1.5 rounded-md transition-colors ${
+                      viewMode === "table"
+                        ? "bg-white text-black"
+                        : "text-white/40 hover:text-white"
+                    }`}
+                    title="Table view"
+                  >
+                    <Table2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <span className="text-xs text-white/40 font-mono">
+                  {filteredData.length} of {totalResults} pages
+                  {allData.length < totalResults && ` (${allData.length} loaded)`}
+                </span>
+              </div>
+            )}
+
+            {/* Results List */}
+            {allData.length > 0 ? (
+              <div className="space-y-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2 mb-3 text-white font-mono uppercase">
+                  <Globe className="h-5 w-5" />
+                  Crawled Pages
+                </h2>
+
+                {viewMode === "table" ? (
+                  <div>
+                    <div className="flex justify-end mb-2">
+                      <button
+                        onClick={() => {
+                          const header = ["#", "URL", "Title", "Status Code", "Words", "Reading Time", "Links", "Images"].join("\t");
+                          const rows = filteredData.map((p: any) => [
+                            p._index + 1,
+                            p.url || "",
+                            p.metadata?.title || "",
+                            p.metadata?.status_code || "",
+                            p.metadata?.word_count || 0,
+                            p.metadata?.reading_time_seconds ? `${Math.ceil(p.metadata.reading_time_seconds / 60)}m` : "",
+                            p.links_detail?.total || p.links?.length || 0,
+                            p.images?.length || 0,
+                          ].join("\t"));
+                          navigator.clipboard.writeText([header, ...rows].join("\n"));
+                          setTsvCopied(true);
+                          setTimeout(() => setTsvCopied(false), 2000);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-white/30 hover:text-white transition-colors"
+                      >
+                        {tsvCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        {tsvCopied ? "Copied!" : "Copy Table"}
+                      </button>
+                    </div>
+                    <div className="rounded-md border border-white/10 overflow-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-white/[0.06] bg-white/[0.02]">
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono w-10">#</th>
+                            <th
+                              className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono cursor-pointer hover:text-white"
+                              onClick={() => setSortBy(sortBy === "url" ? "index" : "url")}
+                            >
+                              URL {sortBy === "url" && "↑"}
+                            </th>
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono">Title</th>
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono w-20">Status</th>
+                            <th
+                              className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-white/40 font-mono cursor-pointer hover:text-white w-20"
+                              onClick={() => setSortBy(sortBy === "words" ? "index" : "words")}
+                            >
+                              Words {sortBy === "words" && "↓"}
+                            </th>
+                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-white/40 font-mono w-16">Time</th>
+                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-white/40 font-mono w-16">Links</th>
+                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-white/40 font-mono w-16">Images</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredData.map((page: any) => {
+                            const wordCount = page.metadata?.word_count || 0;
+                            const readingTime = page.metadata?.reading_time_seconds
+                              ? Math.ceil(page.metadata.reading_time_seconds / 60)
+                              : 0;
+                            const statusCode = page.metadata?.status_code;
+                            const linksCount = page.links_detail?.total || page.links?.length || 0;
+                            const imagesCount = page.images?.length || 0;
+                            return (
+                              <tr key={page._index} className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.03] transition-colors">
+                                <td className="px-3 py-2 text-xs text-white/40 font-mono">{page._index + 1}</td>
+                                <td className="px-3 py-2 max-w-xs">
+                                  <a
+                                    href={page.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-emerald-400 hover:text-emerald-300 truncate block"
+                                  >
+                                    {page.url}
+                                  </a>
+                                </td>
+                                <td className="px-3 py-2 text-xs text-white/40 truncate max-w-[200px]">
+                                  {page.metadata?.title || "\u2014"}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {statusCode && (
+                                    <span
+                                      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-mono ${
+                                        statusCode >= 200 && statusCode < 400
+                                          ? "border-emerald-500/30 text-emerald-400"
+                                          : statusCode >= 400
+                                          ? "border-red-500/30 text-red-400"
+                                          : "border-white/20 text-white/50"
+                                      }`}
+                                    >
+                                      {statusCode}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-white/40 text-right font-mono">
+                                  {wordCount > 0 ? wordCount.toLocaleString() : "\u2014"}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-white/40 text-right">
+                                  {readingTime > 0 ? `${readingTime}m` : "\u2014"}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-white/40 text-right font-mono">
+                                  {linksCount > 0 ? linksCount : "\u2014"}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-white/40 text-right font-mono">
+                                  {imagesCount > 0 ? imagesCount : "\u2014"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {filteredData.map((page: any) => (
+                      <PageResultCard key={page._index} page={page} index={page._index} jobId={jobId} />
+                    ))}
+                  </>
+                )}
+
+                {hasMore && (
+                  <div className="flex justify-center pt-4">
                     <button
-                      onClick={() => setViewMode("cards")}
-                      className={`p-1.5 rounded-md transition-colors ${
-                        viewMode === "cards"
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                      }`}
-                      title="Card view"
+                      onClick={loadMore}
+                      disabled={loadingMore}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm border border-white/20 text-white/50 hover:text-white disabled:opacity-50 transition-colors"
                     >
-                      <LayoutGrid className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => setViewMode("table")}
-                      className={`p-1.5 rounded-md transition-colors ${
-                        viewMode === "table"
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                      }`}
-                      title="Table view"
-                    >
-                      <Table2 className="h-4 w-4" />
+                      {loadingMore ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : null}
+                      {loadingMore
+                        ? "Loading..."
+                        : `Load More (${totalResults - allData.length} remaining)`}
                     </button>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {filteredData.length} of {totalResults} pages
-                    {allData.length < totalResults && ` (${allData.length} loaded)`}
-                  </span>
-                </div>
-              )}
-
-              {/* Results List */}
-              {allData.length > 0 ? (
-                <div className="space-y-3">
-                  <h2 className="text-lg font-semibold flex items-center gap-2 mb-3">
-                    <Globe className="h-5 w-5" />
-                    Crawled Pages
-                  </h2>
-
-                  {viewMode === "table" ? (
-                    <div>
-                      <div className="flex justify-end mb-2">
-                        <button
-                          onClick={() => {
-                            const header = ["#", "URL", "Title", "Status Code", "Words", "Reading Time", "Links", "Images"].join("\t");
-                            const rows = filteredData.map((p: any) => [
-                              p._index + 1,
-                              p.url || "",
-                              p.metadata?.title || "",
-                              p.metadata?.status_code || "",
-                              p.metadata?.word_count || 0,
-                              p.metadata?.reading_time_seconds ? `${Math.ceil(p.metadata.reading_time_seconds / 60)}m` : "",
-                              p.links_detail?.total || p.links?.length || 0,
-                              p.images?.length || 0,
-                            ].join("\t"));
-                            navigator.clipboard.writeText([header, ...rows].join("\n"));
-                            setTsvCopied(true);
-                            setTimeout(() => setTsvCopied(false), 2000);
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        >
-                          {tsvCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                          {tsvCopied ? "Copied!" : "Copy Table"}
-                        </button>
-                      </div>
-                      <div className="rounded-md border border-border overflow-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-border bg-muted/50">
-                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-10">#</th>
-                              <th
-                                className="px-3 py-2 text-left text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground"
-                                onClick={() => setSortBy(sortBy === "url" ? "index" : "url")}
-                              >
-                                URL {sortBy === "url" && "↑"}
-                              </th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Title</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-20">Status</th>
-                              <th
-                                className="px-3 py-2 text-right text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground w-20"
-                                onClick={() => setSortBy(sortBy === "words" ? "index" : "words")}
-                              >
-                                Words {sortBy === "words" && "↓"}
-                              </th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-16">Time</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-16">Links</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground w-16">Images</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredData.map((page: any) => {
-                              const wordCount = page.metadata?.word_count || 0;
-                              const readingTime = page.metadata?.reading_time_seconds
-                                ? Math.ceil(page.metadata.reading_time_seconds / 60)
-                                : 0;
-                              const statusCode = page.metadata?.status_code;
-                              const linksCount = page.links_detail?.total || page.links?.length || 0;
-                              const imagesCount = page.images?.length || 0;
-                              return (
-                                <tr key={page._index} className="border-b border-border last:border-0 hover:bg-muted/50 transition-colors">
-                                  <td className="px-3 py-2 text-xs text-muted-foreground font-mono">{page._index + 1}</td>
-                                  <td className="px-3 py-2 max-w-xs">
-                                    <a
-                                      href={page.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs text-primary hover:underline truncate block"
-                                    >
-                                      {page.url}
-                                    </a>
-                                  </td>
-                                  <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[200px]">
-                                    {page.metadata?.title || "—"}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    {statusCode && (
-                                      <Badge
-                                        variant="outline"
-                                        className={`text-[10px] ${
-                                          statusCode >= 200 && statusCode < 400
-                                            ? "border-green-500/50 text-green-400"
-                                            : statusCode >= 400
-                                            ? "border-red-500/50 text-red-400"
-                                            : ""
-                                        }`}
-                                      >
-                                        {statusCode}
-                                      </Badge>
-                                    )}
-                                  </td>
-                                  <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
-                                    {wordCount > 0 ? wordCount.toLocaleString() : "—"}
-                                  </td>
-                                  <td className="px-3 py-2 text-xs text-muted-foreground text-right">
-                                    {readingTime > 0 ? `${readingTime}m` : "—"}
-                                  </td>
-                                  <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
-                                    {linksCount > 0 ? linksCount : "—"}
-                                  </td>
-                                  <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
-                                    {imagesCount > 0 ? imagesCount : "—"}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {filteredData.map((page: any) => (
-                        <PageResultCard key={page._index} page={page} index={page._index} jobId={jobId} />
-                      ))}
-                    </>
-                  )}
-
-                  {hasMore && (
-                    <div className="flex justify-center pt-4">
-                      <Button
-                        variant="outline"
-                        onClick={loadMore}
-                        disabled={loadingMore}
-                        className="gap-2"
-                      >
-                        {loadingMore ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : null}
-                        {loadingMore
-                          ? "Loading..."
-                          : `Load More (${totalResults - allData.length} remaining)`}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ) : isRunning ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/50 mb-4" />
-                  <p className="text-sm text-muted-foreground">
-                    Discovering and scraping pages...
-                  </p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">
-                    Each page gets: markdown, HTML, screenshot, links, structured data, and more
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <Globe className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                  <p className="text-sm text-muted-foreground">No pages were crawled.</p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </main>
-    </div>
-    </SidebarProvider>
+                )}
+              </div>
+            ) : isRunning ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-4" />
+                <p className="text-sm text-white/40">
+                  Discovering and scraping pages...
+                </p>
+                <p className="text-xs text-white/40 mt-1">
+                  Each page gets: markdown, HTML, screenshot, links, structured data, and more
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Globe className="h-12 w-12 text-white/40 mb-4" />
+                <p className="text-sm text-white/40">No pages were crawled.</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </PageLayout>
   );
 }

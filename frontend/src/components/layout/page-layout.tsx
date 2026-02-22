@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 
-type NavPage = "dashboard" | "playground" | "docs" | "jobs";
+type NavPage = "dashboard" | "playground" | "docs" | "jobs" | "settings" | "";
 
 const NAV_LINKS: { id: NavPage; label: string; href: string }[] = [
   { id: "dashboard", label: "Dashboard", href: "/dashboard" },
