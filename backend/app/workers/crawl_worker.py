@@ -368,7 +368,11 @@ def process_crawl(self, job_id: str, config: dict):
                                     if not _is_blocked:
                                         from app.services.scraper import _looks_blocked
                                         raw = fetch_result.get("raw_html", "")
-                                        _is_blocked = _looks_blocked(raw)
+                                        # Run off-event-loop to avoid blocking
+                                        # the consumer with regex on huge HTML.
+                                        _is_blocked = await loop.run_in_executor(
+                                            None, _looks_blocked, raw
+                                        )
 
                                     if _is_blocked and _pinned_strategy is not None:
                                         logger.warning(
@@ -493,6 +497,11 @@ def process_crawl(self, job_id: str, config: dict):
                     try:
                         url = item["url"]
                         depth = item["depth"]
+                        _item_t0 = _time_mod.monotonic()
+                        logger.warning(
+                            f"Consumer: processing {url} "
+                            f"(queue={extract_queue.qsize()})"
+                        )
 
                         if "scrape_data" in item:
                             # Already fully extracted (fallback path)
@@ -518,6 +527,10 @@ def process_crawl(self, job_id: str, config: dict):
                                 timeout=60,  # Per-page extraction timeout
                             )
                             discovered_links = scrape_data.links or []
+                            logger.warning(
+                                f"Consumer: extracted {url} "
+                                f"({_time_mod.monotonic() - _item_t0:.1f}s)"
+                            )
 
                         # Skip truly empty pages — catches bot-detection
                         # interstitials and blank renders, but preserves thin
