@@ -142,6 +142,14 @@ class ResilientRedis:
     async def lpush(self, key, *values):
         return await self._safe_op("lpush", self.client.lpush, key, *values, default=0)
 
+    async def rpush(self, key, *values):
+        return await self._safe_op("rpush", self.client.rpush, key, *values, default=0)
+
+    async def lpop(self, key, count=None):
+        if count is not None:
+            return await self._safe_op("lpop", self.client.lpop, key, count, default=None)
+        return await self._safe_op("lpop", self.client.lpop, key, default=None)
+
     async def lrange(self, key, start, end):
         return await self._safe_op(
             "lrange", self.client.lrange, key, start, end, default=[]
@@ -171,6 +179,9 @@ class ResilientRedis:
     async def smembers(self, key):
         return await self._safe_op("smembers", self.client.smembers, key, default=set())
 
+    async def scard(self, key):
+        return await self._safe_op("scard", self.client.scard, key, default=0)
+
     async def srem(self, key, *values):
         return await self._safe_op("srem", self.client.srem, key, *values, default=0)
 
@@ -191,6 +202,11 @@ class ResilientRedis:
 
     async def zcard(self, key):
         return await self._safe_op("zcard", self.client.zcard, key, default=0)
+
+    async def zpopmin(self, key, count=1):
+        return await self._safe_op(
+            "zpopmin", self.client.zpopmin, key, count, default=[]
+        )
 
     async def hset(self, name, key=None, value=None, mapping=None):
         if mapping:
