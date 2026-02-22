@@ -76,7 +76,7 @@ export function PageLayout({
       </nav>
 
       {/* ═══ TICKER ═══ */}
-      <div className="fixed top-16 left-0 right-0 z-40 border-b border-white/[0.06] bg-[#050505] overflow-hidden h-8 flex items-center">
+      <div className="mt-16 border-b border-white/[0.06] bg-[#050505] overflow-hidden h-8 flex items-center">
         <div className="flex whitespace-nowrap animate-ticker">
           {[0, 1].map((dup) => (
             <div key={dup} className="flex">
@@ -91,7 +91,7 @@ export function PageLayout({
       </div>
 
       {/* ═══ MAIN ═══ */}
-      <main className="pt-28">
+      <main>
         {/* Grid bg */}
         <div className="fixed inset-0 opacity-[0.025] pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "40px 40px" }} />
         <div className="relative z-10">
