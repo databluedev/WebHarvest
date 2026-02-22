@@ -757,6 +757,25 @@ async def _try_accept_google_consent(page) -> None:
             continue
 
 
+def _looks_noscript_block(html: str) -> bool:
+    """Fast check: is this the noscript + short body pattern?
+
+    On hard sites like Amazon, this pattern indicates an IP/session-level
+    block — all HTTP fingerprints will get the same response, so there's
+    no point racing more curl_cffi profiles.
+    """
+    if "<noscript" not in html.lower():
+        return False
+    body_match = re.search(r"<body[^>]*>(.*?)</body>", html, re.DOTALL | re.IGNORECASE)
+    body_html = body_match.group(1) if body_match else html
+    visible = re.sub(r"<script[^>]*>.*?</script>", " ", body_html, flags=re.DOTALL | re.IGNORECASE)
+    visible = re.sub(r"<style[^>]*>.*?</style>", " ", visible, flags=re.DOTALL | re.IGNORECASE)
+    visible = re.sub(r"<noscript[^>]*>.*?</noscript>", " ", visible, flags=re.DOTALL | re.IGNORECASE)
+    body_text = re.sub(r"<[^>]+>", " ", visible).strip()
+    body_text = re.sub(r"\s+", " ", body_text)
+    return len(body_text) < 300
+
+
 def _looks_blocked(html: str) -> bool:
     if not html:
         return True
@@ -3259,6 +3278,15 @@ async def scrape_url_fetch_only(
                     fetched = True
                     winning_strategy = pinned_strategy
                     winning_tier = pinned_tier
+                elif hard_site and html and _looks_noscript_block(html):
+                    # On hard sites, a noscript+short_body block is an
+                    # IP/session-level decision — all HTTP profiles will get
+                    # the same response.  Skip straight to browsers.
+                    logger.info(
+                        f"Pinned {pinned_strategy} got noscript block for "
+                        f"{url}, skipping HTTP tiers → browser"
+                    )
+                    starting_tier = max(starting_tier, 2)
             elif pinned_strategy == "httpx":
                 result = await _fetch_with_httpx(
                     url,
