@@ -107,7 +107,7 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-emerald-400 hover:text-emerald-300 truncate flex items-center gap-1"
+              className="text-sm text-amber-400 hover:text-amber-300 truncate flex items-center gap-1"
               onClick={(e) => e.stopPropagation()}
             >
               {item.title || item.url}
@@ -151,7 +151,7 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                     activeTab === tab.id
-                      ? "bg-white text-black"
+                      ? "border-amber-500 text-amber-400 bg-amber-500/[0.03]"
                       : "text-white/40 hover:text-white/70"
                   }`}
                 >
@@ -238,7 +238,7 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                       {item.links_detail.internal.links.map((link: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
                           <ArrowDownLeft className="h-3 w-3 text-blue-400 shrink-0" />
-                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 truncate">{link.url}</a>
+                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300 truncate">{link.url}</a>
                           {link.text && <span className="text-white/40 truncate shrink-0 max-w-48">&quot;{link.text}&quot;</span>}
                         </div>
                       ))}
@@ -252,7 +252,7 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                       {item.links_detail.external.links.map((link: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
                           <ArrowUpRight className="h-3 w-3 text-orange-400 shrink-0" />
-                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 truncate">{link.url}</a>
+                          <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300 truncate">{link.url}</a>
                           {link.text && <span className="text-white/40 truncate shrink-0 max-w-48">&quot;{link.text}&quot;</span>}
                         </div>
                       ))}
@@ -262,7 +262,7 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                 {!item.links_detail && item.links && (
                   <div className="space-y-1 max-h-64 overflow-auto">
                     {item.links.map((link: string, i: number) => (
-                      <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="block text-xs text-emerald-400 hover:text-emerald-300 truncate">{link}</a>
+                      <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="block text-xs text-amber-400 hover:text-amber-300 truncate">{link}</a>
                     ))}
                   </div>
                 )}
@@ -473,7 +473,7 @@ export default function SearchStatusPage() {
             </button>
           </Link>
           <div>
-            <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono text-white">Search Results</h1>
+            <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text">Search Results</h1>
             {status?.query && (
               <p className="text-sm mt-0.5">
                 <span className="text-white/50">Query:</span> <span className="text-white font-mono">&quot;{status.query}&quot;</span>
@@ -498,7 +498,8 @@ export default function SearchStatusPage() {
 
         {status && (
           <>
-            <div className="border border-white/10 bg-white/[0.02] mb-6 p-6 rounded-md">
+            <div className="border border-white/10 bg-white/[0.02] mb-6 p-6 rounded-md relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500 to-emerald-500" />
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <span
@@ -690,7 +691,7 @@ export default function SearchStatusPage() {
                                   href={item.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-xs text-emerald-400 hover:text-emerald-300 truncate block"
+                                  className="text-xs text-amber-400 hover:text-amber-300 truncate block"
                                 >
                                   {item.url}
                                 </a>

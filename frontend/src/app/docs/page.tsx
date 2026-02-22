@@ -32,11 +32,11 @@ interface Section {
 // ---------------------------------------------------------------------------
 
 const METHOD_STYLES: Record<HttpMethod, string> = {
-  GET: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
-  POST: "bg-blue-500/15 text-blue-400 border-blue-500/25",
-  DELETE: "bg-red-500/15 text-red-400 border-red-500/25",
-  PATCH: "bg-amber-500/15 text-amber-400 border-amber-500/25",
-  PUT: "bg-orange-500/15 text-orange-400 border-orange-500/25",
+  GET: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  POST: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  DELETE: "bg-red-500/10 text-red-400 border-red-500/20",
+  PUT: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  PATCH: "bg-violet-500/10 text-violet-400 border-violet-500/20",
 };
 
 // ---------------------------------------------------------------------------
@@ -1639,7 +1639,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
           {getPlaygroundLink(endpoint.path) && (
             <Link
               href={getPlaygroundLink(endpoint.path)!}
-              className="inline-flex items-center gap-1.5 mt-3 text-xs font-medium text-emerald-400 hover:text-emerald-300"
+              className="inline-flex items-center gap-1.5 mt-3 text-xs font-medium text-cyan-400 hover:text-cyan-300"
             >
               <ExternalLink className="h-3 w-3" />
               Try in Playground
@@ -1763,7 +1763,7 @@ export default function DocsPage() {
                   }`}
                 >
                   {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full bg-emerald-500" />
+                    <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-cyan-500 via-violet-500 to-pink-500" />
                   )}
                   <span>{section.title}</span>
                   <span className="text-[10px] tabular-nums text-white/30">
@@ -1783,7 +1783,7 @@ export default function DocsPage() {
                 <span className="text-white/60 font-medium">{totalEndpoints} endpoints</span>
               </p>
               <p className="text-[10px] text-white/30 mt-1 font-mono">
-                Base URL: <code className="text-emerald-400/70 font-mono">/api/v1</code>
+                Base URL: <code className="text-cyan-400/70 font-mono">/api/v1</code>
               </p>
             </div>
           </div>
@@ -1801,7 +1801,7 @@ export default function DocsPage() {
                 <FileText className="h-3.5 w-3.5 text-white/50" />
                 <span className="text-xs text-white/50 font-mono uppercase tracking-wider">API Reference</span>
               </div>
-              <h1 className="text-[40px] font-extrabold tracking-tight uppercase font-mono text-white leading-[1.1]">
+              <h1 className="text-[40px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text leading-[1.1]">
                 API Documentation
               </h1>
               <p className="text-sm sm:text-base text-white/50 max-w-2xl mt-4 leading-relaxed font-light">
@@ -1867,7 +1867,7 @@ export default function DocsPage() {
                   </p>
                   <button
                     onClick={() => setSearchQuery("")}
-                    className="mt-3 text-xs text-emerald-400 hover:text-emerald-300"
+                    className="mt-3 text-xs text-cyan-400 hover:text-cyan-300"
                   >
                     Clear search
                   </button>
@@ -1915,11 +1915,11 @@ export default function DocsPage() {
               <div className="rounded-lg border border-white/10 bg-white/[0.02] p-6 text-center">
                 <p className="text-sm text-white/50">
                   Need help?{" "}
-                  <a href="/api-keys" className="text-emerald-400 hover:text-emerald-300">
+                  <a href="/api-keys" className="text-cyan-400 hover:text-cyan-300">
                     Generate an API key
                   </a>{" "}
                   to get started or check the{" "}
-                  <a href="/" className="text-emerald-400 hover:text-emerald-300">
+                  <a href="/" className="text-violet-400 hover:text-violet-300">
                     dashboard
                   </a>{" "}
                   for usage analytics.

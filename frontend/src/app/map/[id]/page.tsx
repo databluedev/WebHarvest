@@ -136,7 +136,7 @@ export default function MapDetailPage() {
             </button>
           </Link>
           <div>
-            <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono text-white">Map Result</h1>
+            <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-pink">Map Result</h1>
             <p className="text-[13px] text-white/40 font-mono">{jobId}</p>
           </div>
         </div>
@@ -159,7 +159,8 @@ export default function MapDetailPage() {
         {status && (
           <>
             {/* Status Card */}
-            <div className="border border-white/10 bg-white/[0.02] mb-6">
+            <div className="border border-white/10 bg-white/[0.02] mb-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pink-500 to-amber-500" />
               <div className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -180,7 +181,7 @@ export default function MapDetailPage() {
                         href={status.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-emerald-400 hover:text-emerald-300 flex items-center gap-1 truncate max-w-md transition-colors"
+                        className="text-sm text-pink-400 hover:text-pink-300 flex items-center gap-1 truncate max-w-md transition-colors"
                       >
                         {status.url}
                         <ExternalLink className="h-3 w-3 shrink-0" />
@@ -245,7 +246,8 @@ export default function MapDetailPage() {
 
             {/* Links List */}
             {status.links?.length > 0 ? (
-              <div className="border border-white/10 bg-white/[0.02]">
+              <div className="border border-white/10 bg-white/[0.02] relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pink-500 to-amber-500" />
                 <div className="p-6 pb-0">
                   <div className="flex items-center gap-2 mb-4">
                     <h2 className="text-[16px] font-bold text-white font-mono uppercase">Discovered URLs</h2>
@@ -275,7 +277,7 @@ export default function MapDetailPage() {
                             href={link.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-emerald-400 hover:text-emerald-300 text-[13px] font-mono truncate block transition-colors"
+                            className="text-pink-400 hover:text-pink-300 text-[13px] font-mono truncate block transition-colors"
                           >
                             {link.url}
                           </a>

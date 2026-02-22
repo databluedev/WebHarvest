@@ -190,7 +190,7 @@ export default function ScrapeDetailPage() {
             </button>
           </Link>
           <div>
-            <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono text-white">Scrape Result</h1>
+            <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-blue">Scrape Result</h1>
             <p className="text-[13px] text-white/40 font-mono">{jobId}</p>
           </div>
         </div>
@@ -213,7 +213,8 @@ export default function ScrapeDetailPage() {
         {status && (
           <>
             {/* Status Card */}
-            <div className="border border-white/10 bg-white/[0.02] mb-6">
+            <div className="border border-white/10 bg-white/[0.02] mb-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 to-emerald-500" />
               <div className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -233,7 +234,7 @@ export default function ScrapeDetailPage() {
                         href={result.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-emerald-400 hover:text-emerald-300 flex items-center gap-1 truncate max-w-md transition-colors"
+                        className="text-sm text-cyan-400 hover:text-cyan-300 flex items-center gap-1 truncate max-w-md transition-colors"
                       >
                         {result.url}
                         <ExternalLink className="h-3 w-3 shrink-0" />
@@ -278,7 +279,7 @@ export default function ScrapeDetailPage() {
                     )}
                     {result.metadata.canonical_url && result.metadata.canonical_url !== result.url && (
                       <span className="text-xs text-white/40 truncate flex items-center gap-1">
-                        Canonical: <a href={result.metadata.canonical_url} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 transition-colors">{result.metadata.canonical_url}</a>
+                        Canonical: <a href={result.metadata.canonical_url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 transition-colors">{result.metadata.canonical_url}</a>
                       </span>
                     )}
                   </div>
@@ -294,7 +295,8 @@ export default function ScrapeDetailPage() {
 
             {/* Result Content */}
             {result && (
-              <div className="border border-white/10 bg-white/[0.02]">
+              <div className="border border-white/10 bg-white/[0.02] relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 to-emerald-500" />
                 <div className="p-6">
                   {/* Tab bar */}
                   <div className="flex gap-1 mb-4 pb-2 border-b border-white/10 overflow-x-auto">
@@ -306,7 +308,7 @@ export default function ScrapeDetailPage() {
                           onClick={() => setActiveTab(tab.id)}
                           className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-mono transition-colors whitespace-nowrap ${
                             activeTab === tab.id
-                              ? "bg-white text-black"
+                              ? "border-cyan-500 text-cyan-400 bg-cyan-500/[0.03]"
                               : "text-white/40 hover:text-white/70"
                           }`}
                         >
@@ -406,7 +408,7 @@ export default function ScrapeDetailPage() {
                               {result.links_detail.internal.links.map((link: any, i: number) => (
                                 <div key={i} className="flex items-center gap-2 text-xs">
                                   <ArrowDownLeft className="h-3 w-3 text-blue-400 shrink-0" />
-                                  <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 truncate transition-colors">
+                                  <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 truncate transition-colors">
                                     {link.url}
                                   </a>
                                   {link.text && <span className="text-white/40 truncate shrink-0 max-w-40">&quot;{link.text}&quot;</span>}
@@ -423,7 +425,7 @@ export default function ScrapeDetailPage() {
                               {result.links_detail.external.links.map((link: any, i: number) => (
                                 <div key={i} className="flex items-center gap-2 text-xs">
                                   <ArrowUpRight className="h-3 w-3 text-orange-400 shrink-0" />
-                                  <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300 truncate transition-colors">
+                                  <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 truncate transition-colors">
                                     {link.url}
                                   </a>
                                   {link.text && <span className="text-white/40 truncate shrink-0 max-w-40">&quot;{link.text}&quot;</span>}
@@ -436,7 +438,7 @@ export default function ScrapeDetailPage() {
                         {!result.links_detail && result.links && (
                           <div className="space-y-1">
                             {result.links.map((link: string, i: number) => (
-                              <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="block text-xs text-emerald-400 hover:text-emerald-300 truncate transition-colors">
+                              <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="block text-xs text-cyan-400 hover:text-cyan-300 truncate transition-colors">
                                 {link}
                               </a>
                             ))}
@@ -594,7 +596,7 @@ export default function ScrapeDetailPage() {
                                             href={value}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                                            className="text-cyan-400 hover:text-cyan-300 transition-colors"
                                           >
                                             {value}
                                           </a>

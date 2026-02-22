@@ -115,7 +115,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
               href={page.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-emerald-400 hover:text-emerald-300 truncate flex items-center gap-1"
+              className="text-sm text-violet-400 hover:text-violet-300 truncate flex items-center gap-1"
               onClick={(e) => e.stopPropagation()}
             >
               {page.url}
@@ -177,7 +177,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                     activeTab === tab.id
-                      ? "bg-white text-black"
+                      ? "border-violet-500 text-violet-400 bg-violet-500/[0.03]"
                       : "text-white/40 hover:text-white/70"
                   }`}
                 >
@@ -276,7 +276,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                             href={link.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-emerald-400 hover:text-emerald-300 truncate"
+                            className="text-violet-400 hover:text-violet-300 truncate"
                           >
                             {link.url}
                           </a>
@@ -302,7 +302,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                             href={link.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-emerald-400 hover:text-emerald-300 truncate"
+                            className="text-violet-400 hover:text-violet-300 truncate"
                           >
                             {link.url}
                           </a>
@@ -326,7 +326,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                           href={link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-emerald-400 hover:text-emerald-300"
+                          className="text-violet-400 hover:text-violet-300"
                         >
                           {link}
                         </a>
@@ -618,7 +618,7 @@ export default function CrawlStatusPage() {
             </button>
           </Link>
           <div>
-            <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono text-white">Crawl Results</h1>
+            <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-violet">Crawl Results</h1>
             <p className="text-[13px] text-white/40 font-mono">{jobId}</p>
           </div>
         </div>
@@ -639,7 +639,8 @@ export default function CrawlStatusPage() {
         {status && (
           <>
             {/* Status Card */}
-            <div className="border border-white/10 bg-white/[0.02] mb-6">
+            <div className="border border-white/10 bg-white/[0.02] mb-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-violet-500 to-pink-500" />
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -878,7 +879,7 @@ export default function CrawlStatusPage() {
                                     href={page.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-xs text-emerald-400 hover:text-emerald-300 truncate block"
+                                    className="text-xs text-violet-400 hover:text-violet-300 truncate block"
                                   >
                                     {page.url}
                                   </a>

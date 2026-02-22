@@ -15,13 +15,13 @@ const NAV_LINKS: { id: NavPage; label: string; href: string }[] = [
 
 const TICKER_ITEMS = [
   { label: "PAGES_SCRAPED", value: "14,203", color: "text-emerald-400", prefix: "▲ " },
-  { label: "AVG_RESPONSE", value: "2.3s", color: "text-white/50" },
-  { label: "SUCCESS_RATE", value: "98.7%", color: "text-emerald-400", prefix: "▲ " },
-  { label: "ANTI_BOT_BYPASS", value: "ACTIVE", color: "text-emerald-400" },
-  { label: "WORKERS", value: "4/4", color: "text-white/50" },
+  { label: "AVG_RESPONSE", value: "2.3s", color: "text-amber-400" },
+  { label: "SUCCESS_RATE", value: "98.7%", color: "text-cyan-400", prefix: "▲ " },
+  { label: "ANTI_BOT_BYPASS", value: "ACTIVE", color: "text-violet-400" },
+  { label: "WORKERS", value: "4/4", color: "text-pink-400" },
   { label: "QUEUE", value: "0 pending", color: "text-white/50" },
   { label: "UPTIME", value: "99.9%", color: "text-emerald-400" },
-  { label: "PROXY_POOL", value: "ROTATING", color: "text-white/50" },
+  { label: "PROXY_POOL", value: "ROTATING", color: "text-amber-400" },
 ];
 
 export function PageLayout({
@@ -36,10 +36,11 @@ export function PageLayout({
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       {/* ═══ NAV ═══ */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050505]/95 backdrop-blur-sm">
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050505]/95 backdrop-blur-sm relative">
+        <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-emerald-500 via-cyan-500 to-violet-500" />
         <div className="flex items-center justify-between px-6 md:px-10 h-16">
           <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="h-4 w-4 bg-emerald-500" />
+            <div className="h-4 w-4 bg-gradient-to-br from-emerald-400 to-cyan-500" />
             <span className="text-[18px] font-extrabold tracking-tight uppercase font-mono">WEBHARVEST</span>
           </Link>
           <div className="hidden md:flex items-center gap-10">
@@ -102,7 +103,7 @@ export function PageLayout({
       <footer className="border-t border-white/[0.06] relative z-10">
         <div className="flex flex-col md:flex-row items-center justify-between px-6 md:px-10 max-w-[1400px] mx-auto py-8 gap-4">
           <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="h-3 w-3 bg-emerald-500" />
+            <div className="h-3 w-3 bg-gradient-to-br from-emerald-400 to-cyan-500" />
             <span className="text-[14px] font-bold uppercase tracking-[0.1em] text-white/50 font-mono">WebHarvest</span>
           </Link>
           <div className="flex items-center gap-8">

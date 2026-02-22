@@ -51,6 +51,16 @@ const JOB_STATUSES = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+function getTypeColorClasses(type: string): string {
+  switch (type) {
+    case "scrape": return "border-cyan-500/30 text-cyan-400 bg-cyan-500/10";
+    case "crawl": return "border-violet-500/30 text-violet-400 bg-violet-500/10";
+    case "search": return "border-amber-500/30 text-amber-400 bg-amber-500/10";
+    case "map": return "border-pink-500/30 text-pink-400 bg-pink-500/10";
+    default: return "border-white/20 text-white/50 bg-white/[0.03]";
+  }
+}
+
 function getStatusClasses(status: string): string {
   switch (status) {
     case "completed":
@@ -273,7 +283,7 @@ export default function JobsPage() {
       <div className="px-6 md:px-10 max-w-[1400px] mx-auto py-10">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-[36px] font-extrabold tracking-tight uppercase font-mono text-white">
+          <h1 className="text-[36px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-blue">
             Job History
           </h1>
           <p className="text-white/50 font-mono text-[14px] mt-1">
@@ -344,7 +354,8 @@ export default function JobsPage() {
         )}
 
         {/* Jobs Table */}
-        <div className="border border-white/10 bg-white/[0.02]">
+        <div className="border border-white/10 bg-white/[0.02] relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 via-violet-500 to-pink-500" />
           {/* Table header bar */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
             <span className="text-[16px] font-mono font-bold text-white">Jobs</span>
@@ -432,7 +443,7 @@ export default function JobsPage() {
                             </button>
                           </td>
                           <td className="py-3 px-3">
-                            <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-white/20 text-white/50 bg-white/[0.03]">
+                            <span className={`text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border ${getTypeColorClasses(job.type)}`}>
                               {job.type}
                             </span>
                           </td>

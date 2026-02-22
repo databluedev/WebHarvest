@@ -306,7 +306,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-[36px] font-extrabold tracking-tight uppercase font-mono text-white">Dashboard</h1>
+            <h1 className="text-[36px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text">Dashboard</h1>
             <p className="mt-1 text-white/50 font-mono text-sm">
               Real-time analytics, active jobs, and usage overview
             </p>
@@ -446,7 +446,8 @@ export default function DashboardPage() {
 
             {/* Active Jobs (only shown when there are running/pending jobs) */}
             {activeJobs.length > 0 && (
-              <div className="mb-8 border border-amber-400/30 bg-white/[0.02] p-6">
+              <div className="mb-8 border border-white/10 bg-white/[0.02] p-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-400 to-pink-500" />
                 <div className="flex items-center gap-2 mb-4">
                   <Loader2 className="h-5 w-5 text-amber-400 animate-spin" />
                   <h2 className="text-lg font-bold text-white font-mono">Active Jobs</h2>
@@ -499,7 +500,7 @@ export default function DashboardPage() {
             {quota && Object.keys(quota.operations).length > 0 && (
               <div className="mb-8 border border-white/10 bg-white/[0.02] p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <Database className="h-5 w-5 text-emerald-400" />
+                  <Database className="h-5 w-5 text-cyan-400" />
                   <h2 className="text-lg font-bold text-white font-mono">Usage Quota</h2>
                   <span className="text-xs font-mono text-white/50 ml-1">
                     ({quota.period})
@@ -550,9 +551,10 @@ export default function DashboardPage() {
 
             {/* Charts Row 1: Area chart + Pie chart */}
             <div className="grid gap-6 lg:grid-cols-3 mb-8">
-              <div className="lg:col-span-2 border border-white/10 bg-white/[0.02] p-6">
+              <div className="lg:col-span-2 border border-white/10 bg-white/[0.02] p-6 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500 via-cyan-500 to-violet-500" />
                 <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp className="h-5 w-5 text-emerald-400" />
+                  <TrendingUp className="h-5 w-5 text-cyan-400" />
                   <h2 className="text-lg font-bold text-white font-mono">Jobs Per Day</h2>
                   <span className="text-xs font-mono text-white/50 ml-1">(last 30 days)</span>
                 </div>
@@ -565,9 +567,10 @@ export default function DashboardPage() {
                   <ResponsiveContainer width="100%" height={280}>
                     <AreaChart data={jobsPerDay}>
                       <defs>
-                        <linearGradient id="greenGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={PRIMARY_CHART} stopOpacity={0.3} />
-                          <stop offset="95%" stopColor={PRIMARY_CHART} stopOpacity={0} />
+                        <linearGradient id="greenGradient" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="50%" stopColor="#06b6d4" stopOpacity={0.2} />
+                          <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.1} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
@@ -650,7 +653,7 @@ export default function DashboardPage() {
               {/* Status breakdown */}
               <div className="border border-white/10 bg-white/[0.02] p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <BarChart3 className="h-5 w-5 text-emerald-400" />
+                  <BarChart3 className="h-5 w-5 text-amber-400" />
                   <h2 className="text-lg font-bold text-white font-mono">Status Breakdown</h2>
                 </div>
                 {Object.keys(stats.jobs_by_status ?? {}).length === 0 ? (
@@ -692,7 +695,7 @@ export default function DashboardPage() {
               {/* Top domains */}
               <div className="border border-white/10 bg-white/[0.02] p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <Globe className="h-5 w-5 text-emerald-400" />
+                  <Globe className="h-5 w-5 text-violet-400" />
                   <h2 className="text-lg font-bold text-white font-mono">Top 10 Domains</h2>
                 </div>
                 {domainsChart.length === 0 ? (
@@ -734,12 +737,12 @@ export default function DashboardPage() {
             <div className="border border-white/10 bg-white/[0.02] p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Timer className="h-5 w-5 text-emerald-400" />
+                  <Timer className="h-5 w-5 text-pink-400" />
                   <h2 className="text-lg font-bold text-white font-mono">Recent Jobs</h2>
                 </div>
                 <Link
                   href="/jobs"
-                  className="text-sm font-mono text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors"
+                  className="text-sm font-mono text-white/50 hover:text-white flex items-center gap-1 transition-colors"
                 >
                   View all <ArrowRight className="h-3 w-3" />
                 </Link>

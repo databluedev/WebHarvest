@@ -452,6 +452,33 @@ input[type="range"]::-webkit-slider-thumb {
   animation: gradient-shift 4s ease infinite;
 }
 
+.animate-gradient-text-blue {
+  background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 4s ease infinite;
+}
+
+.animate-gradient-text-pink {
+  background: linear-gradient(135deg, #ec4899, #f59e0b);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 4s ease infinite;
+}
+
+.animate-gradient-text-violet {
+  background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 4s ease infinite;
+}
+
 .animate-landing-float {
   animation: landing-float 6s ease-in-out infinite;
 }

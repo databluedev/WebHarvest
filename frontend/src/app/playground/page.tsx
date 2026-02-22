@@ -108,6 +108,16 @@ function getTypeIcon(type: string) {
   }
 }
 
+function getTypeColor(type: string): string {
+  switch (type) {
+    case "scrape": return "text-cyan-400";
+    case "crawl": return "text-violet-400";
+    case "search": return "text-amber-400";
+    case "map": return "text-pink-400";
+    default: return "text-white/50";
+  }
+}
+
 function formatDate(dateStr: string): { date: string; time: string } {
   const d = new Date(dateStr);
   return {
@@ -558,22 +568,23 @@ function PlaygroundContent() {
 
   const TICKER_ITEMS = [
     { label: "PAGES_SCRAPED", value: "14,203", color: "text-emerald-400", prefix: "▲ " },
-    { label: "AVG_RESPONSE", value: "2.3s", color: "text-white/50" },
-    { label: "SUCCESS_RATE", value: "98.7%", color: "text-emerald-400", prefix: "▲ " },
-    { label: "ANTI_BOT_BYPASS", value: "ACTIVE", color: "text-emerald-400" },
-    { label: "WORKERS", value: "4/4", color: "text-white/50" },
+    { label: "AVG_RESPONSE", value: "2.3s", color: "text-amber-400" },
+    { label: "SUCCESS_RATE", value: "98.7%", color: "text-cyan-400", prefix: "▲ " },
+    { label: "ANTI_BOT_BYPASS", value: "ACTIVE", color: "text-violet-400" },
+    { label: "WORKERS", value: "4/4", color: "text-pink-400" },
     { label: "QUEUE", value: "0 pending", color: "text-white/50" },
     { label: "UPTIME", value: "99.9%", color: "text-emerald-400" },
-    { label: "PROXY_POOL", value: "ROTATING", color: "text-white/50" },
+    { label: "PROXY_POOL", value: "ROTATING", color: "text-amber-400" },
   ];
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
       {/* ═══ NAV ═══ */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050505]/95 backdrop-blur-sm">
+      <nav className="relative fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050505]/95 backdrop-blur-sm">
+        <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-emerald-500 via-cyan-500 to-violet-500" />
         <div className="flex items-center justify-between px-6 md:px-10 h-16">
           <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="h-4 w-4 bg-emerald-500" />
+            <div className="h-4 w-4 bg-gradient-to-br from-emerald-400 to-cyan-500" />
             <span className="text-[18px] font-extrabold tracking-tight uppercase font-mono">WEBHARVEST</span>
           </Link>
           <div className="hidden md:flex items-center gap-10">
@@ -629,7 +640,7 @@ function PlaygroundContent() {
               <div>
                 <div className="inline-block border border-emerald-500 text-emerald-400 text-[11px] uppercase tracking-[0.25em] px-4 py-1.5 mb-8 font-mono">Interactive Console</div>
                 <h1 className="font-display text-[48px] md:text-[72px] leading-[0.9] tracking-[-3px] uppercase mb-6">
-                  <span className="text-white">{activeEndpoint.toUpperCase()}</span><br />
+                  <span className="animate-gradient-text">{activeEndpoint.toUpperCase()}</span><br />
                   <span className="text-white/30">THE WEB.</span>
                 </h1>
                 <p className="text-[16px] text-white/50 max-w-[500px] leading-[1.8] border-l-2 border-emerald-500/40 pl-6 font-mono">
@@ -648,10 +659,10 @@ function PlaygroundContent() {
                       onClick={() => switchEndpoint(ep.id)}
                       className={cn(
                         "flex items-center gap-4 w-full px-6 py-4 text-left transition-colors border-l-2",
-                        isActive ? "bg-white/[0.03] border-emerald-500" : "border-transparent hover:bg-white/[0.02]"
+                        isActive ? `bg-white/[0.03] ${ep.id === "scrape" ? "border-cyan-500" : ep.id === "crawl" ? "border-violet-500" : ep.id === "search" ? "border-amber-500" : "border-pink-500"}` : "border-transparent hover:bg-white/[0.02]"
                       )}
                     >
-                      <ep.icon className={cn("h-5 w-5", isActive ? "text-emerald-400" : "text-white/30")} />
+                      <ep.icon className={cn("h-5 w-5", isActive ? (ep.id === "scrape" ? "text-cyan-400" : ep.id === "crawl" ? "text-violet-400" : ep.id === "search" ? "text-amber-400" : "text-pink-400") : "text-white/30")} />
                       <div>
                         <div className={cn("text-[14px] font-bold uppercase tracking-[0.1em] font-mono", isActive ? "text-white" : "text-white/50")}>{ep.label}</div>
                         <div className={cn("text-[11px] mt-0.5 font-mono", isActive ? "text-white/40" : "text-white/25")}>{ep.desc}</div>
@@ -676,7 +687,7 @@ function PlaygroundContent() {
             {/* Big input */}
             <div className="border border-white/10 mb-8">
               <div className="flex items-center h-[72px] md:h-[88px] px-6 md:px-8">
-                <span className="text-emerald-500/50 text-[20px] md:text-[24px] mr-4 font-bold select-none font-mono">$</span>
+                <span className="text-amber-500/50 text-[20px] md:text-[24px] mr-4 font-bold select-none font-mono">$</span>
                 {activeEndpoint !== "search" ? (
                   <span className="text-white/40 text-[16px] md:text-[20px] select-none font-mono">https://</span>
                 ) : (
@@ -1059,8 +1070,8 @@ function PlaygroundContent() {
                       <Link href={getJobDetailPath(job)} className="block p-8 md:p-10 hover:bg-white/[0.02] transition-all">
                         <div className="flex items-center justify-between mb-6">
                           <div className="flex items-center gap-2.5">
-                            <TypeIcon className="h-4 w-4 text-emerald-500/50" />
-                            <span className="text-[11px] font-mono font-bold uppercase tracking-[0.25em] text-emerald-500/50">{job.type}</span>
+                            <TypeIcon className={cn("h-4 w-4", getTypeColor(job.type))} />
+                            <span className={cn("text-[11px] font-mono font-bold uppercase tracking-[0.25em]", getTypeColor(job.type))}>{job.type}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className={cn("h-2.5 w-2.5", job.status === "completed" ? "bg-emerald-400" : job.status === "failed" ? "bg-red-400" : job.status === "running" ? "bg-amber-400 animate-pulse" : "bg-white/30")} />
@@ -1087,7 +1098,7 @@ function PlaygroundContent() {
                       </Link>
                       {isCompleted && (
                         <div className="px-8 md:px-10 pb-6">
-                          <button onClick={(e) => { e.preventDefault(); handleDownload(job); }} className="flex items-center justify-center gap-2.5 w-full py-3 text-[11px] font-mono font-bold uppercase tracking-[0.2em] border border-emerald-500/15 text-emerald-500/60 hover:bg-emerald-500/[0.06] hover:text-emerald-400 hover:border-emerald-500/25 transition-all">
+                          <button onClick={(e) => { e.preventDefault(); handleDownload(job); }} className="flex items-center justify-center gap-2.5 w-full py-3 text-[11px] font-mono font-bold uppercase tracking-[0.2em] border border-white/10 text-white/40 hover:bg-white/[0.04] hover:text-white/70 hover:border-white/20 transition-all">
                             <Download className="h-3.5 w-3.5" /> Export
                           </button>
                         </div>
@@ -1113,7 +1124,7 @@ function PlaygroundContent() {
       <footer className="border-t border-white/[0.06]">
         <div className="flex flex-col md:flex-row items-center justify-between px-6 md:px-10 max-w-[1400px] mx-auto py-8 gap-4">
           <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="h-3 w-3 bg-emerald-500" />
+            <div className="h-3 w-3 bg-gradient-to-br from-emerald-400 to-cyan-500" />
             <span className="text-[14px] font-bold uppercase tracking-[0.1em] text-white/50 font-mono">WebHarvest</span>
           </Link>
           <div className="flex items-center gap-8">

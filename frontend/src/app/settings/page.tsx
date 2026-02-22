@@ -146,17 +146,18 @@ export default function SettingsPage() {
       <div className="max-w-[1000px] mx-auto px-6 md:px-10 py-10">
         {/* Page Header */}
         <div className="mb-10">
-          <h1 className="text-[36px] font-extrabold tracking-tight uppercase font-mono text-white">Settings</h1>
+          <h1 className="text-[36px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-violet">Settings</h1>
           <p className="text-white/50 font-mono text-[14px] mt-1">
             Manage your LLM API keys and proxy configuration
           </p>
         </div>
 
         {/* BYOK Section */}
-        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6">
+        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500 to-pink-500" />
           <div className="mb-4">
             <h2 className="text-[16px] font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
-              <SettingsIcon className="h-5 w-5 text-emerald-400" />
+              <SettingsIcon className="h-5 w-5 text-amber-400" />
               Bring Your Own Key (BYOK)
             </h2>
             <p className="text-white/50 text-[13px] font-mono mt-1">
@@ -254,7 +255,8 @@ export default function SettingsPage() {
         </div>
 
         {/* Saved Keys */}
-        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6">
+        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500/50 to-pink-500/50" />
           <div className="mb-4">
             <h2 className="text-[16px] font-bold text-white font-mono uppercase tracking-wider">Saved LLM Keys</h2>
           </div>
@@ -299,10 +301,11 @@ export default function SettingsPage() {
         </div>
 
         {/* Proxy Configuration */}
-        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6">
+        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-violet-500 to-cyan-500" />
           <div className="mb-4">
             <h2 className="text-[16px] font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
-              <Shield className="h-5 w-5 text-emerald-400" />
+              <Shield className="h-5 w-5 text-violet-400" />
               Proxy Configuration
             </h2>
             <p className="text-white/50 text-[13px] font-mono mt-1">
@@ -367,10 +370,11 @@ export default function SettingsPage() {
         </div>
 
         {/* Default Webhook */}
-        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6">
+        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 to-emerald-500" />
           <div className="mb-4">
             <h2 className="text-[16px] font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
-              <Webhook className="h-5 w-5 text-emerald-400" />
+              <Webhook className="h-5 w-5 text-cyan-400" />
               Default Webhook
             </h2>
             <p className="text-white/50 text-[13px] font-mono mt-1">
@@ -450,7 +454,8 @@ export default function SettingsPage() {
         </div>
 
         {/* Saved Proxies */}
-        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6">
+        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-violet-500/50 to-cyan-500/50" />
           <div className="mb-4">
             <h2 className="text-[16px] font-bold text-white font-mono uppercase tracking-wider">Saved Proxies</h2>
           </div>
