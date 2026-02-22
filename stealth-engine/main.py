@@ -898,7 +898,7 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
             doc_framework=doc_framework,
         )
     except Exception as e:
-        logger.error("Chromium scrape failed for %s: %s", req.url, e)
+        logger.warning("Chromium scrape failed for %s: %s", req.url, e)
         # Capture partial content if page loaded anything before the error
         partial_html = ""
         try:
@@ -1087,7 +1087,7 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
             doc_framework=doc_framework,
         )
     except Exception as e:
-        logger.error("Firefox scrape failed for %s: %s", req.url, e)
+        logger.warning("Firefox scrape failed for %s: %s", req.url, e)
         # Capture partial content if page loaded anything before the error
         partial_html = ""
         try:
