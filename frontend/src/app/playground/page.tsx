@@ -2,22 +2,15 @@
 
 import { useState, useEffect, useCallback, useRef, memo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
-import { Footer } from "@/components/layout/footer";
-import { FormatSelector } from "@/components/layout/format-selector";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import {
   Globe,
   Search,
-  Map,
-  Radar,
   Loader2,
   SlidersHorizontal,
-  FileCode,
   Code,
   ChevronDown,
   ChevronUp,
@@ -43,7 +36,7 @@ import {
   Bug,
   RefreshCw,
   Square,
-  Terminal,
+  Menu,
 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────
@@ -221,12 +214,12 @@ const InlineResultCard = memo(function InlineResultCard({
   const statusCode = page.metadata?.status_code;
 
   return (
-    <div className="border border-white/10 hover:border-white/15 transition-all">
+    <div className="border border-white/10 hover:border-white/20 transition-all">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-5 w-full px-8 py-5 hover:bg-white/[0.02] transition-colors text-left"
       >
-        <span className="text-[14px] text-white/30 font-mono w-8 shrink-0 text-right tabular-nums font-bold">
+        <span className="text-[14px] text-white/40 font-mono w-8 shrink-0 text-right tabular-nums font-bold">
           {String(index + 1).padStart(2, "0")}
         </span>
         {page.url && (
@@ -238,14 +231,14 @@ const InlineResultCard = memo(function InlineResultCard({
           />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-mono font-medium truncate text-[#f0f0f0]">{page.url || "Unknown URL"}</p>
+          <p className="text-[15px] font-mono font-medium truncate text-white">{page.url || "Unknown URL"}</p>
           {page.metadata?.title && (
-            <p className="text-[13px] text-white/40 truncate mt-1">{page.metadata.title}</p>
+            <p className="text-[13px] text-white/50 truncate mt-1">{page.metadata.title}</p>
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
           {wordCount > 0 && (
-            <span className="text-[12px] font-mono text-white/30 bg-white/[0.04] px-3 py-1 border border-white/[0.06]">
+            <span className="text-[12px] font-mono text-white/40 bg-white/[0.04] px-3 py-1 border border-white/[0.06]">
               {wordCount.toLocaleString()} words
             </span>
           )}
@@ -259,7 +252,7 @@ const InlineResultCard = memo(function InlineResultCard({
               {statusCode}
             </span>
           )}
-          {expanded ? <ChevronUp className="h-4 w-4 text-white/30" /> : <ChevronDown className="h-4 w-4 text-white/30" />}
+          {expanded ? <ChevronUp className="h-4 w-4 text-white/40" /> : <ChevronDown className="h-4 w-4 text-white/40" />}
         </div>
       </button>
 
@@ -279,7 +272,7 @@ const InlineResultCard = memo(function InlineResultCard({
                     "flex items-center gap-2 px-6 py-3.5 text-[12px] font-mono uppercase tracking-[0.15em] transition-all border-b-2 -mb-[1px]",
                     activeTab === tab.id
                       ? "border-emerald-500 text-emerald-400 bg-emerald-500/[0.03]"
-                      : "border-transparent text-white/30 hover:text-white/60"
+                      : "border-transparent text-white/40 hover:text-white/70"
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -289,7 +282,7 @@ const InlineResultCard = memo(function InlineResultCard({
             })}
             <div className="flex-1" />
             {activeTab !== "screenshot" && (
-              <button onClick={copyContent} className="flex items-center gap-2 px-5 py-3.5 text-[12px] font-mono text-white/25 hover:text-white/60 transition-all">
+              <button onClick={copyContent} className="flex items-center gap-2 px-5 py-3.5 text-[12px] font-mono text-white/40 hover:text-white/70 transition-all">
                 {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                 <span>{copied ? "Copied" : "Copy"}</span>
               </button>
@@ -298,12 +291,12 @@ const InlineResultCard = memo(function InlineResultCard({
 
           <div className="p-6">
             {activeTab === "markdown" && hasMarkdown && (
-              <pre className="max-h-72 overflow-auto text-[14px] text-white/50 whitespace-pre-wrap font-mono bg-black/40 p-6 leading-[1.8] border border-white/[0.06]">
+              <pre className="max-h-72 overflow-auto text-[14px] text-white/60 whitespace-pre-wrap font-mono bg-black/40 p-6 leading-[1.8] border border-white/[0.06]">
                 {page.markdown}
               </pre>
             )}
             {activeTab === "html" && hasHtml && (
-              <pre className="max-h-72 overflow-auto text-[13px] text-white/50 whitespace-pre-wrap font-mono bg-black/40 p-6 border border-white/[0.06]">
+              <pre className="max-h-72 overflow-auto text-[13px] text-white/60 whitespace-pre-wrap font-mono bg-black/40 p-6 border border-white/[0.06]">
                 {page.html}
               </pre>
             )}
@@ -312,12 +305,12 @@ const InlineResultCard = memo(function InlineResultCard({
                 {screenshotData ? (
                   <img src={`data:image/jpeg;base64,${screenshotData}`} alt={`Screenshot of ${page.url}`} className="max-w-full border border-white/10" style={{ maxHeight: "500px" }} />
                 ) : screenshotLoading ? (
-                  <div className="flex items-center gap-3 py-8 text-white/40">
+                  <div className="flex items-center gap-3 py-8 text-white/50">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="text-[13px] font-mono uppercase tracking-wider">Loading...</span>
                   </div>
                 ) : (
-                  <button onClick={loadScreenshot} className="flex items-center gap-2 px-5 py-3 text-[13px] font-mono uppercase tracking-wider border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all">
+                  <button onClick={loadScreenshot} className="flex items-center gap-2 px-5 py-3 text-[13px] font-mono uppercase tracking-wider border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/[0.03] transition-all">
                     <Camera className="h-4 w-4" /> Load Screenshot
                   </button>
                 )}
@@ -328,7 +321,7 @@ const InlineResultCard = memo(function InlineResultCard({
                 {page.links_detail ? (
                   <>
                     <div className="flex gap-4 text-[13px] font-mono pb-3 border-b border-white/[0.08]">
-                      <span className="text-white/50">{page.links_detail.total} total</span>
+                      <span className="text-white/60">{page.links_detail.total} total</span>
                       {page.links_detail.internal && <span className="text-blue-400">{page.links_detail.internal.count} internal</span>}
                       {page.links_detail.external && <span className="text-amber-400">{page.links_detail.external.count} external</span>}
                     </div>
@@ -354,7 +347,7 @@ const InlineResultCard = memo(function InlineResultCard({
                 {page.headings.map((h: any, i: number) => (
                   <div key={i} className="flex items-center gap-3 text-[13px]" style={{ paddingLeft: `${(h.level - 1) * 16}px` }}>
                     <span className="text-[10px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 shrink-0">H{h.level}</span>
-                    <span className={h.level === 1 ? "font-medium text-[#f0f0f0]" : "text-white/50"}>{h.text}</span>
+                    <span className={h.level === 1 ? "font-medium text-white" : "text-white/60"}>{h.text}</span>
                   </div>
                 ))}
               </div>
@@ -367,7 +360,7 @@ const InlineResultCard = memo(function InlineResultCard({
                       <img src={img.src} alt={img.alt || ""} className="max-w-full max-h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                     </div>
                     <div className="p-2">
-                      <p className="text-[11px] font-mono text-white/30 truncate">{img.src.split("/").pop()}</p>
+                      <p className="text-[11px] font-mono text-white/40 truncate">{img.src.split("/").pop()}</p>
                     </div>
                   </div>
                 ))}
@@ -413,7 +406,6 @@ function PlaygroundContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [formats, setFormats] = useState<string[]>(["markdown"]);
-  const [showFormatSelector, setShowFormatSelector] = useState(false);
   const [htmlMode, setHtmlMode] = useState<"cleaned" | "raw">("cleaned");
   const [screenshotMode, setScreenshotMode] = useState<"viewport" | "fullpage">("fullpage");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -445,6 +437,7 @@ function PlaygroundContent() {
   const [useSitemap, setUseSitemap] = useState(true);
   const [mapResult, setMapResult] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [mobileNav, setMobileNav] = useState(false);
 
   const [activeJob, setActiveJob] = useState<{
     id: string; type: Endpoint; status: string; target: string;
@@ -495,7 +488,6 @@ function PlaygroundContent() {
   useEffect(() => { if (mobile && devicePresets.length === 0) { api.getDevicePresets().then((res) => setDevicePresets(res.devices || [])).catch(() => {}); } }, [mobile]);
 
   const toggleFormat = (format: string) => setFormats((prev) => prev.includes(format) ? prev.filter((f) => f !== format) : [...prev, format]);
-  const formatSummary = formats.length === 0 ? "None" : formats.length === 1 ? formats[0].charAt(0).toUpperCase() + formats[0].slice(1).replace("_", " ") : `${formats.length} formats`;
 
   const handleGetCode = () => {
     let code = "";
@@ -562,449 +554,576 @@ function PlaygroundContent() {
   const isDisabled = loading || (activeEndpoint === "search" ? !searchQuery.trim() : !url.trim());
   const hasRuns = recentJobs.length > 0;
   const copyMapUrls = () => { if (!mapResult?.links) return; navigator.clipboard.writeText(mapResult.links.map((l: any) => l.url).join("\n")); setCopied(true); setTimeout(() => setCopied(false), 2000); };
-  const ActiveIcon = ENDPOINTS.find((e) => e.id === activeEndpoint)?.icon || Crosshair;
   const pct = activeJob && activeJob.total > 0 ? Math.round((activeJob.completed / activeJob.total) * 100) : 0;
 
+  const TICKER_ITEMS = [
+    { label: "PAGES_SCRAPED", value: "14,203", color: "text-emerald-400", prefix: "▲ " },
+    { label: "AVG_RESPONSE", value: "2.3s", color: "text-white/50" },
+    { label: "SUCCESS_RATE", value: "98.7%", color: "text-emerald-400", prefix: "▲ " },
+    { label: "ANTI_BOT_BYPASS", value: "ACTIVE", color: "text-emerald-400" },
+    { label: "WORKERS", value: "4/4", color: "text-white/50" },
+    { label: "QUEUE", value: "0 pending", color: "text-white/50" },
+    { label: "UPTIME", value: "99.9%", color: "text-emerald-400" },
+    { label: "PROXY_POOL", value: "ROTATING", color: "text-white/50" },
+  ];
+
   return (
-    <SidebarProvider>
-      <div className="flex h-screen">
-        <Sidebar />
-        <main className="flex-1 overflow-auto bg-[#050505]">
-          <MobileMenuButton />
-          <div className="min-h-screen flex flex-col">
-            <div className="flex-1 flex flex-col relative">
-              {/* Grid background */}
-              <div className="absolute inset-0 opacity-[0.025]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "40px 40px" }} />
+    <div className="min-h-screen bg-[#050505] text-white">
+      {/* ═══ NAV ═══ */}
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#050505]/95 backdrop-blur-sm">
+        <div className="flex items-center justify-between px-6 md:px-10 h-16">
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <div className="h-4 w-4 bg-emerald-500" />
+            <span className="text-[18px] font-extrabold tracking-tight uppercase font-mono">WEBHARVEST</span>
+          </Link>
+          <div className="hidden md:flex items-center gap-10">
+            <Link href="/dashboard" className="text-[12px] uppercase tracking-[0.2em] text-white/50 hover:text-white transition-colors font-mono">Dashboard</Link>
+            <span className="text-[12px] uppercase tracking-[0.2em] text-white border-b border-white/40 pb-0.5 font-mono cursor-default">Playground</span>
+            <Link href="/docs" className="text-[12px] uppercase tracking-[0.2em] text-white/50 hover:text-white transition-colors font-mono">API Docs</Link>
+            <Link href="/jobs" className="text-[12px] uppercase tracking-[0.2em] text-white/50 hover:text-white transition-colors font-mono">Jobs</Link>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="hidden sm:flex text-[11px] text-white/40 items-center gap-1.5 font-mono">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              ONLINE
+            </span>
+            <Link href="/settings" className="hidden sm:block border border-white/20 px-5 py-2 text-[12px] uppercase tracking-[0.15em] hover:bg-white hover:text-black transition-all font-mono">Settings</Link>
+            <button onClick={() => setMobileNav(!mobileNav)} className="md:hidden h-10 w-10 grid place-items-center text-white/60"><Menu className="h-5 w-5" /></button>
+          </div>
+        </div>
+        {mobileNav && (
+          <div className="md:hidden border-t border-white/10 bg-[#050505] px-6 py-4 space-y-3">
+            <Link href="/dashboard" className="block text-[12px] uppercase tracking-[0.2em] text-white/50 hover:text-white font-mono py-2">Dashboard</Link>
+            <span className="block text-[12px] uppercase tracking-[0.2em] text-white font-mono py-2">Playground</span>
+            <Link href="/docs" className="block text-[12px] uppercase tracking-[0.2em] text-white/50 hover:text-white font-mono py-2">API Docs</Link>
+            <Link href="/jobs" className="block text-[12px] uppercase tracking-[0.2em] text-white/50 hover:text-white font-mono py-2">Jobs</Link>
+            <Link href="/settings" className="block text-[12px] uppercase tracking-[0.2em] text-white/50 hover:text-white font-mono py-2">Settings</Link>
+          </div>
+        )}
+      </nav>
 
-              <div className={cn("relative z-10 flex-1 flex flex-col w-full max-w-[1200px] mx-auto px-8 lg:px-12", !hasRuns && jobsLoaded ? "justify-center" : "pt-10")}>
+      {/* ═══ TICKER ═══ */}
+      <div className="fixed top-16 left-0 right-0 z-40 border-b border-white/[0.06] bg-[#050505] overflow-hidden h-8 flex items-center">
+        <div className="flex whitespace-nowrap animate-ticker-slide">
+          {[0, 1].map((dup) => (
+            <div key={dup} className="flex">
+              {TICKER_ITEMS.map((item, i) => (
+                <span key={`${dup}-${i}`} className="text-[11px] tracking-wider mx-8 text-white/30 font-mono">
+                  {item.label} <span className={item.color}>{item.prefix || ""}{item.value}</span>
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
 
-                {/* ── Page Header ── */}
-                <div className={cn(hasRuns ? "pb-8" : "pb-10")}>
-                  <div className="flex items-start justify-between mb-8">
-                    <div>
-                      <div className="inline-block border border-emerald-500/30 text-emerald-400 text-[11px] font-mono uppercase tracking-[0.25em] px-4 py-1.5 mb-5">Interactive Console</div>
-                      <h1 className="text-[36px] font-display font-extrabold tracking-tight text-[#f0f0f0] uppercase">
-                        {activeEndpoint === "scrape" && "Scrape"}
-                        {activeEndpoint === "search" && "Search"}
-                        {activeEndpoint === "map" && "Map"}
-                        {activeEndpoint === "crawl" && "Crawl"}
-                        <span className="text-white/20 ml-3">the web.</span>
-                      </h1>
-                    </div>
-                    <span className="text-[11px] font-mono text-white/20 uppercase tracking-[0.2em] border border-white/[0.08] px-4 py-2 mt-2">v1/{activeEndpoint}</span>
-                  </div>
+      {/* ═══ MAIN CONTENT ═══ */}
+      <main className="pt-28">
+        {/* Grid bg */}
+        <div className="fixed inset-0 opacity-[0.025] pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "40px 40px" }} />
 
-                  {/* Mode Switcher */}
-                  <div className="flex items-center border-b border-white/10">
-                    {ENDPOINTS.map((ep) => {
-                      const isActive = activeEndpoint === ep.id;
-                      return (
-                        <button
-                          key={ep.id}
-                          onClick={() => switchEndpoint(ep.id)}
-                          className={cn(
-                            "flex items-center gap-3 px-7 py-4 text-[13px] font-mono uppercase tracking-[0.15em] transition-all border-b-2 -mb-[1px]",
-                            isActive ? "border-emerald-500 text-emerald-400" : "border-transparent text-white/25 hover:text-white/60"
-                          )}
-                        >
-                          <ep.icon className="h-[18px] w-[18px]" />
-                          <span>{ep.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+        {/* ── HERO ── */}
+        <section className="px-6 md:px-10 pt-16 pb-12 border-b border-white/[0.06]">
+          <div className="max-w-[1400px] mx-auto">
+            <div className="flex flex-col lg:flex-row items-start justify-between gap-10 lg:gap-0">
+              <div>
+                <div className="inline-block border border-emerald-500 text-emerald-400 text-[11px] uppercase tracking-[0.25em] px-4 py-1.5 mb-8 font-mono">Interactive Console</div>
+                <h1 className="font-display text-[48px] md:text-[72px] leading-[0.9] tracking-[-3px] uppercase mb-6">
+                  <span className="text-white">{activeEndpoint.toUpperCase()}</span><br />
+                  <span className="text-white/30">THE WEB.</span>
+                </h1>
+                <p className="text-[16px] text-white/50 max-w-[500px] leading-[1.8] border-l-2 border-emerald-500/40 pl-6 font-mono">
+                  Enter a target URL below. Select your output formats. Execute and watch results stream in real-time.
+                </p>
+              </div>
 
-                {/* ── Command Input ── */}
-                <section className={cn("w-full relative z-20", hasRuns ? "mb-10" : "mb-8")}>
-                  <div className="flex items-center gap-3 mb-5">
-                    <span className="text-[12px] font-mono uppercase tracking-[0.25em] text-white/30">{activeEndpoint === "search" ? "Search Query" : "Target URL"}</span>
-                    <div className="h-px flex-1 bg-white/[0.06]" />
-                    <span className="text-[11px] font-mono text-white/15">POST /v1/{activeEndpoint}</span>
-                  </div>
-
-                  <div className="border border-white/10">
-                    <div className="flex items-center h-[72px] px-8">
-                      {activeEndpoint !== "search" ? (
-                        <>
-                          <span className="text-emerald-500/60 font-mono text-[20px] mr-3 font-bold select-none">$</span>
-                          <span className="text-white/25 font-mono text-[18px] shrink-0 select-none">https://</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-emerald-500/60 font-mono text-[20px] mr-3 font-bold select-none">$</span>
-                          <Search className="h-5 w-5 text-white/25 shrink-0 mr-2" />
-                        </>
+              {/* Endpoint selector */}
+              <div className="border border-white/10 w-full lg:w-auto lg:min-w-[280px]">
+                <div className="text-[10px] uppercase tracking-[0.3em] text-white/40 px-6 py-3 border-b border-white/[0.06] font-mono">Endpoint</div>
+                {ENDPOINTS.map((ep) => {
+                  const isActive = activeEndpoint === ep.id;
+                  return (
+                    <button
+                      key={ep.id}
+                      onClick={() => switchEndpoint(ep.id)}
+                      className={cn(
+                        "flex items-center gap-4 w-full px-6 py-4 text-left transition-colors border-l-2",
+                        isActive ? "bg-white/[0.03] border-emerald-500" : "border-transparent hover:bg-white/[0.02]"
                       )}
-                      <input
-                        type="text"
-                        value={activeEndpoint === "search" ? searchQuery : url}
-                        onChange={(e) => { if (activeEndpoint === "search") setSearchQuery(e.target.value); else setUrl(e.target.value.replace(/^https?:\/\//, "")); }}
-                        onKeyDown={(e) => e.key === "Enter" && !isDisabled && handleAction()}
-                        placeholder={PLACEHOLDERS[activeEndpoint]}
-                        className="flex-1 bg-transparent text-[20px] font-mono text-[#f0f0f0] outline-none placeholder:text-white/10 ml-1 font-medium"
-                      />
-                      <ActiveIcon className="h-5 w-5 shrink-0 ml-3 text-emerald-500/30" />
-                    </div>
-
-                    {formats.length === 0 && activeEndpoint !== "map" && (
-                      <div className="flex items-center gap-2 px-8 pb-3">
-                        <div className="h-2 w-2 bg-amber-400" />
-                        <p className="text-[12px] font-mono text-amber-400 uppercase tracking-wider">No format selected — metadata only</p>
+                    >
+                      <ep.icon className={cn("h-5 w-5", isActive ? "text-emerald-400" : "text-white/30")} />
+                      <div>
+                        <div className={cn("text-[14px] font-bold uppercase tracking-[0.1em] font-mono", isActive ? "text-white" : "text-white/50")}>{ep.label}</div>
+                        <div className={cn("text-[11px] mt-0.5 font-mono", isActive ? "text-white/40" : "text-white/25")}>{ep.desc}</div>
                       </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── COMMAND INPUT ── */}
+        <section className="px-6 md:px-10 py-12 border-b border-white/[0.06]">
+          <div className="max-w-[1400px] mx-auto">
+            <div className="flex items-center gap-3 mb-8">
+              <span className="text-[12px] uppercase tracking-[0.25em] text-white/40 font-mono">{activeEndpoint === "search" ? "Search Query" : "Target URL"}</span>
+              <div className="h-px flex-1 bg-white/[0.06]" />
+              <span className="text-[11px] text-white/30 font-mono">POST /v1/{activeEndpoint}</span>
+            </div>
+
+            {/* Big input */}
+            <div className="border border-white/10 mb-8">
+              <div className="flex items-center h-[72px] md:h-[88px] px-6 md:px-8">
+                <span className="text-emerald-500/50 text-[20px] md:text-[24px] mr-4 font-bold select-none font-mono">$</span>
+                {activeEndpoint !== "search" ? (
+                  <span className="text-white/40 text-[16px] md:text-[20px] select-none font-mono">https://</span>
+                ) : (
+                  <Search className="h-5 w-5 md:h-6 md:w-6 text-white/40 shrink-0 mr-2" />
+                )}
+                <input
+                  type="text"
+                  value={activeEndpoint === "search" ? searchQuery : url}
+                  onChange={(e) => { if (activeEndpoint === "search") setSearchQuery(e.target.value); else setUrl(e.target.value.replace(/^https?:\/\//, "")); }}
+                  onKeyDown={(e) => e.key === "Enter" && !isDisabled && handleAction()}
+                  placeholder={PLACEHOLDERS[activeEndpoint]}
+                  className="flex-1 bg-transparent text-[18px] md:text-[24px] text-white outline-none ml-2 font-medium placeholder:text-white/15 font-mono"
+                />
+              </div>
+              {formats.length === 0 && activeEndpoint !== "map" && (
+                <div className="flex items-center gap-2 px-6 md:px-8 pb-3">
+                  <div className="h-2 w-2 bg-amber-400" />
+                  <p className="text-[12px] font-mono text-amber-400 uppercase tracking-wider">No format selected — metadata only</p>
+                </div>
+              )}
+            </div>
+
+            {/* Controls */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                {activeEndpoint !== "map" && ["markdown", "html", "links", "screenshot"].map((fmt) => (
+                  <button
+                    key={fmt}
+                    onClick={() => toggleFormat(fmt)}
+                    className={cn(
+                      "px-4 md:px-5 py-2.5 md:py-3 text-[11px] md:text-[12px] uppercase tracking-[0.15em] flex items-center gap-2 transition-all font-mono",
+                      formats.includes(fmt)
+                        ? "border border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-400"
+                        : "border border-white/[0.08] text-white/50 hover:border-white/20 hover:text-white/70"
                     )}
+                  >
+                    <span className="text-[14px] md:text-[16px]">◉</span> {fmt.charAt(0).toUpperCase() + fmt.slice(1)}
+                  </button>
+                ))}
 
-                    <div className="flex items-center justify-between px-8 py-4 border-t border-white/[0.08]">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setShowAdvanced(!showAdvanced)} className={cn("h-11 w-11 grid place-items-center transition-all border", showAdvanced ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-white/[0.03] text-white/30 hover:text-white/60 border-transparent hover:border-white/10")} title="Settings">
-                          <SlidersHorizontal className="h-[18px] w-[18px]" />
-                        </button>
-                        <button onClick={() => router.push("/docs")} className="h-11 w-11 grid place-items-center bg-white/[0.03] text-white/30 hover:text-white/60 border border-transparent hover:border-white/10 transition-all" title="API Docs">
-                          <FileCode className="h-[18px] w-[18px]" />
-                        </button>
-                        {activeEndpoint !== "map" && (
-                          <div className="relative">
-                            <button onClick={() => setShowFormatSelector(!showFormatSelector)} className="flex items-center gap-2.5 h-11 px-5 text-[12px] font-mono uppercase tracking-[0.15em] bg-white/[0.03] text-white/30 hover:text-white/60 border border-transparent hover:border-white/10 transition-all">
-                              <FileText className="h-4 w-4" /> {formatSummary} <ChevronDown className="h-3 w-3 opacity-40" />
+                {activeEndpoint !== "map" && <div className="w-px h-8 bg-white/[0.06] mx-1 hidden md:block" />}
+
+                <button
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className={cn(
+                    "border px-4 md:px-5 py-2.5 md:py-3 text-[11px] md:text-[12px] uppercase tracking-[0.15em] transition-all font-mono flex items-center gap-2",
+                    showAdvanced ? "border-emerald-500/30 text-emerald-400" : "border-white/[0.08] text-white/50 hover:border-white/20 hover:text-white/70"
+                  )}
+                >
+                  <SlidersHorizontal className="h-4 w-4" /> Config
+                </button>
+                <button
+                  onClick={handleGetCode}
+                  className="border border-white/[0.08] text-white/50 px-4 md:px-5 py-2.5 md:py-3 text-[11px] md:text-[12px] uppercase tracking-[0.15em] hover:border-white/20 hover:text-white/70 transition-all font-mono flex items-center gap-2"
+                >
+                  <Code className="h-4 w-4" /> cURL
+                </button>
+              </div>
+              <button
+                onClick={handleAction}
+                disabled={isDisabled}
+                className="bg-white text-black px-8 md:px-10 py-3.5 md:py-4 text-[13px] md:text-[14px] font-bold uppercase tracking-[0.15em] hover:bg-emerald-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center gap-3 font-mono w-full md:w-auto justify-center"
+              >
+                {loading ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <>{ACTION_LABELS[activeEndpoint]} <span className="text-[18px]">→</span></>}
+              </button>
+            </div>
+
+            {error && (
+              <div className="mt-4 border border-red-500/20 bg-red-500/[0.05] px-8 py-4 text-[13px] font-mono text-red-400">
+                <span className="text-red-500/60 mr-2 font-bold">ERR</span>{error}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── ADVANCED SETTINGS ── */}
+        {showAdvanced && (
+          <section className="px-6 md:px-10 py-12 border-b border-white/[0.06] animate-fade-in">
+            <div className="max-w-[1400px] mx-auto">
+              <div className="border border-white/10">
+                <div className="flex items-center gap-3 px-8 py-4 border-b border-white/[0.08]">
+                  <SlidersHorizontal className="h-4 w-4 text-white/40" />
+                  <span className="text-[12px] font-mono text-white/40 uppercase tracking-[0.2em]">Configuration</span>
+                </div>
+                <div className="p-8 space-y-6">
+                  {activeEndpoint === "search" && (
+                    <div className="space-y-5 pb-5 border-b border-white/[0.08]">
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Engine</label>
+                        <div className="flex gap-2">
+                          {["duckduckgo", "brave", "google"].map((eng) => (
+                            <button key={eng} onClick={() => setEngine(eng)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", engine === eng ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white/80")}>
+                              {eng === "duckduckgo" ? "DuckDuckGo" : eng === "brave" ? "Brave" : "Google (BYOK)"}
                             </button>
-                            <FormatSelector open={showFormatSelector} onClose={() => setShowFormatSelector(false)} selectedFormats={formats} onToggleFormat={toggleFormat} htmlMode={htmlMode} onHtmlModeChange={setHtmlMode} screenshotMode={screenshotMode} onScreenshotModeChange={setScreenshotMode} />
-                          </div>
-                        )}
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <button onClick={handleGetCode} className="flex items-center gap-2 h-11 px-5 text-[12px] font-mono uppercase tracking-[0.15em] text-white/30 hover:text-white/60 border border-white/10 hover:bg-white/[0.03] transition-all">
-                          <Code className="h-4 w-4" /> cURL
-                        </button>
-                        <button onClick={handleAction} disabled={isDisabled} className="flex items-center gap-3 h-12 px-8 text-[13px] font-mono font-bold uppercase tracking-[0.15em] bg-white text-black hover:bg-emerald-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                          {loading ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <>{ACTION_LABELS[activeEndpoint]} <ArrowRight className="h-4 w-4" /></>}
-                        </button>
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Results: <span className="text-amber-400">{numResults}</span></label>
+                        <input type="range" min={1} max={10} value={numResults} onChange={(e) => setNumResults(parseInt(e.target.value))} className="w-full" />
                       </div>
-                    </div>
-                  </div>
-
-                  {error && (
-                    <div className="mt-4 border border-red-500/20 bg-red-500/[0.05] px-8 py-4 text-[13px] font-mono text-red-400">
-                      <span className="text-red-500/60 mr-2 font-bold">ERR</span>{error}
                     </div>
                   )}
-                </section>
-
-                {/* ── Advanced Settings ── */}
-                {showAdvanced && (
-                  <section className="w-full mb-10 animate-fade-in">
-                    <div className="border border-white/10">
-                      <div className="flex items-center gap-3 px-8 py-4 border-b border-white/[0.08]">
-                        <SlidersHorizontal className="h-4 w-4 text-white/30" />
-                        <span className="text-[12px] font-mono text-white/30 uppercase tracking-[0.2em]">Configuration</span>
-                      </div>
-                      <div className="p-8 space-y-6">
-                        {activeEndpoint === "search" && (
-                          <div className="space-y-5 pb-5 border-b border-white/[0.08]">
-                            <div className="space-y-2">
-                              <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Engine</label>
-                              <div className="flex gap-2">
-                                {["duckduckgo", "brave", "google"].map((eng) => (
-                                  <button key={eng} onClick={() => setEngine(eng)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", engine === eng ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40 hover:bg-white/[0.08] hover:text-white/70")}>
-                                    {eng === "duckduckgo" ? "DuckDuckGo" : eng === "brave" ? "Brave" : "Google (BYOK)"}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Results: <span className="text-amber-400">{numResults}</span></label>
-                              <input type="range" min={1} max={10} value={numResults} onChange={(e) => setNumResults(parseInt(e.target.value))} className="w-full" />
-                            </div>
-                          </div>
-                        )}
-                        {activeEndpoint === "crawl" && (
-                          <div className="space-y-5 pb-5 border-b border-white/[0.08]">
-                            <div className="grid grid-cols-3 gap-4">
-                              {[
-                                { label: "Page Limit", value: maxPages, set: setMaxPages, max: 10000 },
-                                { label: "Link Depth", value: maxDepth, set: setMaxDepth, max: 20 },
-                                { label: "Concurrency", value: concurrency, set: setConcurrency, max: 10 },
-                              ].map((f) => (
-                                <div key={f.label} className="space-y-2">
-                                  <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">{f.label}</label>
-                                  <Input type="number" value={f.value} onChange={(e) => f.set(parseInt(e.target.value) || 1)} min={1} max={f.max} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] text-[14px]" />
-                                </div>
-                              ))}
-                            </div>
-                            <div className="space-y-3">
-                              <div className="space-y-2">
-                                <label className="text-[12px] font-mono text-white/50 uppercase tracking-wider">Include Paths <span className="text-white/20">(comma-separated)</span></label>
-                                <Input placeholder="/blog/*, /docs/*" value={includePaths} onChange={(e) => setIncludePaths(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] placeholder:text-white/15 text-[14px]" />
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-[12px] font-mono text-white/50 uppercase tracking-wider">Exclude Paths <span className="text-white/20">(comma-separated)</span></label>
-                                <Input placeholder="/admin/*, /login" value={excludePaths} onChange={(e) => setExcludePaths(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] placeholder:text-white/15 text-[14px]" />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {activeEndpoint === "map" && (
-                          <div className="space-y-5 pb-5 border-b border-white/[0.08]">
-                            <div className="space-y-2">
-                              <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Filter Keyword</label>
-                              <Input placeholder="blog, pricing, docs" value={mapSearch} onChange={(e) => setMapSearch(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] placeholder:text-white/15 text-[14px]" />
-                            </div>
-                            <div className="grid grid-cols-3 gap-3">
-                              <div className="space-y-2">
-                                <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Max URLs</label>
-                                <Input type="number" value={mapLimit} onChange={(e) => setMapLimit(parseInt(e.target.value) || 100)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] text-[14px]" />
-                              </div>
-                              <div className="flex items-end justify-center pb-1">
-                                <button onClick={() => setIncludeSubdomains(!includeSubdomains)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", includeSubdomains ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Subdomains {includeSubdomains ? "ON" : "OFF"}</button>
-                              </div>
-                              <div className="flex items-end justify-center pb-1">
-                                <button onClick={() => setUseSitemap(!useSitemap)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", useSitemap ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Sitemap {useSitemap ? "ON" : "OFF"}</button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {activeEndpoint !== "map" && (
-                          <>
-                            <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-                              {[
-                                { label: "Main content only", val: onlyMainContent, set: setOnlyMainContent },
-                                { label: "Use Proxy", val: useProxy, set: setUseProxy },
-                                { label: "Mobile Emulation", val: mobile, set: setMobile },
-                              ].map((f) => (
-                                <div key={f.label} className="flex items-center justify-between">
-                                  <label className="text-[13px] font-mono text-white/60">{f.label}</label>
-                                  <button onClick={() => f.set(!f.val)} className={cn("px-4 py-1.5 text-[11px] font-mono font-bold uppercase tracking-[0.2em] transition-all", f.val ? "bg-white text-black" : "bg-white/[0.04] text-white/30")}>{f.val ? "ON" : "OFF"}</button>
-                                </div>
-                              ))}
-                              <div className="space-y-2">
-                                <label className="text-[13px] font-mono text-white/60">Wait after load (ms)</label>
-                                <Input type="number" value={waitFor} onChange={(e) => setWaitFor(parseInt(e.target.value) || 0)} placeholder="0" className="h-10 font-mono bg-transparent border-white/10 text-[#ededed] text-sm placeholder:text-white/15" />
-                              </div>
-                            </div>
-                            {mobile && devicePresets.length > 0 && (
-                              <select value={mobileDevice} onChange={(e) => setMobileDevice(e.target.value)} className="w-full h-11 text-[13px] font-mono bg-transparent border border-white/10 text-white/70 px-4">
-                                <option value="">Default mobile</option>
-                                {devicePresets.map((d: any) => (<option key={d.id} value={d.id}>{d.name} ({d.width}x{d.height})</option>))}
-                              </select>
-                            )}
-                          </>
-                        )}
-                        <div className="space-y-3 pt-4 border-t border-white/[0.08]">
-                          <label className="text-[11px] font-mono text-white/25 uppercase tracking-[0.2em]">Webhooks</label>
-                          <Input placeholder="https://your-server.com/webhook" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] placeholder:text-white/15 text-[14px]" />
-                          <Input placeholder="webhook-secret" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-[#ededed] placeholder:text-white/15 text-[14px]" />
-                        </div>
-                        {activeEndpoint === "scrape" && (
-                          <div className="space-y-3 pt-4 border-t border-white/[0.08]">
-                            <label className="text-[11px] font-mono text-white/25 uppercase tracking-[0.2em]">Headers & Cookies</label>
-                            <textarea className="w-full border border-white/10 bg-transparent px-5 py-3 text-[13px] font-mono text-white/70 placeholder:text-white/15 focus:outline-none focus:border-emerald-500/30 min-h-[60px] resize-none" placeholder='{"Authorization": "Bearer ..."}' value={headersText} onChange={(e) => setHeadersText(e.target.value)} />
-                            <textarea className="w-full border border-white/10 bg-transparent px-5 py-3 text-[13px] font-mono text-white/70 placeholder:text-white/15 focus:outline-none focus:border-emerald-500/30 min-h-[60px] resize-none" placeholder='{"session_id": "abc123"}' value={cookiesText} onChange={(e) => setCookiesText(e.target.value)} />
-                          </div>
-                        )}
-                        <div className="space-y-3 pt-4 border-t border-white/[0.08]">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[13px] font-mono text-white/60 flex items-center gap-2">
-                              <Sparkles className="h-4 w-4 text-amber-400" /> AI Extraction (BYOK)
-                            </label>
-                            <button onClick={() => setExtractEnabled(!extractEnabled)} className={cn("px-4 py-1.5 text-[11px] font-mono font-bold uppercase tracking-[0.2em] transition-all", extractEnabled ? "bg-white text-black" : "bg-white/[0.04] text-white/30")}>{extractEnabled ? "ON" : "OFF"}</button>
-                          </div>
-                          {extractEnabled && (
-                            <textarea className="w-full border border-white/10 bg-transparent px-5 py-3 text-[14px] font-mono text-white/70 placeholder:text-white/15 focus:outline-none focus:border-emerald-500/30 min-h-[80px] resize-none" placeholder="Extract product name, price, and description" value={extractPrompt} onChange={(e) => setExtractPrompt(e.target.value)} />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-                )}
-
-                {/* ── Active Job ── */}
-                {activeJob && (
-                  <section className="w-full mb-10 animate-fade-in">
-                    <div className={cn("border overflow-hidden", activeJob.status === "completed" ? "border-emerald-500/20" : activeJob.status === "failed" || activeJob.status === "cancelled" ? "border-red-500/20" : "border-white/10")}>
-                      <div className={cn("h-[2px]", activeJob.status === "completed" ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : activeJob.status === "failed" ? "bg-red-500" : "bg-emerald-500/50")} />
-
-                      <div className="flex items-center justify-between px-8 py-5 border-b border-white/[0.08]">
-                        <div className="flex items-center gap-5">
-                          <div className={cn("h-11 w-11 border grid place-items-center", activeJob.status === "completed" ? "border-emerald-500/20 bg-emerald-500/[0.04]" : activeJob.status === "failed" ? "border-red-500/20 bg-red-500/[0.04]" : "border-emerald-500/10 bg-emerald-500/[0.04]")}>
-                            {activeJob.status === "running" ? <Loader2 className="h-5 w-5 text-emerald-500 animate-spin" /> : activeJob.status === "completed" ? <CheckCircle2 className="h-5 w-5 text-emerald-400" /> : <XCircle className="h-5 w-5 text-red-400" />}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-4">
-                              <span className="text-[18px] font-bold uppercase tracking-[0.1em] text-[#f0f0f0]">{activeJob.type}</span>
-                              <span className={cn("text-[11px] font-mono uppercase tracking-[0.25em] px-3 py-1 border", activeJob.status === "running" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/15" : activeJob.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/15" : "bg-red-500/10 text-red-400 border-red-500/20")}>
-                                {activeJob.status === "running" ? "Running" : activeJob.status}
-                              </span>
-                            </div>
-                            <span className="text-[14px] font-mono text-white/35 mt-1 block">{activeJob.target}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          {activeJob.status === "running" && (
-                            <button onClick={async () => { try { await api.cancelJob(activeJob.id); setActiveJob((p: any) => p ? { ...p, status: "cancelled" } : null); } catch {} }} className="h-9 px-3 flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-all"><Square className="h-3.5 w-3.5" /> Stop</button>
-                          )}
-                          <button onClick={dismissJob} className="h-9 w-9 grid place-items-center text-white/20 hover:text-white/50 hover:bg-white/[0.04] transition-all"><X className="h-4 w-4" /></button>
-                        </div>
-                      </div>
-
-                      <div className="px-8 py-5">
-                        <div className="flex items-center justify-between text-[13px] font-mono mb-3">
-                          <span className="text-white/50">{activeJob.completed} <span className="text-white/20">/</span> {activeJob.total > 0 ? activeJob.total : "—"} pages</span>
-                          <span className="text-emerald-400 font-bold text-[20px]">{pct}%</span>
-                        </div>
-                        <div className="h-1.5 bg-white/[0.06] overflow-hidden">
-                          <div className={cn("h-full transition-all duration-500", activeJob.status === "completed" ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : activeJob.status === "failed" ? "bg-red-500" : "bg-emerald-500")} style={{ width: `${activeJob.total > 0 ? Math.min(100, (activeJob.completed / activeJob.total) * 100) : 0}%` }} />
-                        </div>
-                        {activeJob.error && <div className="mt-4 border border-red-500/20 bg-red-500/[0.05] px-6 py-3 text-[13px] font-mono text-red-400"><span className="text-red-500/60 mr-2 font-bold">ERR</span>{activeJob.error}</div>}
-                        {activeJob.status === "completed" && (
-                          <div className="flex items-center gap-3 mt-5">
-                            <button onClick={handleDownloadActiveJob} className="flex items-center gap-2 h-11 px-6 text-[13px] font-mono font-bold uppercase tracking-[0.15em] bg-white text-black hover:bg-emerald-400 transition-all"><Download className="h-4 w-4" /> Export JSON</button>
-                            <Link href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })} className="flex items-center gap-2 h-11 px-6 text-[13px] font-mono uppercase tracking-[0.15em] border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all"><ExternalLink className="h-4 w-4" /> View Details</Link>
-                          </div>
-                        )}
-                        {(activeJob.status === "failed" || activeJob.status === "cancelled") && (
-                          <div className="flex items-center gap-3 mt-5">
-                            <button onClick={async () => { try { const res = await api.retryJob(activeJob.id); setActiveJob({ id: res.new_job_id, type: activeJob.type, status: "running", target: activeJob.target, completed: 0, total: activeJob.total || 0, data: [], error: undefined }); } catch {} }} className="flex items-center gap-2 h-11 px-6 text-[13px] font-mono font-bold uppercase tracking-[0.15em] bg-white text-black hover:bg-emerald-400 transition-all"><RefreshCw className="h-4 w-4" /> Retry</button>
-                            <Link href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })} className="flex items-center gap-2 h-11 px-6 text-[13px] font-mono uppercase tracking-[0.15em] border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all"><ExternalLink className="h-4 w-4" /> Details</Link>
-                          </div>
-                        )}
-                      </div>
-
-                      {activeJob.data && activeJob.data.length > 0 && activeJob.type !== "map" && (
-                        <div className="border-t border-white/[0.08]">
-                          <div className="px-8 py-4 flex items-center justify-between bg-white/[0.01]">
-                            <div className="flex items-center gap-3">
-                              <Globe className="h-4 w-4 text-emerald-500/60" />
-                              <span className="text-[12px] font-mono font-bold text-white/40 uppercase tracking-[0.2em]">{activeJob.data.length} {activeJob.data.length === 1 ? "result" : "results"}</span>
-                            </div>
-                            {activeJob.status === "running" && <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400/60 uppercase tracking-[0.2em]"><div className="h-2 w-2 bg-emerald-400 animate-pulse" /> Live</div>}
-                          </div>
-                          <div className="px-6 pb-6 space-y-2 max-h-[600px] overflow-auto">
-                            {activeJob.data.map((page: any, i: number) => <InlineResultCard key={page.id || page.url || i} page={page} index={i} jobId={activeJob.id} />)}
-                          </div>
-                        </div>
-                      )}
-                      {activeJob.data && activeJob.data.length > 0 && activeJob.type === "map" && (
-                        <div className="border-t border-white/[0.08]">
-                          <div className="px-8 py-4 flex items-center gap-3 bg-white/[0.01]">
-                            <Network className="h-4 w-4 text-emerald-500/60" />
-                            <span className="text-[12px] font-mono font-bold text-white/40 uppercase tracking-[0.2em]">{activeJob.data.length} URLs</span>
-                          </div>
-                          <div className="max-h-[400px] overflow-auto">
-                            {activeJob.data.map((link: any, i: number) => (
-                              <div key={i} className="flex items-center justify-between px-8 py-3 hover:bg-white/[0.02] group transition-colors border-b border-white/[0.04] last:border-0">
-                                <a href={link.url || link} target="_blank" rel="noopener noreferrer" className="text-[14px] font-mono text-emerald-400 hover:text-emerald-300 truncate">{link.url || link}</a>
-                                <ExternalLink className="h-3.5 w-3.5 text-white/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-3" />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </section>
-                )}
-
-                {/* ── Map Results ── */}
-                {activeEndpoint === "map" && mapResult && (
-                  <section className="w-full mb-10 animate-fade-in">
-                    <div className="border border-white/10 overflow-hidden">
-                      <div className="h-[2px] bg-gradient-to-r from-emerald-600 to-emerald-400" />
-                      <div className="flex items-center justify-between px-8 py-4 border-b border-white/[0.08]">
-                        <div className="flex items-center gap-3">
-                          <Network className="h-5 w-5 text-emerald-500/60" />
-                          <span className="text-[14px] font-mono font-bold text-white/60 uppercase tracking-[0.15em]">Sitemap</span>
-                          <span className="text-[14px] font-mono text-emerald-400 font-bold">{mapResult.total}</span>
-                        </div>
-                        <button onClick={copyMapUrls} className="flex items-center gap-2 px-4 py-2 text-[12px] font-mono uppercase tracking-wider border border-white/10 text-white/30 hover:text-white/60 hover:bg-white/[0.03] transition-all">
-                          {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />} Copy All
-                        </button>
-                      </div>
-                      <div className="max-h-[400px] overflow-auto">
-                        {mapResult.links?.map((link: any, i: number) => (
-                          <div key={i} className="flex items-center justify-between px-8 py-3 hover:bg-white/[0.02] group transition-colors border-b border-white/[0.04] last:border-0">
-                            <div className="min-w-0 flex-1">
-                              <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-[14px] font-mono text-emerald-400 hover:text-emerald-300 truncate block">{link.url}</a>
-                              {link.title && <p className="text-[12px] text-white/25 truncate">{link.title}</p>}
-                            </div>
-                            <a href={link.url} target="_blank" rel="noopener noreferrer" className="opacity-0 group-hover:opacity-100 ml-3 transition-opacity"><ExternalLink className="h-3.5 w-3.5 text-white/20" /></a>
+                  {activeEndpoint === "crawl" && (
+                    <div className="space-y-5 pb-5 border-b border-white/[0.08]">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {[
+                          { label: "Page Limit", value: maxPages, set: setMaxPages, max: 10000 },
+                          { label: "Link Depth", value: maxDepth, set: setMaxDepth, max: 20 },
+                          { label: "Concurrency", value: concurrency, set: setConcurrency, max: 10 },
+                        ].map((f) => (
+                          <div key={f.label} className="space-y-2">
+                            <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">{f.label}</label>
+                            <Input type="number" value={f.value} onChange={(e) => f.set(parseInt(e.target.value) || 1)} min={1} max={f.max} className="h-11 font-mono bg-transparent border-white/10 text-white text-[14px]" />
                           </div>
                         ))}
                       </div>
-                    </div>
-                  </section>
-                )}
-
-                {/* ── Recent Runs ── */}
-                {hasRuns && (
-                  <section className="w-full pb-12">
-                    <div className="flex items-center justify-between mb-8">
-                      <div className="flex items-center gap-3">
-                        <span className="text-[12px] font-mono text-white/30 uppercase tracking-[0.25em]">Recent Activity</span>
-                        <div className="h-px flex-1 bg-white/[0.06] min-w-[60px]" />
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-mono text-white/60 uppercase tracking-wider">Include Paths <span className="text-white/30">(comma-separated)</span></label>
+                          <Input placeholder="/blog/*, /docs/*" value={includePaths} onChange={(e) => setIncludePaths(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-white placeholder:text-white/20 text-[14px]" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-mono text-white/60 uppercase tracking-wider">Exclude Paths <span className="text-white/30">(comma-separated)</span></label>
+                          <Input placeholder="/admin/*, /login" value={excludePaths} onChange={(e) => setExcludePaths(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-white placeholder:text-white/20 text-[14px]" />
+                        </div>
                       </div>
-                      <Link href="/jobs" className="text-[12px] font-mono text-white/25 hover:text-white/50 transition-colors uppercase tracking-[0.2em] flex items-center gap-2">View All <ArrowRight className="h-3.5 w-3.5" /></Link>
                     </div>
-                    <div className="grid gap-px md:grid-cols-2 lg:grid-cols-3 bg-white/[0.06]">
-                      {recentJobs.map((job) => {
-                        const jobUrl = getJobUrl(job);
-                        const domain = getDomain(jobUrl);
-                        const TypeIcon = getTypeIcon(job.type);
-                        const { date, time } = job.created_at ? formatDate(job.created_at) : { date: "", time: "" };
-                        const jobFormats: string[] = job.config?.formats || [];
-                        const isCompleted = job.status === "completed";
-                        return (
-                          <div key={job.id} className="bg-[#050505] group">
-                            <Link href={getJobDetailPath(job)} className="block p-8 hover:bg-white/[0.02] transition-all">
-                              <div className="flex items-center justify-between mb-5">
-                                <div className="flex items-center gap-2.5">
-                                  <TypeIcon className="h-4 w-4 text-emerald-500/50" />
-                                  <span className="text-[11px] font-mono font-bold uppercase tracking-[0.25em] text-emerald-500/50">{job.type}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <div className={cn("h-2.5 w-2.5", job.status === "completed" ? "bg-emerald-400" : job.status === "failed" ? "bg-red-400" : job.status === "running" ? "bg-amber-400 animate-pulse" : "bg-white/20")} />
-                                  <span className="text-[11px] font-mono text-white/25 uppercase tracking-wider">{job.status === "completed" ? "Done" : job.status}</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3 mb-4">
-                                {jobUrl && !jobUrl.includes("URLs") && <img src={getFavicon(jobUrl)} alt="" className="h-5 w-5 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
-                                <span className="text-[16px] font-mono font-medium text-white/70 truncate">{domain || "—"}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-white/20 mb-4">
-                                <Clock className="h-3.5 w-3.5" />
-                                <span className="text-[12px] font-mono">{date} {time}</span>
-                              </div>
-                              {jobFormats.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5">
-                                  {jobFormats.slice(0, 4).map((fmt: string) => {
-                                    const fmtInfo = formatIcons[fmt];
-                                    return <span key={fmt} className="px-2.5 py-1 text-[10px] font-mono text-white/20 uppercase tracking-[0.2em] border border-white/[0.06]">{fmtInfo?.label || fmt}</span>;
-                                  })}
-                                  {jobFormats.length > 4 && <span className="text-[10px] font-mono text-white/15 self-center">+{jobFormats.length - 4}</span>}
-                                </div>
-                              )}
-                            </Link>
-                            {isCompleted && (
-                              <div className="px-8 pb-6">
-                                <button onClick={(e) => { e.preventDefault(); handleDownload(job); }} className="flex items-center justify-center gap-2.5 w-full py-3 text-[11px] font-mono font-bold uppercase tracking-[0.2em] border border-emerald-500/15 text-emerald-500/50 hover:bg-emerald-500/[0.06] hover:text-emerald-400 hover:border-emerald-500/25 transition-all">
-                                  <Download className="h-3.5 w-3.5" /> Export
-                                </button>
-                              </div>
-                            )}
+                  )}
+                  {activeEndpoint === "map" && (
+                    <div className="space-y-5 pb-5 border-b border-white/[0.08]">
+                      <div className="space-y-2">
+                        <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Filter Keyword</label>
+                        <Input placeholder="blog, pricing, docs" value={mapSearch} onChange={(e) => setMapSearch(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-white placeholder:text-white/20 text-[14px]" />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="space-y-2">
+                          <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Max URLs</label>
+                          <Input type="number" value={mapLimit} onChange={(e) => setMapLimit(parseInt(e.target.value) || 100)} className="h-11 font-mono bg-transparent border-white/10 text-white text-[14px]" />
+                        </div>
+                        <div className="flex items-end justify-center pb-1">
+                          <button onClick={() => setIncludeSubdomains(!includeSubdomains)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", includeSubdomains ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/50")}>Subdomains {includeSubdomains ? "ON" : "OFF"}</button>
+                        </div>
+                        <div className="flex items-end justify-center pb-1">
+                          <button onClick={() => setUseSitemap(!useSitemap)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", useSitemap ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/50")}>Sitemap {useSitemap ? "ON" : "OFF"}</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {activeEndpoint !== "map" && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                        {[
+                          { label: "Main content only", val: onlyMainContent, set: setOnlyMainContent },
+                          { label: "Use Proxy", val: useProxy, set: setUseProxy },
+                          { label: "Mobile Emulation", val: mobile, set: setMobile },
+                        ].map((f) => (
+                          <div key={f.label} className="flex items-center justify-between">
+                            <label className="text-[13px] font-mono text-white/70">{f.label}</label>
+                            <button onClick={() => f.set(!f.val)} className={cn("px-4 py-1.5 text-[11px] font-mono font-bold uppercase tracking-[0.2em] transition-all", f.val ? "bg-white text-black" : "bg-white/[0.04] text-white/40")}>{f.val ? "ON" : "OFF"}</button>
                           </div>
-                        );
-                      })}
+                        ))}
+                        <div className="space-y-2">
+                          <label className="text-[13px] font-mono text-white/70">Wait after load (ms)</label>
+                          <Input type="number" value={waitFor} onChange={(e) => setWaitFor(parseInt(e.target.value) || 0)} placeholder="0" className="h-10 font-mono bg-transparent border-white/10 text-white text-sm placeholder:text-white/20" />
+                        </div>
+                      </div>
+                      {/* HTML mode toggle */}
+                      {formats.includes("html") && (
+                        <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                          <label className="text-[13px] font-mono text-white/70">HTML Mode</label>
+                          <div className="flex gap-2">
+                            <button onClick={() => setHtmlMode("cleaned")} className={cn("px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] transition-all", htmlMode === "cleaned" ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Cleaned</button>
+                            <button onClick={() => setHtmlMode("raw")} className={cn("px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] transition-all", htmlMode === "raw" ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Raw</button>
+                          </div>
+                        </div>
+                      )}
+                      {/* Screenshot mode toggle */}
+                      {formats.includes("screenshot") && (
+                        <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                          <label className="text-[13px] font-mono text-white/70">Screenshot Mode</label>
+                          <div className="flex gap-2">
+                            <button onClick={() => setScreenshotMode("viewport")} className={cn("px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] transition-all", screenshotMode === "viewport" ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Viewport</button>
+                            <button onClick={() => setScreenshotMode("fullpage")} className={cn("px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] transition-all", screenshotMode === "fullpage" ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Full Page</button>
+                          </div>
+                        </div>
+                      )}
+                      {mobile && devicePresets.length > 0 && (
+                        <select value={mobileDevice} onChange={(e) => setMobileDevice(e.target.value)} className="w-full h-11 text-[13px] font-mono bg-transparent border border-white/10 text-white/80 px-4">
+                          <option value="">Default mobile</option>
+                          {devicePresets.map((d: any) => (<option key={d.id} value={d.id}>{d.name} ({d.width}x{d.height})</option>))}
+                        </select>
+                      )}
+                    </>
+                  )}
+                  <div className="space-y-3 pt-4 border-t border-white/[0.08]">
+                    <label className="text-[11px] font-mono text-white/40 uppercase tracking-[0.2em]">Webhooks</label>
+                    <Input placeholder="https://your-server.com/webhook" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-white placeholder:text-white/20 text-[14px]" />
+                    <Input placeholder="webhook-secret" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)} className="h-11 font-mono bg-transparent border-white/10 text-white placeholder:text-white/20 text-[14px]" />
+                  </div>
+                  {activeEndpoint === "scrape" && (
+                    <div className="space-y-3 pt-4 border-t border-white/[0.08]">
+                      <label className="text-[11px] font-mono text-white/40 uppercase tracking-[0.2em]">Headers & Cookies</label>
+                      <textarea className="w-full border border-white/10 bg-transparent px-5 py-3 text-[13px] font-mono text-white/80 placeholder:text-white/20 focus:outline-none focus:border-emerald-500/30 min-h-[60px] resize-none" placeholder='{"Authorization": "Bearer ..."}' value={headersText} onChange={(e) => setHeadersText(e.target.value)} />
+                      <textarea className="w-full border border-white/10 bg-transparent px-5 py-3 text-[13px] font-mono text-white/80 placeholder:text-white/20 focus:outline-none focus:border-emerald-500/30 min-h-[60px] resize-none" placeholder='{"session_id": "abc123"}' value={cookiesText} onChange={(e) => setCookiesText(e.target.value)} />
                     </div>
-                  </section>
-                )}
+                  )}
+                  <div className="space-y-3 pt-4 border-t border-white/[0.08]">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[13px] font-mono text-white/70 flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-amber-400" /> AI Extraction (BYOK)
+                      </label>
+                      <button onClick={() => setExtractEnabled(!extractEnabled)} className={cn("px-4 py-1.5 text-[11px] font-mono font-bold uppercase tracking-[0.2em] transition-all", extractEnabled ? "bg-white text-black" : "bg-white/[0.04] text-white/40")}>{extractEnabled ? "ON" : "OFF"}</button>
+                    </div>
+                    {extractEnabled && (
+                      <textarea className="w-full border border-white/10 bg-transparent px-5 py-3 text-[14px] font-mono text-white/80 placeholder:text-white/20 focus:outline-none focus:border-emerald-500/30 min-h-[80px] resize-none" placeholder="Extract product name, price, and description" value={extractPrompt} onChange={(e) => setExtractPrompt(e.target.value)} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
-                {!hasRuns && jobsLoaded && (
-                  <div className="text-center py-6"><p className="text-[14px] font-mono text-white/25 uppercase tracking-[0.2em]">No runs yet</p></div>
+        {/* ── ACTIVE JOB ── */}
+        {activeJob && (
+          <section className="px-6 md:px-10 py-12 border-b border-white/[0.06] animate-fade-in">
+            <div className="max-w-[1400px] mx-auto">
+              <div className="flex items-center gap-3 mb-8">
+                <span className="text-[12px] uppercase tracking-[0.25em] text-emerald-500/60 font-mono">Active Job</span>
+                <div className="h-px flex-1 bg-emerald-500/10" />
+                <span className="text-[11px] text-emerald-500/40 font-mono">{activeJob.status.toUpperCase()}</span>
+              </div>
+
+              <div className={cn("border overflow-hidden", activeJob.status === "completed" ? "border-emerald-500/20" : activeJob.status === "failed" || activeJob.status === "cancelled" ? "border-red-500/20" : "border-white/10")}>
+                <div className={cn("h-[2px]", activeJob.status === "completed" ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : activeJob.status === "failed" ? "bg-red-500" : "bg-emerald-500/50")} />
+
+                <div className="flex items-center justify-between px-6 md:px-10 py-6 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-5 md:gap-6">
+                    <div className={cn("h-12 w-12 border grid place-items-center shrink-0", activeJob.status === "completed" ? "border-emerald-500/20 bg-emerald-500/[0.04]" : activeJob.status === "failed" ? "border-red-500/20 bg-red-500/[0.04]" : "border-emerald-500/10 bg-emerald-500/[0.04]")}>
+                      {activeJob.status === "running" ? <Loader2 className="h-5 w-5 text-emerald-500 animate-spin" /> : activeJob.status === "completed" ? <CheckCircle2 className="h-5 w-5 text-emerald-400" /> : <XCircle className="h-5 w-5 text-red-400" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-[20px] font-bold uppercase tracking-[0.1em] text-white">{activeJob.type}</span>
+                        <span className={cn("text-[11px] font-mono uppercase tracking-[0.25em] px-4 py-1 border", activeJob.status === "running" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/15" : activeJob.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/15" : "bg-red-500/10 text-red-400 border-red-500/20")}>
+                          {activeJob.status === "running" ? "Running" : activeJob.status}
+                        </span>
+                      </div>
+                      <span className="text-[14px] font-mono text-white/50 mt-1 block">{activeJob.target}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {activeJob.status === "running" && (
+                      <button onClick={async () => { try { await api.cancelJob(activeJob.id); setActiveJob((p: any) => p ? { ...p, status: "cancelled" } : null); } catch {} }} className="h-9 px-3 flex items-center gap-2 text-[11px] font-mono uppercase tracking-wider text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition-all"><Square className="h-3.5 w-3.5" /> Stop</button>
+                    )}
+                    <button onClick={dismissJob} className="h-9 w-9 grid place-items-center text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-all"><X className="h-4 w-4" /></button>
+                  </div>
+                </div>
+
+                {/* Progress */}
+                <div className="px-6 md:px-10 py-6">
+                  <div className="flex items-center justify-between text-[13px] font-mono mb-3">
+                    <span className="text-white/60">{activeJob.completed} <span className="text-white/30">/</span> {activeJob.total > 0 ? activeJob.total : "—"} pages</span>
+                    <span className="text-emerald-400 font-bold text-[24px]">{pct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-white/[0.06] overflow-hidden">
+                    <div className={cn("h-full transition-all duration-500", activeJob.status === "completed" ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : activeJob.status === "failed" ? "bg-red-500" : "bg-emerald-500")} style={{ width: `${activeJob.total > 0 ? Math.min(100, (activeJob.completed / activeJob.total) * 100) : 0}%` }} />
+                  </div>
+                  {activeJob.error && <div className="mt-4 border border-red-500/20 bg-red-500/[0.05] px-6 py-3 text-[13px] font-mono text-red-400"><span className="text-red-500/60 mr-2 font-bold">ERR</span>{activeJob.error}</div>}
+
+                  {/* Actions */}
+                  {activeJob.status === "completed" && (
+                    <div className="flex items-center gap-4 mt-6">
+                      <button onClick={handleDownloadActiveJob} className="flex items-center gap-2 bg-white text-black px-8 py-3.5 text-[13px] font-mono font-bold uppercase tracking-[0.15em] hover:bg-emerald-400 transition-colors">
+                        <Download className="h-4 w-4" /> Export JSON
+                      </button>
+                      <Link href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })} className="flex items-center gap-2 border border-white/10 text-white/50 px-8 py-3.5 text-[13px] font-mono uppercase tracking-[0.15em] hover:text-white/80 hover:border-white/20 transition-all">
+                        <ExternalLink className="h-4 w-4" /> View Full Results
+                      </Link>
+                    </div>
+                  )}
+                  {(activeJob.status === "failed" || activeJob.status === "cancelled") && (
+                    <div className="flex items-center gap-3 mt-6">
+                      <button onClick={async () => { try { const res = await api.retryJob(activeJob.id); setActiveJob({ id: res.new_job_id, type: activeJob.type, status: "running", target: activeJob.target, completed: 0, total: activeJob.total || 0, data: [], error: undefined }); } catch {} }} className="flex items-center gap-2 bg-white text-black px-8 py-3.5 text-[13px] font-mono font-bold uppercase tracking-[0.15em] hover:bg-emerald-400 transition-colors"><RefreshCw className="h-4 w-4" /> Retry</button>
+                      <Link href={getJobDetailPath({ id: activeJob.id, type: activeJob.type })} className="flex items-center gap-2 border border-white/10 text-white/50 px-8 py-3.5 text-[13px] font-mono uppercase tracking-[0.15em] hover:text-white/80 hover:border-white/20 transition-all"><ExternalLink className="h-4 w-4" /> Details</Link>
+                    </div>
+                  )}
+                </div>
+
+                {/* Inline results */}
+                {activeJob.data && activeJob.data.length > 0 && activeJob.type !== "map" && (
+                  <div className="border-t border-white/[0.08]">
+                    <div className="px-6 md:px-10 py-4 flex items-center justify-between bg-white/[0.01]">
+                      <div className="flex items-center gap-3">
+                        <Globe className="h-4 w-4 text-emerald-500/60" />
+                        <span className="text-[12px] font-mono font-bold text-white/50 uppercase tracking-[0.2em]">{activeJob.data.length} {activeJob.data.length === 1 ? "result" : "results"}</span>
+                      </div>
+                      {activeJob.status === "running" && <div className="flex items-center gap-2 text-[11px] font-mono text-emerald-400/60 uppercase tracking-[0.2em]"><div className="h-2 w-2 bg-emerald-400 animate-pulse" /> Live</div>}
+                    </div>
+                    <div className="px-4 md:px-6 pb-6 space-y-2 max-h-[600px] overflow-auto">
+                      {activeJob.data.map((page: any, i: number) => <InlineResultCard key={page.id || page.url || i} page={page} index={i} jobId={activeJob.id} />)}
+                    </div>
+                  </div>
+                )}
+                {activeJob.data && activeJob.data.length > 0 && activeJob.type === "map" && (
+                  <div className="border-t border-white/[0.08]">
+                    <div className="px-6 md:px-10 py-4 flex items-center gap-3 bg-white/[0.01]">
+                      <Network className="h-4 w-4 text-emerald-500/60" />
+                      <span className="text-[12px] font-mono font-bold text-white/50 uppercase tracking-[0.2em]">{activeJob.data.length} URLs</span>
+                    </div>
+                    <div className="max-h-[400px] overflow-auto">
+                      {activeJob.data.map((link: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between px-6 md:px-8 py-3 hover:bg-white/[0.02] group transition-colors border-b border-white/[0.04] last:border-0">
+                          <a href={link.url || link} target="_blank" rel="noopener noreferrer" className="text-[14px] font-mono text-emerald-400 hover:text-emerald-300 truncate">{link.url || link}</a>
+                          <ExternalLink className="h-3.5 w-3.5 text-white/15 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-3" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
-            <Footer />
+          </section>
+        )}
+
+        {/* ── MAP RESULTS ── */}
+        {activeEndpoint === "map" && mapResult && (
+          <section className="px-6 md:px-10 py-12 border-b border-white/[0.06] animate-fade-in">
+            <div className="max-w-[1400px] mx-auto">
+              <div className="border border-white/10 overflow-hidden">
+                <div className="h-[2px] bg-gradient-to-r from-emerald-600 to-emerald-400" />
+                <div className="flex items-center justify-between px-6 md:px-8 py-4 border-b border-white/[0.08]">
+                  <div className="flex items-center gap-3">
+                    <Network className="h-5 w-5 text-emerald-500/60" />
+                    <span className="text-[14px] font-mono font-bold text-white/70 uppercase tracking-[0.15em]">Sitemap</span>
+                    <span className="text-[14px] font-mono text-emerald-400 font-bold">{mapResult.total}</span>
+                  </div>
+                  <button onClick={copyMapUrls} className="flex items-center gap-2 px-4 py-2 text-[12px] font-mono uppercase tracking-wider border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all">
+                    {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />} Copy All
+                  </button>
+                </div>
+                <div className="max-h-[400px] overflow-auto">
+                  {mapResult.links?.map((link: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between px-6 md:px-8 py-3 hover:bg-white/[0.02] group transition-colors border-b border-white/[0.04] last:border-0">
+                      <div className="min-w-0 flex-1">
+                        <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-[14px] font-mono text-emerald-400 hover:text-emerald-300 truncate block">{link.url}</a>
+                        {link.title && <p className="text-[12px] text-white/35 truncate">{link.title}</p>}
+                      </div>
+                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="opacity-0 group-hover:opacity-100 ml-3 transition-opacity"><ExternalLink className="h-3.5 w-3.5 text-white/30" /></a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── RECENT RUNS ── */}
+        {hasRuns && (
+          <section className="px-6 md:px-10 py-16">
+            <div className="max-w-[1400px] mx-auto">
+              <div className="flex items-center justify-between mb-10">
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px] font-mono text-white/40 uppercase tracking-[0.25em]">Recent Activity</span>
+                  <div className="h-px w-16 bg-white/[0.06]" />
+                </div>
+                <Link href="/jobs" className="text-[12px] font-mono text-white/30 hover:text-white/60 transition-colors uppercase tracking-[0.2em]">View All →</Link>
+              </div>
+              <div className="grid gap-px md:grid-cols-2 lg:grid-cols-3 bg-white/[0.06]">
+                {recentJobs.map((job) => {
+                  const jobUrl = getJobUrl(job);
+                  const domain = getDomain(jobUrl);
+                  const TypeIcon = getTypeIcon(job.type);
+                  const { date, time } = job.created_at ? formatDate(job.created_at) : { date: "", time: "" };
+                  const jobFormats: string[] = job.config?.formats || [];
+                  const isCompleted = job.status === "completed";
+                  return (
+                    <div key={job.id} className="bg-[#050505] group">
+                      <Link href={getJobDetailPath(job)} className="block p-8 md:p-10 hover:bg-white/[0.02] transition-all">
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="flex items-center gap-2.5">
+                            <TypeIcon className="h-4 w-4 text-emerald-500/50" />
+                            <span className="text-[11px] font-mono font-bold uppercase tracking-[0.25em] text-emerald-500/50">{job.type}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={cn("h-2.5 w-2.5", job.status === "completed" ? "bg-emerald-400" : job.status === "failed" ? "bg-red-400" : job.status === "running" ? "bg-amber-400 animate-pulse" : "bg-white/30")} />
+                            <span className="text-[11px] font-mono text-white/35 uppercase tracking-wider">{job.status === "completed" ? "Done" : job.status}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 mb-5">
+                          {jobUrl && !jobUrl.includes("URLs") && <img src={getFavicon(jobUrl)} alt="" className="h-6 w-6 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+                          <span className="text-[18px] font-mono font-medium text-white/80 truncate">{domain || "—"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-white/30 mb-5">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span className="text-[12px] font-mono">{date} {time}</span>
+                        </div>
+                        {jobFormats.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-8">
+                            {jobFormats.slice(0, 4).map((fmt: string) => {
+                              const fmtInfo = formatIcons[fmt];
+                              return <span key={fmt} className="px-3 py-1.5 text-[10px] font-mono text-white/30 uppercase tracking-[0.2em] border border-white/[0.06]">{fmtInfo?.label || fmt}</span>;
+                            })}
+                            {jobFormats.length > 4 && <span className="text-[10px] font-mono text-white/25 self-center">+{jobFormats.length - 4}</span>}
+                          </div>
+                        )}
+                      </Link>
+                      {isCompleted && (
+                        <div className="px-8 md:px-10 pb-6">
+                          <button onClick={(e) => { e.preventDefault(); handleDownload(job); }} className="flex items-center justify-center gap-2.5 w-full py-3 text-[11px] font-mono font-bold uppercase tracking-[0.2em] border border-emerald-500/15 text-emerald-500/60 hover:bg-emerald-500/[0.06] hover:text-emerald-400 hover:border-emerald-500/25 transition-all">
+                            <Download className="h-3.5 w-3.5" /> Export
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {!hasRuns && jobsLoaded && (
+          <section className="px-6 md:px-10 py-20">
+            <div className="max-w-[1400px] mx-auto text-center">
+              <p className="text-[14px] font-mono text-white/40 uppercase tracking-[0.2em]">No runs yet — enter a URL above to get started</p>
+            </div>
+          </section>
+        )}
+      </main>
+
+      {/* ═══ FOOTER ═══ */}
+      <footer className="border-t border-white/[0.06]">
+        <div className="flex flex-col md:flex-row items-center justify-between px-6 md:px-10 max-w-[1400px] mx-auto py-8 gap-4">
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <div className="h-3 w-3 bg-emerald-500" />
+            <span className="text-[14px] font-bold uppercase tracking-[0.1em] text-white/50 font-mono">WebHarvest</span>
+          </Link>
+          <div className="flex items-center gap-8">
+            <Link href="/docs" className="text-[11px] uppercase tracking-[0.2em] text-white/30 hover:text-white/60 transition-colors font-mono">Documentation</Link>
+            <a href="https://github.com/Takezo49/WebHarvest" target="_blank" rel="noopener noreferrer" className="text-[11px] uppercase tracking-[0.2em] text-white/30 hover:text-white/60 transition-colors font-mono">GitHub</a>
+            <Link href="/docs" className="text-[11px] uppercase tracking-[0.2em] text-white/30 hover:text-white/60 transition-colors font-mono">API Reference</Link>
           </div>
-        </main>
-      </div>
-    </SidebarProvider>
+        </div>
+      </footer>
+    </div>
   );
 }
 
