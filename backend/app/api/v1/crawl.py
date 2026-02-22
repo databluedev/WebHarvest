@@ -68,6 +68,11 @@ def _build_result_dicts(results) -> list[dict]:
         links_detail = meta.pop("links_detail", None)
         tables = meta.pop("tables", None)
         selector_data = meta.pop("selector_data", None)
+        product_data = meta.pop("product_data", None)
+        fit_markdown = meta.pop("fit_markdown", None)
+        citations = meta.pop("citations", None)
+        markdown_with_citations = meta.pop("markdown_with_citations", None)
+        content_hash = meta.pop("content_hash", None)
 
         if meta:
             page["metadata"] = meta
@@ -83,6 +88,16 @@ def _build_result_dicts(results) -> list[dict]:
             page["tables"] = tables
         if selector_data:
             page["selector_data"] = selector_data
+        if product_data:
+            page["product_data"] = product_data
+        if fit_markdown:
+            page["fit_markdown"] = fit_markdown
+        if citations:
+            page["citations"] = citations
+        if markdown_with_citations:
+            page["markdown_with_citations"] = markdown_with_citations
+        if content_hash:
+            page["content_hash"] = content_hash
 
         pages.append(page)
     return pages
@@ -201,6 +216,11 @@ async def get_crawl_status(
             links_detail = None
             tables = None
             selector_data = None
+            product_data = None
+            fit_markdown = None
+            citations = None
+            markdown_with_citations = None
+            content_hash = None
 
             if r.metadata_:
                 meta = dict(r.metadata_)
@@ -210,6 +230,11 @@ async def get_crawl_status(
                 links_detail = meta.pop("links_detail", None)
                 tables = meta.pop("tables", None)
                 selector_data = meta.pop("selector_data", None)
+                product_data = meta.pop("product_data", None)
+                fit_markdown = meta.pop("fit_markdown", None)
+                citations = meta.pop("citations", None)
+                markdown_with_citations = meta.pop("markdown_with_citations", None)
+                content_hash = meta.pop("content_hash", None)
 
                 page_metadata = PageMetadata(
                     title=meta.get("title"),
@@ -242,6 +267,11 @@ async def get_crawl_status(
                     images=images if not requested_formats or "images" in requested_formats else None,
                     tables=tables if not requested_formats or "tables" in requested_formats else None,
                     selector_data=selector_data,
+                    product_data=product_data,
+                    fit_markdown=fit_markdown,
+                    citations=citations,
+                    markdown_with_citations=markdown_with_citations,
+                    content_hash=content_hash,
                     extract=r.extract,
                     metadata=page_metadata,
                 )
@@ -414,7 +444,7 @@ async def export_crawl(
             if p.get("screenshot_base64"):
                 try:
                     img_data = base64.b64decode(p["screenshot_base64"])
-                    zf.writestr(f"{folder}/screenshot.jpg", img_data)
+                    zf.writestr(f"{folder}/screenshot.png", img_data)
                 except Exception:
                     pass
 
@@ -476,12 +506,28 @@ async def stream_crawl_results(
 
         async def completed_gen():
             for r in all_results:
-                yield {
+                meta = dict(r.metadata_) if r.metadata_ else {}
+                item = {
                     "url": r.url,
                     "markdown": r.markdown,
                     "links": r.links,
-                    "metadata": dict(r.metadata_) if r.metadata_ else None,
                 }
+                if r.html:
+                    item["html"] = r.html
+                if r.screenshot_url:
+                    item["screenshot"] = r.screenshot_url
+                # Extract enriched fields from metadata
+                for _key in ("structured_data", "headings", "images", "product_data",
+                             "tables", "selector_data", "fit_markdown", "citations",
+                             "markdown_with_citations", "content_hash", "links_detail"):
+                    _val = meta.pop(_key, None)
+                    if _val:
+                        item[_key] = _val
+                if meta:
+                    item["metadata"] = meta
+                if r.extract:
+                    item["extract"] = r.extract
+                yield item
 
         return StreamingResponse(
             ndjson_stream(completed_gen()),
@@ -507,12 +553,27 @@ async def stream_crawl_results(
             if new_results:
                 idle = 0
                 for r in new_results:
-                    yield {
+                    meta = dict(r.metadata_) if r.metadata_ else {}
+                    item = {
                         "url": r.url,
                         "markdown": r.markdown,
                         "links": r.links,
-                        "metadata": dict(r.metadata_) if r.metadata_ else None,
                     }
+                    if r.html:
+                        item["html"] = r.html
+                    if r.screenshot_url:
+                        item["screenshot"] = r.screenshot_url
+                    for _key in ("structured_data", "headings", "images", "product_data",
+                                 "tables", "selector_data", "fit_markdown", "citations",
+                                 "markdown_with_citations", "content_hash", "links_detail"):
+                        _val = meta.pop(_key, None)
+                        if _val:
+                            item[_key] = _val
+                    if meta:
+                        item["metadata"] = meta
+                    if r.extract:
+                        item["extract"] = r.extract
+                    yield item
                     last_count += 1
             else:
                 idle += 1

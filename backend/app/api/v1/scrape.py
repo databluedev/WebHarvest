@@ -72,6 +72,11 @@ def _build_result_dicts(results) -> list[dict]:
         headings = meta.pop("headings", None)
         images = meta.pop("images", None)
         links_detail = meta.pop("links_detail", None)
+        product_data = meta.pop("product_data", None)
+        fit_markdown = meta.pop("fit_markdown", None)
+        citations = meta.pop("citations", None)
+        markdown_with_citations = meta.pop("markdown_with_citations", None)
+        content_hash = meta.pop("content_hash", None)
 
         if meta:
             page["metadata"] = meta
@@ -83,6 +88,16 @@ def _build_result_dicts(results) -> list[dict]:
             page["images"] = images
         if links_detail:
             page["links_detail"] = links_detail
+        if product_data:
+            page["product_data"] = product_data
+        if fit_markdown:
+            page["fit_markdown"] = fit_markdown
+        if citations:
+            page["citations"] = citations
+        if markdown_with_citations:
+            page["markdown_with_citations"] = markdown_with_citations
+        if content_hash:
+            page["content_hash"] = content_hash
 
         pages.append(page)
     return pages
@@ -202,6 +217,20 @@ async def scrape(
             metadata_dict["images"] = result.images
         if result.links_detail and (not _req_fmts or "links" in _req_fmts):
             metadata_dict["links_detail"] = result.links_detail
+        if result.product_data:
+            metadata_dict["product_data"] = result.product_data
+        if result.tables:
+            metadata_dict["tables"] = result.tables
+        if result.selector_data:
+            metadata_dict["selector_data"] = result.selector_data
+        if result.fit_markdown:
+            metadata_dict["fit_markdown"] = result.fit_markdown
+        if result.citations:
+            metadata_dict["citations"] = result.citations
+        if result.markdown_with_citations:
+            metadata_dict["markdown_with_citations"] = result.markdown_with_citations
+        if result.content_hash:
+            metadata_dict["content_hash"] = result.content_hash
 
         job_result = JobResult(
             job_id=job.id,
@@ -353,12 +382,23 @@ async def get_scrape_status(
         images = None
         links_detail = None
 
+        product_data = None
+        fit_markdown = None
+        citations = None
+        markdown_with_citations = None
+        content_hash = None
+
         if r.metadata_:
             meta = dict(r.metadata_)
             structured_data = meta.pop("structured_data", None)
             headings = meta.pop("headings", None)
             images = meta.pop("images", None)
             links_detail = meta.pop("links_detail", None)
+            product_data = meta.pop("product_data", None)
+            fit_markdown = meta.pop("fit_markdown", None)
+            citations = meta.pop("citations", None)
+            markdown_with_citations = meta.pop("markdown_with_citations", None)
+            content_hash = meta.pop("content_hash", None)
 
             page_metadata = PageMetadata(
                 title=meta.get("title"),
@@ -398,6 +438,16 @@ async def get_scrape_status(
         if not requested_formats or "images" in requested_formats:
             if images:
                 page["images"] = images
+        if product_data:
+            page["product_data"] = product_data
+        if fit_markdown:
+            page["fit_markdown"] = fit_markdown
+        if citations:
+            page["citations"] = citations
+        if markdown_with_citations:
+            page["markdown_with_citations"] = markdown_with_citations
+        if content_hash:
+            page["content_hash"] = content_hash
         if r.extract:
             page["extract"] = r.extract
         if page_metadata:
@@ -516,7 +566,7 @@ async def export_scrape(
             if p.get("screenshot_base64"):
                 try:
                     img_data = base64.b64decode(p["screenshot_base64"])
-                    zf.writestr(f"{folder}/screenshot.jpg", img_data)
+                    zf.writestr(f"{folder}/screenshot.png", img_data)
                 except Exception:
                     pass
 

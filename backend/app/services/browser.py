@@ -1066,6 +1066,10 @@ class BrowserPool:
                     )
                 else:
                     ua = random.choice(CHROME_USER_AGENTS)
+                    # Build dynamic Sec-Ch-Ua from the UA string
+                    import re as _re
+                    _m = _re.search(r"Chrome/(\d+)", ua)
+                    _chrome_ver = _m.group(1) if _m else "125"
                     context_kwargs = dict(
                         user_agent=ua,
                         viewport=vp,
@@ -1080,7 +1084,7 @@ class BrowserPool:
                             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
                             "Accept-Language": "en-US,en;q=0.9",
                             "Accept-Encoding": "gzip, deflate, br",
-                            "Sec-Ch-Ua": '"Chromium";v="125", "Google Chrome";v="125", "Not-A.Brand";v="99"',
+                            "Sec-Ch-Ua": f'"Chromium";v="{_chrome_ver}", "Google Chrome";v="{_chrome_ver}", "Not-A.Brand";v="24"',
                             "Sec-Ch-Ua-Mobile": "?0",
                             "Sec-Ch-Ua-Platform": '"Windows"'
                             if "Win" in ua
@@ -1399,6 +1403,10 @@ class CrawlSession:
             )
         else:
             ua = random.choice(CHROME_USER_AGENTS)
+            # Build dynamic Sec-Ch-Ua from the UA string
+            import re as _re
+            _m = _re.search(r"Chrome/(\d+)", ua)
+            _chrome_ver = _m.group(1) if _m else "125"
             context_kwargs = dict(
                 user_agent=ua,
                 viewport=vp,
@@ -1413,7 +1421,7 @@ class CrawlSession:
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
                     "Accept-Language": "en-US,en;q=0.9",
                     "Accept-Encoding": "gzip, deflate, br",
-                    "Sec-Ch-Ua": '"Chromium";v="125", "Google Chrome";v="125", "Not-A.Brand";v="99"',
+                    "Sec-Ch-Ua": f'"Chromium";v="{_chrome_ver}", "Google Chrome";v="{_chrome_ver}", "Not-A.Brand";v="24"',
                     "Sec-Ch-Ua-Mobile": "?0",
                     "Sec-Ch-Ua-Platform": '"Windows"'
                     if "Win" in ua
@@ -1497,6 +1505,12 @@ class CrawlSession:
             if self._recreate_lock is None:
                 self._recreate_lock = asyncio.Lock()
             async with self._recreate_lock:
+                # Close the dead context to prevent leaks before recreating
+                if self._context:
+                    try:
+                        await self._context.close()
+                    except Exception:
+                        pass
                 # Double-check: another coroutine may have already recreated it
                 try:
                     return await self._context.new_page()
@@ -1505,7 +1519,7 @@ class CrawlSession:
             return await self._context.new_page()
 
     async def _recreate_context(self):
-        """Recreate the browser context after a crash, preserving cookies."""
+        """Recreate the browser context after a crash, preserving cookies and headers."""
         # Close the old dead context (ignore errors — it may already be dead)
         if self._context:
             try:
@@ -1528,6 +1542,8 @@ class CrawlSession:
         webgl_vendor, webgl_renderer = random.choice(WEBGL_RENDERERS)
         color_depth = random.choice(COLOR_DEPTHS)
 
+        import re as _re
+
         if is_firefox:
             ua = random.choice(FIREFOX_USER_AGENTS)
             context_kwargs = dict(
@@ -1540,9 +1556,23 @@ class CrawlSession:
                 has_touch=False,
                 is_mobile=False,
                 color_scheme="light",
+                extra_http_headers={
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "DNT": "1",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1",
+                    "Upgrade-Insecure-Requests": "1",
+                },
             )
         else:
             ua = random.choice(CHROME_USER_AGENTS)
+            # Build dynamic Sec-Ch-Ua from the UA string
+            _m = _re.search(r"Chrome/(\d+)", ua)
+            _chrome_ver = _m.group(1) if _m else "125"
             context_kwargs = dict(
                 user_agent=ua,
                 viewport=vp,
@@ -1553,6 +1583,23 @@ class CrawlSession:
                 has_touch=False,
                 is_mobile=False,
                 color_scheme="light",
+                extra_http_headers={
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Sec-Ch-Ua": f'"Chromium";v="{_chrome_ver}", "Google Chrome";v="{_chrome_ver}", "Not-A.Brand";v="24"',
+                    "Sec-Ch-Ua-Mobile": "?0",
+                    "Sec-Ch-Ua-Platform": '"Windows"'
+                    if "Win" in ua
+                    else '"macOS"'
+                    if "Mac" in ua
+                    else '"Linux"',
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1",
+                    "Upgrade-Insecure-Requests": "1",
+                },
             )
 
         self._context = await browser.new_context(**context_kwargs)

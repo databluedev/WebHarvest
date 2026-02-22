@@ -458,8 +458,7 @@ def process_crawl(self, job_id: str, config: dict):
                                             )
                                             _ss_bytes = (
                                                 await _ss_page.screenshot(
-                                                    type="jpeg",
-                                                    quality=80,
+                                                    type="png",
                                                     full_page=True,
                                                 )
                                             )

@@ -830,6 +830,20 @@ def _looks_blocked(html: str) -> bool:
     if len(body_text) > 3000:
         return False
 
+    # Medium pages (800-3000 chars): only check strong block signals that
+    # wouldn't appear in normal content. This closes the gap where pages
+    # with minimal content slip through unchecked.
+    if 800 <= len(body_text) <= 3000:
+        _strong_block_patterns = [
+            "checking your browser", "just a moment", "attention required",
+            "please wait while we verify", "performance & security by cloudflare",
+            "sucuri website firewall", "your connection needs to be verified",
+        ]
+        for pattern in _strong_block_patterns:
+            if pattern in body_text:
+                logger.warning(f"_looks_blocked: medium page matched '{pattern}' ({len(body_text)} chars)")
+                return True
+
     # Only check block patterns on very short pages — pages with moderate
     # text (e.g. partially loaded product pages) shouldn't be flagged just
     # because they contain words like "captcha" in a footer link or script ref.
@@ -1065,11 +1079,23 @@ async def _race_strategies(
                 try:
                     name, result = task.result()
 
-                    # Track best HTML for fallback regardless of validation
+                    # Track best HTML for fallback regardless of validation.
+                    # Score by visible text length (not raw HTML size) so a
+                    # clean 50KB article beats a 500KB cookie-consent page.
                     html = result[0] if isinstance(result, tuple) else ""
-                    if html and len(html) > len(race.best_html):
-                        race.best_html = html
-                        race.best_result = result
+                    if html:
+                        _visible = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+                        _visible = re.sub(r"<style[^>]*>.*?</style>", "", _visible, flags=re.DOTALL | re.IGNORECASE)
+                        _visible_text = re.sub(r"<[^>]+>", " ", _visible)
+                        _visible_len = len(_visible_text.split())
+                        _best_visible = 0
+                        if race.best_html:
+                            _bv = re.sub(r"<script[^>]*>.*?</script>", "", race.best_html, flags=re.DOTALL | re.IGNORECASE)
+                            _bv = re.sub(r"<style[^>]*>.*?</style>", "", _bv, flags=re.DOTALL | re.IGNORECASE)
+                            _best_visible = len(re.sub(r"<[^>]+>", " ", _bv).split())
+                        if _visible_len > _best_visible:
+                            race.best_html = html
+                            race.best_result = result
 
                     if validate_fn(result):
                         race.winner_name = name
@@ -1223,7 +1249,6 @@ async def scrape_url(
         and (not needs_browser or _is_browser_strategy)
     ):
         last_strategy = strategy_data.get("last_success_strategy", "")
-        strategy_data.get("last_success_tier", 1)
         tier_start = time.time()
 
         _custom_headers = getattr(request, "headers", None)
@@ -1369,13 +1394,14 @@ async def scrape_url(
         nonlocal raw_html_best, screenshot_b64_best, action_screenshots_best
         if race.best_html and len(race.best_html) > len(raw_html_best):
             raw_html_best = race.best_html
-        # Preserve screenshot from browser race results (5-tuple)
+        # Preserve screenshot from browser race results (5-tuple or 6-tuple)
         if (
             race.best_result
             and isinstance(race.best_result, tuple)
-            and len(race.best_result) == 5
+            and len(race.best_result) >= 5
         ):
-            _, _, best_ss, best_action_ss, _ = race.best_result
+            best_ss = race.best_result[2]
+            best_action_ss = race.best_result[3]
             if best_ss and not screenshot_b64_best:
                 screenshot_b64_best = best_ss
                 action_screenshots_best = best_action_ss or []
@@ -2599,15 +2625,27 @@ async def _fetch_with_browser_session(
         referrer = random.choice(_GOOGLE_REFERRERS)
         hard_site = _is_hard_site(url)
 
-        response = await page.goto(
-            url,
-            wait_until="domcontentloaded",
-            timeout=15000,
-            referer=referrer,
-        )
-        status_code = response.status if response else 0
-        if response:
-            response_headers = {k.lower(): v for k, v in response.headers.items()}
+        try:
+            response = await page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=15000,
+                referer=referrer,
+            )
+            status_code = response.status if response else 0
+            if response:
+                response_headers = {k.lower(): v for k, v in response.headers.items()}
+        except Exception as nav_err:
+            # Navigation timeout — capture whatever HTML was already loaded
+            # instead of discarding it. Partial content is better than nothing.
+            logger.warning(f"Navigation timeout for {url} in CrawlSession, capturing partial: {nav_err}")
+            try:
+                raw_html = await page.content()
+                if raw_html and len(raw_html) > 500:
+                    return raw_html, status_code or 0, screenshot_b64, action_screenshots, response_headers
+            except Exception:
+                pass
+            raise
 
         try:
             await page.wait_for_load_state(

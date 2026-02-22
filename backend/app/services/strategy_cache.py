@@ -122,16 +122,15 @@ async def record_strategy_result(
             # Exponential moving average for timing
             prev_avg = data.get("avg_success_ms", time_ms)
             data["avg_success_ms"] = prev_avg * 0.7 + time_ms * 0.3
-            # Reset fail counts for lower tiers on success
-            if tier <= 1:
-                data["fail_count_tier1"] = 0
-            if tier <= 2:
-                data["fail_count_tier2"] = 0
+            # Any success resets ALL fail counts — the domain is reachable,
+            # so don't skip lower tiers on the next visit.
+            data["fail_count_tier1"] = 0
+            data["fail_count_tier2"] = 0
         else:
-            # Increment fail counts
+            # Increment fail count for the specific tier that failed
             if tier <= 1:
                 data["fail_count_tier1"] = data.get("fail_count_tier1", 0) + 1
-            elif tier <= 2:
+            if tier == 2:
                 data["fail_count_tier2"] = data.get("fail_count_tier2", 0) + 1
 
         await redis.set(key, json.dumps(data), ex=ttl)

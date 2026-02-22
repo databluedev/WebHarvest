@@ -67,6 +67,10 @@ class CrawlPageData(BaseModel):
     product_data: dict | None = None
     tables: list[dict] | None = None
     selector_data: dict | None = None
+    fit_markdown: str | None = None
+    citations: list[str] | None = None
+    markdown_with_citations: str | None = None
+    content_hash: str | None = None
     extract: dict[str, Any] | list[Any] | None = None
     metadata: PageMetadata | None = None
 

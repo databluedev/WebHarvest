@@ -337,7 +337,7 @@ async def export_search(
             if p.get("screenshot_base64"):
                 try:
                     zf.writestr(
-                        f"{folder}/screenshot.jpg",
+                        f"{folder}/screenshot.png",
                         base64.b64decode(p["screenshot_base64"]),
                     )
                 except Exception:

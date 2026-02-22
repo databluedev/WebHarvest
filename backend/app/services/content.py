@@ -345,11 +345,25 @@ def _clean_soup(html: str) -> BeautifulSoup:
     for tag in soup.find_all(list(JUNK_TAGS)):
         tag.decompose()
 
+    # Collect elements that match PRESERVE_SELECTORS — these must never be removed
+    _preserved = set()
+    for sel in PRESERVE_SELECTORS:
+        try:
+            for el in soup.select(sel):
+                _preserved.add(id(el))
+                # Also protect all ancestors of preserved elements
+                for parent in el.parents:
+                    _preserved.add(id(parent))
+        except Exception:
+            pass
+
     # Remove ALL boilerplate — no text-length mercy
     for selector in BOILERPLATE_SELECTORS:
         try:
             for el in soup.select(selector):
                 if _is_inside_main_content(el):
+                    continue
+                if id(el) in _preserved:
                     continue
                 el.decompose()
         except Exception:
@@ -384,8 +398,11 @@ def _extract_main_tag(html: str, url: str = "") -> Tag | BeautifulSoup:
     # Get text length directly from the tag — no re-parse needed
     bs4_text_len = len(main_content.get_text(strip=True)) if main_content else 0
 
-    # Skip trafilatura when BS4 found sufficient content (saves 150-250ms)
-    if bs4_text_len > 500:
+    # Skip trafilatura when BS4 found sufficient content (saves 150-250ms).
+    # Threshold of 200 chars ensures trafilatura is tried for thin/ambiguous
+    # BS4 results (e.g. pages where main content is in JS-rendered sections
+    # that trafilatura can sometimes recover from raw HTML heuristics).
+    if bs4_text_len > 200:
         logger.debug(f"BS4 extraction sufficient ({bs4_text_len} chars), skipping trafilatura")
         return main_content or soup.body or soup
 
@@ -530,7 +547,9 @@ def _find_main_container(soup: BeautifulSoup) -> Tag | None:
                 logger.debug(f"Doc framework '{fw}' content found via '{sel}'")
                 return el
 
-    # Standard semantic selectors
+    # Standard semantic selectors — try progressively less specific.
+    # Threshold of 500 chars avoids latching onto navbars/sidebars that
+    # happen to live inside <main> or <article>.
     for selector in [
         "main",
         "article",
@@ -540,7 +559,18 @@ def _find_main_container(soup: BeautifulSoup) -> Tag | None:
         ".main-content",
     ]:
         el = soup.select_one(selector)
-        if el and len(el.get_text(strip=True)) > 200:
+        if el and len(el.get_text(strip=True)) > 500:
+            return el
+
+    # Second pass with lower threshold — catches thin but valid pages
+    # (product pages, landing pages with short content)
+    for selector in [
+        "main",
+        "article",
+        "[role='main']",
+    ]:
+        el = soup.select_one(selector)
+        if el and len(el.get_text(strip=True)) > 100:
             return el
 
     return None
@@ -630,7 +660,7 @@ def _postprocess_markdown(markdown: str) -> str:
 _CONVERTER = WebHarvestConverter(
     heading_style="ATX",
     bullets="-",
-    newline_style="backslash",
+    newline_style="spaces",
     strip=["script", "style"],
 )
 
@@ -722,9 +752,9 @@ def _clean_soup_light(html: str, base_url: str = "") -> BeautifulSoup:
     return soup
 
 
-# Minimum words for a block to be kept (lowered from 10 to preserve
-# captions, bylines, short metadata, and CTAs)
-BLOCK_WORD_THRESHOLD = 4
+# Minimum words for a block to be kept (lowered to preserve product names,
+# prices, short labels, captions, bylines, and CTAs)
+BLOCK_WORD_THRESHOLD = 2
 
 # Tags that contain valuable non-text content — never filtered by word count
 _VALUABLE_CHILDREN = {"img", "pre", "code", "table", "video", "audio", "picture"}
