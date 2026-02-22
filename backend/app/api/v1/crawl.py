@@ -252,16 +252,19 @@ async def get_crawl_status(
                     response_headers=meta.get("response_headers"),
                 )
 
-            # Only include fields the user actually requested
+            # Only include fields the user actually requested.
+            # Exclude heavy fields (html, screenshot) from paginated
+            # responses — the frontend loads them on demand via
+            # /jobs/{id}/results/{result_id}.
             data.append(
                 CrawlPageData(
                     id=str(r.id),
                     url=r.url,
                     markdown=r.markdown if not requested_formats or "markdown" in requested_formats else None,
-                    html=r.html if not requested_formats or "html" in requested_formats else None,
+                    html="available" if r.html else None,
                     links=r.links if not requested_formats or "links" in requested_formats else None,
                     links_detail=links_detail if not requested_formats or "links" in requested_formats else None,
-                    screenshot=r.screenshot_url if not requested_formats or "screenshot" in requested_formats else None,
+                    screenshot="available" if r.screenshot_url else None,
                     structured_data=structured_data if not requested_formats or "structured_data" in requested_formats else None,
                     headings=headings if not requested_formats or "headings" in requested_formats else None,
                     images=images if not requested_formats or "images" in requested_formats else None,

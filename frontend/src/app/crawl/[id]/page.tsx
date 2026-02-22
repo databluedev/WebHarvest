@@ -42,8 +42,12 @@ type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "he
 const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { page: any; index: number; jobId: string }) {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("markdown");
-  const [screenshotData, setScreenshotData] = useState<string | null>(page.screenshot || null);
+  // Heavy fields (screenshot, html) are loaded on demand via detail endpoint.
+  // The paginated response sends "available" markers instead of full data.
+  const [screenshotData, setScreenshotData] = useState<string | null>(null);
   const [screenshotLoading, setScreenshotLoading] = useState(false);
+  const [htmlData, setHtmlData] = useState<string | null>(null);
+  const [htmlLoading, setHtmlLoading] = useState(false);
 
   const hasMarkdown = !!page.markdown;
   const hasHtml = !!page.html;
@@ -54,18 +58,24 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
   const hasImages = page.images?.length > 0;
   const hasExtract = !!page.extract;
 
-  const loadScreenshot = useCallback(async () => {
-    if (screenshotData || screenshotLoading || !page.id) return;
-    setScreenshotLoading(true);
+  const loadDetail = useCallback(async (field: "screenshot" | "html") => {
+    if (!page.id) return;
+    if (field === "screenshot" && (screenshotData || screenshotLoading)) return;
+    if (field === "html" && (htmlData || htmlLoading)) return;
+    if (field === "screenshot") setScreenshotLoading(true);
+    else setHtmlLoading(true);
     try {
       const detail = await api.getJobResultDetail(jobId, page.id);
-      setScreenshotData(detail.screenshot || null);
+      if (field === "screenshot") setScreenshotData(detail.screenshot || null);
+      else setHtmlData(detail.html || null);
     } catch {
-      setScreenshotData(null);
+      if (field === "screenshot") setScreenshotData(null);
+      else setHtmlData(null);
     } finally {
-      setScreenshotLoading(false);
+      if (field === "screenshot") setScreenshotLoading(false);
+      else setHtmlLoading(false);
     }
-  }, [jobId, page.id, screenshotData, screenshotLoading]);
+  }, [jobId, page.id, screenshotData, screenshotLoading, htmlData, htmlLoading]);
 
   const tabs: { id: TabType; label: string; icon: any; available: boolean }[] = [
     { id: "markdown", label: "Markdown", icon: FileText, available: hasMarkdown },
@@ -192,9 +202,23 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
             )}
 
             {activeTab === "html" && hasHtml && (
-              <pre className="max-h-96 overflow-auto text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-md p-4">
-                {page.html}
-              </pre>
+              <div>
+                {htmlData ? (
+                  <pre className="max-h-96 overflow-auto text-xs text-muted-foreground whitespace-pre-wrap font-mono bg-muted/30 rounded-md p-4">
+                    {htmlData}
+                  </pre>
+                ) : htmlLoading ? (
+                  <div className="flex items-center gap-2 py-8 text-muted-foreground justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm">Loading HTML...</span>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => loadDetail("html")} className="gap-2">
+                    <Code className="h-4 w-4" />
+                    Load HTML
+                  </Button>
+                )}
+              </div>
             )}
 
             {activeTab === "screenshot" && hasScreenshot && (
@@ -212,7 +236,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                     <span className="text-sm">Loading screenshot...</span>
                   </div>
                 ) : (
-                  <Button variant="outline" size="sm" onClick={loadScreenshot} className="gap-2">
+                  <Button variant="outline" size="sm" onClick={() => loadDetail("screenshot")} className="gap-2">
                     <Camera className="h-4 w-4" />
                     Load Screenshot
                   </Button>
