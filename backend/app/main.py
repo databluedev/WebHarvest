@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -14,6 +15,16 @@ from app.services.browser import browser_pool
 
 # Configure structured logging (must happen before any logger is created)
 configure_logging(log_format=settings.LOG_FORMAT, log_level=settings.LOG_LEVEL)
+
+# Initialize Sentry error tracking
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        environment=settings.SENTRY_ENVIRONMENT,
+        release=f"webharvest@{settings.APP_VERSION}",
+        send_default_pii=False,
+    )
 
 logger = logging.getLogger(__name__)
 

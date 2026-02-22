@@ -29,7 +29,7 @@ services:
       retries: 3
       start_period: 15s
 
-  celery-worker:
+  celery-worker-scrape:
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -49,7 +49,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
-    command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 4 -Q scrape,crawl,map,search' /app/app
+    command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 4 -Q scrape' /app/app
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
       interval: 30s
@@ -57,6 +57,60 @@ services:
       retries: 3
     deploy:
       replicas: 2
+
+  celery-worker-crawl:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@db:5432/${POSTGRES_DB:-webharvest}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
+      - STEALTH_ENGINE_URL=http://stealth-engine:8888
+    command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 2 -Q crawl' /app/app
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      replicas: 2
+
+  celery-worker-search:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@db:5432/${POSTGRES_DB:-webharvest}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 2 -Q search,map' /app/app
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   celery-beat:
     build:

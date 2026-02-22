@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     # Stealth Engine sidecar (empty = disabled, fallback to local browser_pool)
     STEALTH_ENGINE_URL: str = ""
 
+    # Sentry
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.2
+    SENTRY_ENVIRONMENT: str = "development"
+
     # Logging
     LOG_FORMAT: str = "json"  # "json" for production, "text" for development
     LOG_LEVEL: str = "INFO"

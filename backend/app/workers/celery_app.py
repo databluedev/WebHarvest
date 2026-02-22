@@ -4,10 +4,21 @@ import traceback
 from datetime import datetime, timezone
 
 import redis
+import sentry_sdk
 from celery import Celery
 from celery.signals import task_failure, worker_shutting_down, after_setup_logger, after_setup_task_logger
 
 from app.config import settings
+
+# Initialize Sentry for Celery workers
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        environment=settings.SENTRY_ENVIRONMENT,
+        release=f"webharvest@{settings.APP_VERSION}",
+        send_default_pii=False,
+    )
 
 logger = logging.getLogger(__name__)
 

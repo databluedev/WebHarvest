@@ -49,6 +49,9 @@ ddgs>=9.0.0
 # Metrics
 prometheus-client>=0.21.0
 
+# Error Tracking
+sentry-sdk[fastapi,celery]>=2.0.0
+
 # Structured Logging
 python-json-logger>=3.0.0
 

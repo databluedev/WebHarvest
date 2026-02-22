@@ -31,6 +31,8 @@ services:
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
       - LOG_FORMAT=json
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=production
     command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 120"
     restart: unless-stopped
     healthcheck:
@@ -67,6 +69,8 @@ services:
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=production
     command: celery -A app.workers.celery_app worker -l warning -c 4 -Q scrape
     restart: unless-stopped
     stop_grace_period: 30s
@@ -101,6 +105,8 @@ services:
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=production
     command: celery -A app.workers.celery_app worker -l warning -c 2 -Q crawl
     restart: unless-stopped
     stop_grace_period: 30s
@@ -133,6 +139,8 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=production
     command: celery -A app.workers.celery_app worker -l warning -c 2 -Q search,map
     restart: unless-stopped
     stop_grace_period: 30s
@@ -164,6 +172,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=production
     command: celery -A app.workers.celery_app beat -l warning
     restart: unless-stopped
     deploy:
