@@ -139,15 +139,124 @@ def process_crawl(self, job_id: str, config: dict):
 
             loop.set_exception_handler(_crawl_exception_handler)
 
+            # =============================================================
+            # Session warm-up: establish cookies before BFS.
+            # Hard sites (Amazon, etc.) reject requests probabilistically.
+            # Retry the seed URL with the full scrape pipeline (all tiers
+            # including advanced_prewarm) until we get a valid response,
+            # then transfer cookies into crawl_session for fast subsequent
+            # fetches. The successful result is used as page 1 directly.
+            # =============================================================
+            _warmup_result = None
+            _warmup_max = 3
+            for _warmup_attempt in range(_warmup_max):
+                try:
+                    logger.warning(
+                        f"Session warm-up {_warmup_attempt + 1}/{_warmup_max} "
+                        f"for {request.url}"
+                    )
+                    _warmup_scrape = await asyncio.wait_for(
+                        crawler.scrape_page(request.url),
+                        timeout=120,
+                    )
+                    _warmup_data = _warmup_scrape["scrape_data"]
+                    _warmup_md = (_warmup_data.markdown or "").strip()
+                    _warmup_words = len(_warmup_md.split())
+
+                    if _warmup_words >= 15:
+                        logger.warning(
+                            f"Session warm-up succeeded ({_warmup_words} words) "
+                            f"on attempt {_warmup_attempt + 1}"
+                        )
+                        _warmup_result = _warmup_scrape
+                        break
+                    else:
+                        logger.warning(
+                            f"Session warm-up attempt {_warmup_attempt + 1} got "
+                            f"thin content ({_warmup_words} words)"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Session warm-up attempt {_warmup_attempt + 1} failed: {e}"
+                    )
+
+                if _warmup_attempt < _warmup_max - 1:
+                    _backoff = (2 ** _warmup_attempt) * 5  # 5s, 10s
+                    logger.warning(f"Warm-up backoff: {_backoff}s")
+                    await asyncio.sleep(_backoff)
+
+            # Pinned strategy — set by warm-up or by first successful fetch
+            _pinned_strategy: str | None = None
+            _pinned_tier: int | None = None
+
+            # If warm-up succeeded, save result as page 1 and mark seed visited
+            _warmup_links = []
+            if _warmup_result:
+                _wu_data = _warmup_result["scrape_data"]
+                _warmup_links = _warmup_result.get("discovered_links", [])
+
+                # Build metadata for DB storage
+                _wu_meta = {}
+                if _wu_data.metadata:
+                    _wu_meta = _wu_data.metadata.model_dump(exclude_none=True)
+                if _wu_data.structured_data and (not _user_formats or "structured_data" in _user_formats):
+                    _wu_meta["structured_data"] = _wu_data.structured_data
+                if _wu_data.headings and (not _user_formats or "headings" in _user_formats):
+                    _wu_meta["headings"] = _wu_data.headings
+                if _wu_data.images and (not _user_formats or "images" in _user_formats):
+                    _wu_meta["images"] = _wu_data.images
+                if _wu_data.links_detail and (not _user_formats or "links" in _user_formats):
+                    _wu_meta["links_detail"] = _wu_data.links_detail
+                if _wu_data.product_data:
+                    _wu_meta["product_data"] = _wu_data.product_data
+                if _wu_data.tables and (not _user_formats or "tables" in _user_formats):
+                    _wu_meta["tables"] = _wu_data.tables
+                if _wu_data.content_hash:
+                    _wu_meta["content_hash"] = _wu_data.content_hash
+
+                async with session_factory() as db:
+                    job_result = JobResult(
+                        job_id=UUID(job_id),
+                        url=request.url,
+                        markdown=_wu_data.markdown if not _user_formats or "markdown" in _user_formats else None,
+                        html=_wu_data.html if not _user_formats or "html" in _user_formats else None,
+                        links=_wu_data.links if _wu_data.links and (not _user_formats or "links" in _user_formats) else None,
+                        metadata_=_wu_meta if _wu_meta else None,
+                        screenshot_url=_wu_data.screenshot if not _user_formats or "screenshot" in _user_formats else None,
+                    )
+                    db.add(job_result)
+
+                    pages_crawled = 1
+                    _wu_wc = len((_wu_data.markdown or "").split())
+                    logger.warning(
+                        f"Saved page {pages_crawled}/{request.max_pages}: "
+                        f"{request.url} ({_wu_wc}w) [warm-up]"
+                    )
+
+                    job = await db.get(Job, UUID(job_id))
+                    if job:
+                        job.completed_pages = pages_crawled
+                    await db.commit()
+
+                # Mark seed URL as visited so BFS doesn't re-fetch it
+                seed_norm = normalize_url(request.url)
+                await crawler.mark_visited(seed_norm)
+
+                # Seed frontier with discovered links for BFS continuation
+                if _warmup_links and pages_crawled < request.max_pages:
+                    await crawler.add_to_frontier(_warmup_links, 1)
+
+                # Pin strategy to crawl_session — cookies are now established
+                _pinned_strategy = "crawl_session"
+                _pinned_tier = 2
+                logger.warning(
+                    f"Pinned strategy: crawl_session (from warm-up) "
+                    f"for crawl {job_id}"
+                )
+
             # Producer-consumer pipeline queue
             extract_queue = asyncio.Queue(maxsize=concurrency * 2)
             extract_done = asyncio.Event()
-            # No pinned strategy — every page races crawl_session vs stealth
-            # engine (Tier 2) so whichever is fastest and not blocked wins.
-            # HTTP tiers (0-1) are skipped because we always want full
-            # browser rendering for crawls.
-            _pinned_strategy: str | None = None
-            _pinned_tier: int | None = None
 
             async def fetch_producer():
                 """BFS loop: fetch pages, put raw results on extract_queue."""
