@@ -68,9 +68,12 @@ async def job_events(
         prev_completed = -1
         heartbeat_counter = 0
 
-        async with async_session() as stream_db:
-            while True:
-                try:
+        while True:
+            try:
+                # Fresh session per iteration to avoid stale identity-map
+                # reads — a long-lived session's get() returns cached ORM
+                # state even after expire(), missing worker commits.
+                async with async_session() as stream_db:
                     stream_job = await stream_db.get(Job, _job_id)
                     if not stream_job:
                         yield f"data: {json.dumps({'done': True, 'status': 'failed'})}\n\n"
@@ -78,40 +81,38 @@ async def job_events(
 
                     status = stream_job.status
                     completed = stream_job.completed_pages or 0
+                    total = stream_job.total_pages or 0
 
-                    if status != prev_status or completed != prev_completed:
-                        data = json.dumps(
-                            {
-                                "status": status,
-                                "completed_pages": completed,
-                                "total_pages": stream_job.total_pages or 0,
-                            }
-                        )
-                        yield f"data: {data}\n\n"
-                        prev_status = status
-                        prev_completed = completed
-                        heartbeat_counter = 0
+                if status != prev_status or completed != prev_completed:
+                    data = json.dumps(
+                        {
+                            "status": status,
+                            "completed_pages": completed,
+                            "total_pages": total,
+                        }
+                    )
+                    yield f"data: {data}\n\n"
+                    prev_status = status
+                    prev_completed = completed
+                    heartbeat_counter = 0
 
-                    if status in ("completed", "failed", "cancelled"):
-                        yield f"data: {json.dumps({'done': True})}\n\n"
-                        return
-
-                    # Heartbeat every ~15s (30 iterations * 0.5s) to keep
-                    # proxies and browsers from closing idle connections.
-                    heartbeat_counter += 1
-                    if heartbeat_counter >= 30:
-                        yield ": heartbeat\n\n"
-                        heartbeat_counter = 0
-
-                    # Expire cached ORM state so next get() reads fresh from DB
-                    stream_db.expire(stream_job)
-
-                except Exception as e:
-                    logger.warning(f"SSE stream error for {_job_id}: {e}")
-                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                if status in ("completed", "failed", "cancelled"):
+                    yield f"data: {json.dumps({'done': True})}\n\n"
                     return
 
-                await asyncio.sleep(0.5)
+                # Heartbeat every ~15s (30 iterations * 0.5s) to keep
+                # proxies and browsers from closing idle connections.
+                heartbeat_counter += 1
+                if heartbeat_counter >= 30:
+                    yield ": heartbeat\n\n"
+                    heartbeat_counter = 0
+
+            except Exception as e:
+                logger.warning(f"SSE stream error for {_job_id}: {e}")
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                return
+
+            await asyncio.sleep(0.5)
 
     return StreamingResponse(
         event_stream(),
