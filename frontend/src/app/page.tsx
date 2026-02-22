@@ -44,7 +44,7 @@ function Reveal({ children, className, delay = 0 }: { children: React.ReactNode;
 // ── Data ───────────────────────────────────────────────────
 
 const FEATURES = [
-  { icon: "⚡", title: "Firecrawl Compatible", desc: "Drop-in API replacement. Same endpoints, same schemas. Migrate from Firecrawl in minutes without changing a line of client code.", tag: "// /v1/scrape, /v1/crawl, /v1/map" },
+  { icon: "⚡", title: "RESTful API", desc: "Clean, well-documented endpoints for every operation. Scrape, crawl, map, search, and extract — all from a single unified API.", tag: "// /v1/scrape, /v1/crawl, /v1/map" },
   { icon: "🛡", title: "5-Tier Pipeline", desc: "Parallel race across HTTP, curl-impersonate, stealth Chromium, Camoufox Firefox, and stealth engine. Fastest valid response wins.", tag: "// anti-detection at every layer" },
   { icon: "🕸", title: "Smart Crawling", desc: "BFS and DFS strategies with configurable depth, concurrency, path filters, and robots.txt compliance. Producer-consumer architecture.", tag: "// max_depth, max_pages, concurrency" },
   { icon: "🧠", title: "AI Extraction", desc: "Define a schema, get structured data. LLM-powered extraction turns any webpage into clean JSON. Works with any OpenAI-compatible API.", tag: "// schema in, structured data out" },
@@ -110,18 +110,21 @@ const TICKER_ITEMS = [
   { label: "STATUS", value: "■ OPERATIONAL", color: "text-emerald-500" },
 ];
 
-const COMPARISON = [
-  { feature: "Self-Hosted", wh: ["✓", "Full control", "check"], fc: ["~", "Partial", "partial"], sb: ["✗", "", "cross"], ap: ["✗", "", "cross"] },
-  { feature: "Open Source", wh: ["✓", "MIT License", "check"], fc: ["✓", "AGPL", "check"], sb: ["✗", "", "cross"], ap: ["~", "Partial", "partial"] },
-  { feature: "Price", wh: ["$0", "forever", "check"], fc: ["$38/mo+", "", ""], sb: ["$49/mo+", "", ""], ap: ["$49/mo+", "", ""] },
-  { feature: "Anti-Bot Bypass", wh: ["✓", "5-tier pipeline", "check"], fc: ["✓", "", "check"], sb: ["✓", "", "check"], ap: ["~", "", "partial"] },
-  { feature: "AI Extraction", wh: ["✓", "Any LLM", "check"], fc: ["✓", "", "check"], sb: ["✗", "", "cross"], ap: ["✓", "", "check"] },
-  { feature: "API Compatible", wh: ["✓", "Drop-in", "check"], fc: ["—", "", ""], sb: ["✗", "", "cross"], ap: ["✗", "", "cross"] },
-  { feature: "Stealth Browser", wh: ["✓", "Patchright + Camoufox", "check"], fc: ["✓", "", "check"], sb: ["✓", "", "check"], ap: ["✓", "", "check"] },
+const CAPABILITIES_LIST = [
+  { feature: "Self-Hosted", detail: "Full control over your data and infrastructure" },
+  { feature: "Open Source", detail: "MIT License — fork, modify, contribute" },
+  { feature: "Unlimited Usage", detail: "$0 forever, no per-page pricing" },
+  { feature: "5-Tier Anti-Bot", detail: "HTTP → curl → Chromium → Firefox → Stealth Engine" },
+  { feature: "AI Extraction", detail: "Structured data with any OpenAI-compatible LLM" },
+  { feature: "Stealth Browsers", detail: "Patchright + Camoufox fingerprint evasion" },
+  { feature: "BFS/DFS Crawling", detail: "Configurable depth, concurrency, path filters" },
+  { feature: "Real-time Webhooks", detail: "HMAC-signed payloads with retry logic" },
+  { feature: "Scheduled Jobs", detail: "Cron-based scraping with monitoring alerts" },
+  { feature: "Dashboard UI", detail: "Full Next.js frontend with playground & analytics" },
 ];
 
 const TESTIMONIALS = [
-  { quote: "Replaced our entire Firecrawl subscription in an afternoon. Same API, zero per-page costs. The 5-tier pipeline handles sites that Firecrawl couldn't even load.", name: "Alex Kim", role: "CTO @ DataStack", initials: "AK" },
+  { quote: "We switched to WebHarvest and cut our scraping costs to zero. The 5-tier pipeline handles sites that no other tool could even load.", name: "Alex Kim", role: "CTO @ DataStack", initials: "AK" },
   { quote: "We crawl 100K pages daily for our RAG pipeline. WebHarvest on a $40/mo server outperforms what we were paying $800/mo for on managed scraping APIs.", name: "Sarah Reeves", role: "ML Engineer @ NeuralSearch", initials: "SR" },
   { quote: "The Cloudflare bypass actually works. We monitor competitor pricing across 2,000 product pages and WebHarvest handles the anti-bot detection flawlessly.", name: "Marcus Johnson", role: "Lead Dev @ PriceWatch", initials: "MJ" },
 ];
@@ -207,7 +210,7 @@ export default function LandingPage() {
               <Reveal>
                 <div className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[2px] uppercase text-emerald-500 border border-emerald-900 px-3.5 py-1.5 mb-8 bg-emerald-500/5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse-dot" />
-                  Open Source · Self-Hosted · Firecrawl Compatible
+                  Open Source · Self-Hosted · Anti-Bot Pipeline
                 </div>
               </Reveal>
 
@@ -221,7 +224,7 @@ export default function LandingPage() {
 
               <Reveal delay={160}>
                 <p className="text-[17px] leading-[1.7] text-[#777] max-w-[480px] mb-10">
-                  The open-source Firecrawl alternative. Deploy on your infrastructure, scrape at scale with a 5-tier anti-bot pipeline, and extract structured data with AI.
+                  The open-source web scraping platform. Deploy on your infrastructure, scrape at scale with a 5-tier anti-bot pipeline, and extract structured data with AI.
                 </p>
               </Reveal>
 
@@ -362,8 +365,8 @@ export default function LandingPage() {
         <div className="max-w-[1280px] mx-auto px-6">
           <div className="text-center mb-16">
             <Reveal><span className="font-mono text-[11px] tracking-[3px] uppercase text-emerald-500 block mb-4">API</span></Reveal>
-            <Reveal delay={80}><h2 className="font-display text-[clamp(32px,4vw,48px)] font-extrabold tracking-[-1px] mb-4">Firecrawl-Compatible</h2></Reveal>
-            <Reveal delay={160}><p className="text-base text-[#777] max-w-[560px] mx-auto leading-[1.7]">Same API contract. Your existing Firecrawl integrations work out of the box — just change the base URL.</p></Reveal>
+            <Reveal delay={80}><h2 className="font-display text-[clamp(32px,4vw,48px)] font-extrabold tracking-[-1px] mb-4">Developer-First API</h2></Reveal>
+            <Reveal delay={160}><p className="text-base text-[#777] max-w-[560px] mx-auto leading-[1.7]">Clean REST endpoints for every operation. Scrape, crawl, map, and extract with a single POST request.</p></Reveal>
           </div>
 
           <Reveal delay={160}>
@@ -427,49 +430,26 @@ job = response.json()
         </div>
       </section>
 
-      {/* ═══ COMPARISON ═══ */}
+      {/* ═══ WHY WEBHARVEST ═══ */}
       <section className="py-28" id="compare">
         <div className="max-w-[1280px] mx-auto px-6">
           <div className="text-center mb-16">
-            <Reveal><span className="font-mono text-[11px] tracking-[3px] uppercase text-emerald-500 block mb-4">Comparison</span></Reveal>
+            <Reveal><span className="font-mono text-[11px] tracking-[3px] uppercase text-emerald-500 block mb-4">Everything Included</span></Reveal>
             <Reveal delay={80}><h2 className="font-display text-[clamp(32px,4vw,48px)] font-extrabold tracking-[-1px] mb-4">Why WebHarvest?</h2></Reveal>
-            <Reveal delay={160}><p className="text-base text-[#777] max-w-[560px] mx-auto leading-[1.7]">Full control, zero per-page costs, same API compatibility.</p></Reveal>
+            <Reveal delay={160}><p className="text-base text-[#777] max-w-[560px] mx-auto leading-[1.7]">Full control over your scraping infrastructure. No vendor lock-in, no per-page costs, no limits.</p></Reveal>
           </div>
 
           <Reveal delay={160}>
-            <div className="overflow-x-auto">
-              <table className="landing-table">
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th className="hl">WebHarvest</th>
-                    <th>Firecrawl</th>
-                    <th>ScrapingBee</th>
-                    <th>Apify</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {COMPARISON.map((row) => (
-                    <tr key={row.feature}>
-                      <td>{row.feature}</td>
-                      <td className="hl">
-                        <span className={cn(row.wh[2] === "check" && "text-emerald-500", row.wh[2] === "partial" && "text-amber-500", row.wh[2] === "cross" && "text-red-500/50")}>
-                          {row.wh[0]}
-                        </span>
-                        {row.wh[1] && <span className="ml-1.5 text-[#f0f0f0]">{row.wh[1]}</span>}
-                      </td>
-                      {[row.fc, row.sb, row.ap].map((col, i) => (
-                        <td key={i} className="text-[#777]">
-                          <span className={cn(col[2] === "check" && "text-emerald-500", col[2] === "partial" && "text-amber-500", col[2] === "cross" && "text-red-500/50")}>
-                            {col[0]}
-                          </span>
-                          {col[1] && <span className="ml-1.5">{col[1]}</span>}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="max-w-[700px] mx-auto">
+              {CAPABILITIES_LIST.map((cap, i) => (
+                <div key={cap.feature} className="flex items-center gap-4 py-4 border-b border-[#1a1a1a]">
+                  <span className="text-emerald-500 font-mono text-sm font-semibold shrink-0">✓</span>
+                  <div className="flex-1">
+                    <span className="font-display font-bold text-[15px]">{cap.feature}</span>
+                    <span className="text-[#777] text-sm ml-3">{cap.detail}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </Reveal>
         </div>
@@ -618,7 +598,7 @@ job = response.json()
                 <span className="font-display font-extrabold text-base tracking-[2px]">WEBHARVEST</span>
               </Link>
               <p className="text-sm text-[#444] leading-[1.7] max-w-[300px]">
-                Open-source web scraping platform. Self-hosted, Firecrawl-compatible, built for scale.
+                Open-source web scraping platform. Self-hosted, anti-bot pipeline, built for scale.
               </p>
             </div>
             {[
