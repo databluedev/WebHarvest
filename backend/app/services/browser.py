@@ -1672,7 +1672,7 @@ class CrawlSession:
             try:
                 await self._context.add_cookies(pool_cookies)
                 self._cookies = pool_cookies
-                logger.info("CrawlSession: synced %d cookies from pool for %s", len(pool_cookies), domain)
+                logger.warning("CrawlSession: synced %d cookies from pool for %s", len(pool_cookies), domain)
             except Exception as e:
                 logger.debug("CrawlSession: cookie sync failed for %s: %s", domain, e)
 
