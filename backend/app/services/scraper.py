@@ -757,6 +757,31 @@ async def _try_accept_google_consent(page) -> None:
             continue
 
 
+_JS_WAIT_FOR_IMAGES = """
+() => {
+    const imgs = Array.from(document.images).filter(
+        img => img.src && !img.src.startsWith('data:') && !img.complete
+    );
+    if (imgs.length === 0) return Promise.resolve();
+    return Promise.race([
+        Promise.all(imgs.map(img => new Promise(r => {
+            img.addEventListener('load', r, {once: true});
+            img.addEventListener('error', r, {once: true});
+        }))),
+        new Promise(r => setTimeout(r, 5000))
+    ]);
+}
+"""
+
+
+async def _wait_for_images(page, timeout_ms: int = 5000) -> None:
+    """Wait for visible <img> elements to finish loading (with timeout)."""
+    try:
+        await page.evaluate(_JS_WAIT_FOR_IMAGES)
+    except Exception:
+        pass
+
+
 def _looks_noscript_block(html: str) -> bool:
     """Fast check: is this the noscript + short body pattern?
 
@@ -1667,6 +1692,7 @@ async def scrape_url(
             async with browser_pool.get_page(target_url=url) as page:
                 await page.set_content(raw_html, wait_until="domcontentloaded")
                 await page.wait_for_timeout(500)
+                await _wait_for_images(page)
                 screenshot_bytes = await page.screenshot(
                     type="jpeg", quality=80, full_page=True
                 )
@@ -2479,6 +2505,7 @@ async def _fetch_with_browser_stealth(
             action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
 
         if "screenshot" in request.formats:
+            await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
                 type="jpeg", quality=80, full_page=True
             )
@@ -2634,6 +2661,7 @@ async def _fetch_with_browser_session(
             action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
 
         if "screenshot" in request.formats:
+            await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
                 type="jpeg", quality=80, full_page=True
             )
@@ -2830,6 +2858,7 @@ async def _fetch_with_google_search_chain(
             action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
 
         if "screenshot" in request.formats:
+            await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
                 type="jpeg", quality=80, full_page=True
             )
@@ -3049,6 +3078,7 @@ async def _fetch_with_advanced_prewarm(
             action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
 
         if "screenshot" in request.formats:
+            await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
                 type="jpeg", quality=80, full_page=True
             )

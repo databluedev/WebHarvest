@@ -52,6 +52,35 @@ class HealthResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Image load helper — wait for <img> elements to finish loading
+# ---------------------------------------------------------------------------
+
+_JS_WAIT_FOR_IMAGES = """
+() => {
+    const imgs = Array.from(document.images).filter(
+        img => img.src && !img.src.startsWith('data:') && !img.complete
+    );
+    if (imgs.length === 0) return Promise.resolve();
+    return Promise.race([
+        Promise.all(imgs.map(img => new Promise(r => {
+            img.addEventListener('load', r, {once: true});
+            img.addEventListener('error', r, {once: true});
+        }))),
+        new Promise(r => setTimeout(r, 5000))
+    ]);
+}
+"""
+
+
+async def _wait_for_images(page) -> None:
+    """Wait for visible <img> elements to finish loading (max 5s)."""
+    try:
+        await page.evaluate(_JS_WAIT_FOR_IMAGES)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Action executor (direct port of BrowserPool.execute_actions)
 # ---------------------------------------------------------------------------
 
@@ -766,6 +795,7 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
         # Screenshot
         screenshot_b64 = None
         if req.screenshot:
+            await _wait_for_images(page)
             ss = await page.screenshot(type="png", full_page=True)
             screenshot_b64 = base64.b64encode(ss).decode()
 
@@ -861,6 +891,7 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
         # Screenshot
         screenshot_b64 = None
         if req.screenshot:
+            await _wait_for_images(page)
             ss = await page.screenshot(type="png", full_page=True)
             screenshot_b64 = base64.b64encode(ss).decode()
 
