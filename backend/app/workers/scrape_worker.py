@@ -12,6 +12,9 @@ _WORKER_NAME = "scrape"
 
 def _run_async(coro):
     """Run an async function from a sync Celery task."""
+    from app.services.scraper import reset_pool_state_sync
+    reset_pool_state_sync()
+
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(coro)

@@ -14,6 +14,9 @@ _WORKER_NAME = "extract"
 
 
 def _run_async(coro):
+    from app.services.scraper import reset_pool_state_sync
+    reset_pool_state_sync()
+
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(coro)

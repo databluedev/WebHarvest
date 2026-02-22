@@ -102,10 +102,14 @@ async def cleanup_async_pools() -> None:
         _stealth_client = None
         _stealth_loop_id = None
 
-    # Reset browser_pool's event-loop-bound locks so the next Celery task
-    # (which creates a new event loop) won't hit "bound to a different event loop".
-    # We don't close browsers here — BrowserPool.initialize() handles that
-    # when it detects a loop change.
+    _reset_browser_pool_state()
+
+
+def _reset_browser_pool_state():
+    """Reset browser_pool's event-loop-bound locks.
+
+    Safe to call synchronously — just nulls out references.
+    """
     try:
         browser_pool._init_lock = None
         browser_pool._loop = None
@@ -114,6 +118,27 @@ async def cleanup_async_pools() -> None:
         browser_pool._initialized = False
     except Exception:
         pass
+
+
+def reset_pool_state_sync() -> None:
+    """Synchronously null out all pool references.
+
+    Called at the START of _run_async so stale state from a prior
+    Celery task (whose event loop is now closed) cannot leak in.
+    Unlike cleanup_async_pools() this does NOT gracefully close
+    clients (the old loop is dead anyway) — it just drops references
+    so the pool-getter functions recreate them on the new loop.
+    """
+    global _httpx_client, _httpx_loop_id, _curl_loop_id
+    global _stealth_client, _stealth_loop_id
+
+    _httpx_client = None
+    _httpx_loop_id = None
+    _curl_sessions.clear()
+    _curl_loop_id = None
+    _stealth_client = None
+    _stealth_loop_id = None
+    _reset_browser_pool_state()
 
 
 async def _get_httpx_client(proxy_url: str | None = None) -> httpx.AsyncClient:

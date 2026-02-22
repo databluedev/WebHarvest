@@ -17,6 +17,12 @@ _extraction_executor = ThreadPoolExecutor(max_workers=8)
 
 
 def _run_async(coro):
+    # Drop stale pool references from a previous task whose loop is dead.
+    # cleanup_async_pools() in the finally block can be skipped if Celery
+    # kills the task (time limit), leaving refs to a closed loop.
+    from app.services.scraper import reset_pool_state_sync
+    reset_pool_state_sync()
+
     loop = asyncio.new_event_loop()
     try:
         return loop.run_until_complete(coro)
