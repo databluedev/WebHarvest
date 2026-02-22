@@ -1027,6 +1027,362 @@ def extract_structured_data(html: str) -> dict:
     return result
 
 
+# ---------------------------------------------------------------------------
+# Product data extraction (no LLM — schema.org + microdata + OG)
+# ---------------------------------------------------------------------------
+
+_PRODUCT_TYPES = {
+    "product", "product/group", "og:product", "og:product.item",
+    "indivio:product",
+}
+
+_SCHEMA_PRODUCT_TYPES = {
+    "Product", "https://schema.org/Product", "http://schema.org/Product",
+    "IndividualProduct", "ProductModel", "ProductGroup",
+}
+
+
+def _has_product_signals(structured_data: dict | None, html: str) -> bool:
+    """Quick bail — check if the page has any product indicators at all.
+
+    Avoids full parsing cost on blog posts, about pages, etc.
+    """
+    if structured_data:
+        # Check JSON-LD
+        for item in structured_data.get("json_ld", []):
+            items = item if isinstance(item, list) else [item]
+            for obj in items:
+                if isinstance(obj, dict):
+                    t = obj.get("@type", "")
+                    types = t if isinstance(t, list) else [t]
+                    if any(tp in _SCHEMA_PRODUCT_TYPES for tp in types):
+                        return True
+                    # Check @graph array
+                    for graph_item in obj.get("@graph", []):
+                        if isinstance(graph_item, dict):
+                            gt = graph_item.get("@type", "")
+                            gtypes = gt if isinstance(gt, list) else [gt]
+                            if any(gtp in _SCHEMA_PRODUCT_TYPES for gtp in gtypes):
+                                return True
+        # Check OG type
+        og = structured_data.get("open_graph", {})
+        if og.get("type", "").lower() in _PRODUCT_TYPES:
+            return True
+        # Check meta tags for og:type product
+        meta = structured_data.get("meta_tags", {})
+        if meta.get("og:type", "").lower() in _PRODUCT_TYPES:
+            return True
+
+    # Check for microdata itemtype containing Product (fast substring check)
+    if 'itemtype' in html and 'roduct' in html:
+        return True
+
+    # Check for product OG meta tags in raw HTML
+    if 'product:price:amount' in html:
+        return True
+
+    return False
+
+
+def _parse_microdata_item(el: Tag) -> dict:
+    """Recursively parse a single microdata itemscope element into a dict."""
+    result = {}
+    item_type = el.get("itemtype", "")
+    if item_type:
+        result["@type"] = item_type
+
+    for child in el.find_all(True, recursive=True):
+        prop = child.get("itemprop")
+        if not prop:
+            continue
+        # Skip properties that belong to a nested itemscope (not ours).
+        # Walk up from child to el; if we hit another itemscope first, skip.
+        owner = child.parent
+        belongs_to_nested = False
+        while owner is not None and owner is not el:
+            if isinstance(owner, Tag) and owner.get("itemscope") is not None:
+                belongs_to_nested = True
+                break
+            owner = owner.parent
+        if belongs_to_nested:
+            continue
+
+        # If the child is itself an itemscope, recurse
+        if child.get("itemscope") is not None:
+            value = _parse_microdata_item(child)
+        elif child.name == "meta":
+            value = child.get("content", "")
+        elif child.name == "link":
+            value = child.get("href", "")
+        elif child.name == "img":
+            value = child.get("src", "")
+        elif child.name == "time":
+            value = child.get("datetime", child.get_text(strip=True))
+        elif child.name == "data":
+            value = child.get("value", child.get_text(strip=True))
+        else:
+            value = child.get("content", "") or child.get_text(strip=True)
+
+        # Multiple values for the same property → list
+        if prop in result:
+            existing = result[prop]
+            if isinstance(existing, list):
+                existing.append(value)
+            else:
+                result[prop] = [existing, value]
+        else:
+            result[prop] = value
+
+    return result
+
+
+def _extract_microdata_items(soup: BeautifulSoup) -> list[dict]:
+    """Extract all top-level microdata items (itemscope without itemprop parent)."""
+    items = []
+    for el in soup.find_all(attrs={"itemscope": True}):
+        # Only top-level: skip nested itemscopes that have itemprop
+        if el.get("itemprop"):
+            continue
+        items.append(_parse_microdata_item(el))
+    return items
+
+
+def _safe_str(val) -> str | None:
+    """Coerce a value to string, returning None for empty/missing."""
+    if val is None:
+        return None
+    if isinstance(val, dict):
+        return None
+    s = str(val).strip()
+    return s if s else None
+
+
+def _merge_jsonld_product(product: dict, jsonld: dict) -> None:
+    """Merge a JSON-LD Product object into the unified product dict."""
+    if not product.get("name"):
+        product["name"] = _safe_str(jsonld.get("name"))
+    if not product.get("description"):
+        product["description"] = _safe_str(jsonld.get("description"))
+    if not product.get("sku"):
+        product["sku"] = _safe_str(jsonld.get("sku")) or _safe_str(jsonld.get("mpn")) or _safe_str(jsonld.get("gtin13"))
+
+    # Brand
+    if not product.get("brand"):
+        brand = jsonld.get("brand")
+        if isinstance(brand, dict):
+            product["brand"] = _safe_str(brand.get("name"))
+        elif isinstance(brand, str):
+            product["brand"] = _safe_str(brand)
+
+    # Images
+    if not product.get("images"):
+        img = jsonld.get("image")
+        if isinstance(img, list):
+            product["images"] = [str(i) for i in img if i]
+        elif isinstance(img, str) and img:
+            product["images"] = [img]
+        elif isinstance(img, dict):
+            url = img.get("url") or img.get("contentUrl")
+            if url:
+                product["images"] = [str(url)]
+
+    # Offers / pricing
+    offers = jsonld.get("offers")
+    if offers and not product.get("price"):
+        offer_list = offers if isinstance(offers, list) else [offers]
+        for offer in offer_list:
+            if not isinstance(offer, dict):
+                continue
+            # AggregateOffer
+            if offer.get("@type") in ("AggregateOffer", "https://schema.org/AggregateOffer"):
+                low = _safe_str(offer.get("lowPrice"))
+                high = _safe_str(offer.get("highPrice"))
+                if low and high and low != high:
+                    product["price"] = f"{low}-{high}"
+                elif low:
+                    product["price"] = low
+                product["currency"] = _safe_str(offer.get("priceCurrency")) or product.get("currency")
+                avail = offer.get("availability", "")
+                if avail:
+                    product["availability"] = str(avail).rsplit("/", 1)[-1]
+                break
+            # Regular Offer
+            price = _safe_str(offer.get("price"))
+            if price:
+                product["price"] = price
+                product["currency"] = _safe_str(offer.get("priceCurrency")) or product.get("currency")
+                avail = offer.get("availability", "")
+                if avail:
+                    product["availability"] = str(avail).rsplit("/", 1)[-1]
+                break
+
+    # Rating
+    if not product.get("rating"):
+        rating = jsonld.get("aggregateRating")
+        if isinstance(rating, dict):
+            r = {}
+            val = rating.get("ratingValue")
+            if val is not None:
+                try:
+                    r["value"] = float(val)
+                except (ValueError, TypeError):
+                    pass
+            cnt = rating.get("ratingCount") or rating.get("reviewCount")
+            if cnt is not None:
+                try:
+                    r["count"] = int(cnt)
+                except (ValueError, TypeError):
+                    pass
+            if r:
+                product["rating"] = r
+
+
+def _merge_microdata_product(product: dict, item: dict) -> None:
+    """Merge a microdata Product item into the unified product dict."""
+    if not product.get("name"):
+        product["name"] = _safe_str(item.get("name"))
+    if not product.get("description"):
+        product["description"] = _safe_str(item.get("description"))
+    if not product.get("sku"):
+        product["sku"] = _safe_str(item.get("sku")) or _safe_str(item.get("mpn"))
+
+    if not product.get("brand"):
+        brand = item.get("brand")
+        if isinstance(brand, dict):
+            product["brand"] = _safe_str(brand.get("name"))
+        elif isinstance(brand, str):
+            product["brand"] = _safe_str(brand)
+
+    if not product.get("images"):
+        img = item.get("image")
+        if isinstance(img, list):
+            product["images"] = [str(i) for i in img if i]
+        elif isinstance(img, str) and img:
+            product["images"] = [img]
+
+    # Offers from microdata
+    offers = item.get("offers")
+    if offers and not product.get("price"):
+        offer_list = offers if isinstance(offers, list) else [offers]
+        for offer in offer_list:
+            if not isinstance(offer, dict):
+                continue
+            price = _safe_str(offer.get("price"))
+            if price:
+                product["price"] = price
+                product["currency"] = _safe_str(offer.get("priceCurrency")) or product.get("currency")
+                avail = offer.get("availability", "")
+                if avail:
+                    product["availability"] = str(avail).rsplit("/", 1)[-1]
+                break
+
+    if not product.get("rating"):
+        rating = item.get("aggregateRating")
+        if isinstance(rating, dict):
+            r = {}
+            val = rating.get("ratingValue")
+            if val is not None:
+                try:
+                    r["value"] = float(val)
+                except (ValueError, TypeError):
+                    pass
+            cnt = rating.get("ratingCount") or rating.get("reviewCount")
+            if cnt is not None:
+                try:
+                    r["count"] = int(cnt)
+                except (ValueError, TypeError):
+                    pass
+            if r:
+                product["rating"] = r
+
+
+def _merge_og_product(product: dict, og: dict, meta: dict) -> None:
+    """Merge OpenGraph product tags into the unified product dict."""
+    if not product.get("name"):
+        product["name"] = _safe_str(og.get("title"))
+    if not product.get("description"):
+        product["description"] = _safe_str(og.get("description"))
+    if not product.get("images"):
+        img = og.get("image")
+        if img:
+            product["images"] = [img] if isinstance(img, str) else [str(img)]
+
+    # OG product-specific tags (product:price:amount, product:price:currency)
+    if not product.get("price"):
+        price = meta.get("product:price:amount")
+        if price:
+            product["price"] = _safe_str(price)
+    if not product.get("currency"):
+        currency = meta.get("product:price:currency")
+        if currency:
+            product["currency"] = _safe_str(currency)
+
+    if not product.get("brand"):
+        brand = meta.get("product:brand")
+        if brand:
+            product["brand"] = _safe_str(brand)
+
+    if not product.get("availability"):
+        avail = meta.get("product:availability")
+        if avail:
+            product["availability"] = _safe_str(avail)
+
+
+def extract_product_data(html: str, structured_data: dict | None = None) -> dict | None:
+    """Extract unified product data from multiple sources (no LLM).
+
+    Priority: JSON-LD > microdata > OpenGraph.
+    Returns None for non-product pages (fast bail via signal check).
+    """
+    if not _has_product_signals(structured_data, html):
+        return None
+
+    product: dict = {}
+
+    # 1. JSON-LD Product (highest priority)
+    if structured_data:
+        for item in structured_data.get("json_ld", []):
+            items = item if isinstance(item, list) else [item]
+            for obj in items:
+                if not isinstance(obj, dict):
+                    continue
+                t = obj.get("@type", "")
+                types = t if isinstance(t, list) else [t]
+                if any(tp in _SCHEMA_PRODUCT_TYPES for tp in types):
+                    _merge_jsonld_product(product, obj)
+                    break
+                # Check @graph
+                for graph_item in obj.get("@graph", []):
+                    if isinstance(graph_item, dict):
+                        gt = graph_item.get("@type", "")
+                        gtypes = gt if isinstance(gt, list) else [gt]
+                        if any(gtp in _SCHEMA_PRODUCT_TYPES for gtp in gtypes):
+                            _merge_jsonld_product(product, graph_item)
+                            break
+
+    # 2. Microdata (fills gaps)
+    soup = BeautifulSoup(html, "lxml")
+    microdata_items = _extract_microdata_items(soup)
+    for item in microdata_items:
+        item_type = item.get("@type", "")
+        if "Product" in item_type or "product" in item_type.lower():
+            _merge_microdata_product(product, item)
+            break
+
+    # 3. OpenGraph (fills remaining gaps)
+    if structured_data:
+        og = structured_data.get("open_graph", {})
+        meta = structured_data.get("meta_tags", {})
+        _merge_og_product(product, og, meta)
+
+    # Only return if we found at least a name or price
+    if product.get("name") or product.get("price"):
+        # Clean up None values
+        return {k: v for k, v in product.items() if v is not None}
+
+    return None
+
+
 def extract_headings(html: str) -> list[dict]:
     """
     Extract heading hierarchy from HTML.

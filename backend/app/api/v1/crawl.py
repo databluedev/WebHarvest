@@ -66,6 +66,8 @@ def _build_result_dicts(results) -> list[dict]:
         headings = meta.pop("headings", None)
         images = meta.pop("images", None)
         links_detail = meta.pop("links_detail", None)
+        tables = meta.pop("tables", None)
+        selector_data = meta.pop("selector_data", None)
 
         if meta:
             page["metadata"] = meta
@@ -77,6 +79,10 @@ def _build_result_dicts(results) -> list[dict]:
             page["images"] = images
         if links_detail:
             page["links_detail"] = links_detail
+        if tables:
+            page["tables"] = tables
+        if selector_data:
+            page["selector_data"] = selector_data
 
         pages.append(page)
     return pages
@@ -193,6 +199,8 @@ async def get_crawl_status(
             headings = None
             images = None
             links_detail = None
+            tables = None
+            selector_data = None
 
             if r.metadata_:
                 meta = dict(r.metadata_)
@@ -200,6 +208,8 @@ async def get_crawl_status(
                 headings = meta.pop("headings", None)
                 images = meta.pop("images", None)
                 links_detail = meta.pop("links_detail", None)
+                tables = meta.pop("tables", None)
+                selector_data = meta.pop("selector_data", None)
 
                 page_metadata = PageMetadata(
                     title=meta.get("title"),
@@ -230,6 +240,8 @@ async def get_crawl_status(
                     structured_data=structured_data if not requested_formats or "structured_data" in requested_formats else None,
                     headings=headings if not requested_formats or "headings" in requested_formats else None,
                     images=images if not requested_formats or "images" in requested_formats else None,
+                    tables=tables if not requested_formats or "tables" in requested_formats else None,
+                    selector_data=selector_data,
                     extract=r.extract,
                     metadata=page_metadata,
                 )
@@ -335,11 +347,15 @@ async def export_crawl(
                 "html_length",
                 "links_count",
                 "has_screenshot",
+                "product_name",
+                "product_price",
+                "product_brand",
             ]
         )
         for p in pages:
             meta = p.get("metadata", {})
             reading_secs = meta.get("reading_time_seconds", 0)
+            prod = meta.get("product_data") or {}
             writer.writerow(
                 [
                     p["url"],
@@ -352,6 +368,9 @@ async def export_crawl(
                     len(p.get("html", "")),
                     len(p.get("links", [])),
                     "yes" if p.get("screenshot_base64") else "no",
+                    prod.get("name", ""),
+                    prod.get("price", ""),
+                    prod.get("brand", ""),
                 ]
             )
         return StreamingResponse(
@@ -425,4 +444,86 @@ async def export_crawl(
         buf,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="crawl-{short_id}.zip"'},
+    )
+
+
+@router.get(
+    "/{job_id}/stream",
+    summary="Stream crawl results as NDJSON",
+    description="Stream crawl results in real-time as newline-delimited JSON.",
+)
+async def stream_crawl_results(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Stream crawl results as NDJSON for real-time consumption."""
+    import asyncio
+    from app.services.streaming import ndjson_stream
+
+    job = await db.get(Job, UUID(job_id))
+    if not job or job.user_id != user.id:
+        raise NotFoundError("Crawl job not found")
+
+    # Pre-fetch all current results for completed jobs (fast path)
+    if job.status in ("completed", "failed"):
+        result = await db.execute(
+            select(JobResult)
+            .where(JobResult.job_id == job.id)
+            .order_by(JobResult.created_at)
+        )
+        all_results = result.scalars().all()
+
+        async def completed_gen():
+            for r in all_results:
+                yield {
+                    "url": r.url,
+                    "markdown": r.markdown,
+                    "links": r.links,
+                    "metadata": dict(r.metadata_) if r.metadata_ else None,
+                }
+
+        return StreamingResponse(
+            ndjson_stream(completed_gen()),
+            media_type="application/x-ndjson",
+            headers={"X-Content-Type-Options": "nosniff"},
+        )
+
+    # For running jobs, poll for new results
+    async def live_gen():
+        last_count = 0
+        max_idle = 60  # Stop after 60s of no new results
+        idle = 0
+        while idle < max_idle:
+            result = await db.execute(
+                select(JobResult)
+                .where(JobResult.job_id == job.id)
+                .order_by(JobResult.created_at)
+                .offset(last_count)
+                .limit(50)
+            )
+            new_results = result.scalars().all()
+
+            if new_results:
+                idle = 0
+                for r in new_results:
+                    yield {
+                        "url": r.url,
+                        "markdown": r.markdown,
+                        "links": r.links,
+                        "metadata": dict(r.metadata_) if r.metadata_ else None,
+                    }
+                    last_count += 1
+            else:
+                idle += 1
+                # Check if job finished
+                await db.refresh(job)
+                if job.status in ("completed", "failed", "cancelled"):
+                    break
+                await asyncio.sleep(1)
+
+    return StreamingResponse(
+        ndjson_stream(live_gen()),
+        media_type="application/x-ndjson",
+        headers={"X-Content-Type-Options": "nosniff"},
     )
