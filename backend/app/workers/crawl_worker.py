@@ -168,19 +168,30 @@ def process_crawl(self, job_id: str, config: dict):
                     _warmup_data = _warmup_scrape["scrape_data"]
                     _warmup_md = (_warmup_data.markdown or "").strip()
                     _warmup_words = len(_warmup_md.split())
+                    _warmup_html = _warmup_data.html or ""
 
-                    if _warmup_words >= 15:
+                    # Validate: reject blocked / garbage pages that
+                    # scrape_url returns as "best available" fallback.
+                    from app.services.scraper import _looks_blocked
+                    _wu_blocked = _looks_blocked(_warmup_html)
+                    if _wu_blocked:
+                        logger.warning(
+                            f"Session warm-up attempt {_warmup_attempt + 1} "
+                            f"returned blocked content ({_warmup_words} words, "
+                            f"{len(_warmup_html)} chars HTML)"
+                        )
+                    elif _warmup_words < 50:
+                        logger.warning(
+                            f"Session warm-up attempt {_warmup_attempt + 1} got "
+                            f"thin content ({_warmup_words} words)"
+                        )
+                    else:
                         logger.warning(
                             f"Session warm-up succeeded ({_warmup_words} words) "
                             f"on attempt {_warmup_attempt + 1}"
                         )
                         _warmup_result = _warmup_scrape
                         break
-                    else:
-                        logger.warning(
-                            f"Session warm-up attempt {_warmup_attempt + 1} got "
-                            f"thin content ({_warmup_words} words)"
-                        )
                 except Exception as e:
                     logger.warning(
                         f"Session warm-up attempt {_warmup_attempt + 1} failed: {e}"
