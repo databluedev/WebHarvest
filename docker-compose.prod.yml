@@ -198,7 +198,8 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-webharvest}
       - POSTGRES_USER=${POSTGRES_USER:-webharvest}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-webharvest}
-    # No ports exposed to host in production — only internal network
+    ports:
+      - "127.0.0.1:5432:5432"  # localhost-only for SSH tunnel access
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-webharvest}"]
       interval: 5s
@@ -222,7 +223,8 @@ services:
     image: redis:7-alpine
     volumes:
       - redisdata:/data
-    # No ports exposed to host in production — only internal network
+    ports:
+      - "127.0.0.1:6379:6379"  # localhost-only for SSH tunnel access
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
