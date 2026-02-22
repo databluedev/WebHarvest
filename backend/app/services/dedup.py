@@ -4,7 +4,7 @@ import re
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 
-# Tracking parameters to strip
+# Exact-match tracking parameters to strip
 _TRACKING_PARAMS = {
     "utm_source",
     "utm_medium",
@@ -48,32 +48,24 @@ _TRACKING_PARAMS = {
     "nb_klid",
     "plan",
     "guccounter",
-    # Amazon / e-commerce session & personalization params
-    "_encoding",
-    "content-id",
-    "pd_rd_r",
-    "pd_rd_w",
-    "pd_rd_wg",
-    "pf_rd_p",
-    "pf_rd_r",
-    "pf_rd_s",
-    "pf_rd_t",
-    "pf_rd_i",
-    "ref_",
-    "qid",
-    "sr",
-    "dib",
-    "dib_tag",
-    "th",
-    "linkcode",
-    "tag",
-    "linkid",
-    "camp",
-    "creative",
-    "ascsubtag",
-    "spla",
-    "smid",
 }
+
+# Generic pattern-based param stripping — catches session/personalization
+# params across any site without hardcoding site-specific names.
+#
+# Matches params whose values look like:
+#   - UUID anywhere in value   (exact or embedded like amzn1.sym.<uuid>)
+#   - Hex session IDs          (≥16 hex chars)
+#   - Base64-ish blobs         (≥20 chars of alphanumeric + /+=_-)
+#
+# These are almost always session tokens, request IDs, or personalization
+# context that don't affect page content — safe to strip for dedup.
+_SESSION_VALUE_RE = re.compile(
+    r"^[0-9a-f]{16,}$"                                                    # hex ID (exact)
+    r"|^[A-Za-z0-9+/=_-]{20,}$"                                           # base64 blob (exact)
+    r"|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",   # UUID (anywhere)
+    re.IGNORECASE,
+)
 
 
 def normalize_url(url: str) -> str:
@@ -128,11 +120,16 @@ def normalize_url(url: str) -> str:
 
     # Sort and filter query params
     query_params = parse_qs(parsed.query, keep_blank_values=True)
-    filtered_params = {
-        k: v
-        for k, v in sorted(query_params.items())
-        if k.lower() not in _TRACKING_PARAMS
-    }
+    filtered_params = {}
+    for k, v in sorted(query_params.items()):
+        if k.lower() in _TRACKING_PARAMS:
+            continue
+        # Strip params whose values look like session IDs / UUIDs / base64 blobs
+        # e.g. pd_rd_r=523a5d20-f146-4d48-bd40-6aea62e24c55
+        #      content-id=amzn1.sym.c3eaad03-bed6-4045-8b97-...
+        if v and _SESSION_VALUE_RE.search(v[0]):
+            continue
+        filtered_params[k] = v
     query = urlencode(filtered_params, doseq=True) if filtered_params else ""
 
     # Remove fragment
