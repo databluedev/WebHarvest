@@ -2537,6 +2537,24 @@ async def _fetch_with_browser_stealth(
                     random.randint(150, vp["height"] - 200),
                     steps=random.randint(8, 15),
                 )
+
+            # Session-gate re-navigation: if still blocked after challenge
+            # retries, cookies are now set — re-navigate to get real content.
+            html_recheck = await page.content()
+            if _looks_blocked(html_recheck):
+                logger.debug(f"Still blocked after retries on {url}, re-navigating (session primed)")
+                try:
+                    response = await page.goto(url, wait_until="domcontentloaded", timeout=15000, referer=referrer)
+                    status_code = response.status if response else status_code
+                    if response:
+                        response_headers = {k.lower(): v for k, v in response.headers.items()}
+                    try:
+                        await page.wait_for_load_state("networkidle", timeout=8000)
+                    except Exception:
+                        pass
+                    await page.wait_for_timeout(random.randint(500, 1000))
+                except Exception:
+                    pass
         elif stealth:
             await page.wait_for_timeout(random.randint(100, 250))
         else:
@@ -2702,6 +2720,24 @@ async def _fetch_with_browser_session(
                     random.randint(150, vp["height"] - 200),
                     steps=random.randint(8, 15),
                 )
+
+            # Session-gate re-navigation: if still blocked after challenge
+            # retries, cookies are now set — re-navigate to get real content.
+            html_recheck = await page.content()
+            if _looks_blocked(html_recheck):
+                logger.debug(f"Still blocked in session for {url}, re-navigating (session primed)")
+                try:
+                    response = await page.goto(url, wait_until="domcontentloaded", timeout=15000, referer=referrer)
+                    status_code = response.status if response else status_code
+                    if response:
+                        response_headers = {k.lower(): v for k, v in response.headers.items()}
+                    try:
+                        await page.wait_for_load_state("networkidle", timeout=8000)
+                    except Exception:
+                        pass
+                    await page.wait_for_timeout(random.randint(500, 1000))
+                except Exception:
+                    pass
 
         # Doc framework detection: if this is a JS-rendered doc site,
         # wait for content-specific selectors to appear (up to 5s)

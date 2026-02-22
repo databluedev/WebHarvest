@@ -2,6 +2,7 @@ import asyncio
 import base64
 import logging
 import random
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -836,6 +837,45 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
         html = await page.content()
         logger.info("Chromium got %d chars HTML for %s (status=%d)", len(html), req.url, status_code)
 
+        # Session-gate detection: if visible text is tiny, the first visit
+        # likely just set cookies (e.g. Amazon 202 stub). Re-navigate.
+        _body_m = re.search(r"<body[^>]*>(.*?)</body>", html, re.DOTALL | re.IGNORECASE)
+        _bhtml = _body_m.group(1) if _body_m else html
+        _vis = re.sub(r"<script[^>]*>.*?</script>", " ", _bhtml, flags=re.DOTALL | re.IGNORECASE)
+        _vis = re.sub(r"<style[^>]*>.*?</style>", " ", _vis, flags=re.DOTALL | re.IGNORECASE)
+        _vis = re.sub(r"<noscript[^>]*>.*?</noscript>", " ", _vis, flags=re.DOTALL | re.IGNORECASE)
+        _vis_text = re.sub(r"<[^>]+>", " ", _vis).strip()
+        if len(_vis_text) < 300:
+            logger.info("Session-gate stub detected (%d chars), re-navigating %s", len(_vis_text), req.url)
+            try:
+                response = await page.goto(req.url, wait_until="domcontentloaded", timeout=req.timeout)
+                status_code = response.status if response else status_code
+                if response:
+                    resp_headers = dict(response.headers)
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(2000)
+                # Re-scroll to trigger lazy content
+                try:
+                    vh = await page.evaluate("window.innerHeight") or 800
+                    scroll_distance = 0
+                    while scroll_distance < 8000:
+                        await page.mouse.wheel(0, vh - 100)
+                        scroll_distance += vh - 100
+                        await page.wait_for_timeout(random.randint(150, 350))
+                    await page.wait_for_timeout(random.randint(200, 500))
+                    await page.evaluate("window.scrollTo(0, 0)")
+                    await page.wait_for_timeout(random.randint(100, 200))
+                except Exception:
+                    pass
+                final_url = page.url
+                html = await page.content()
+                logger.info("Chromium re-nav got %d chars HTML for %s (status=%d)", len(html), req.url, status_code)
+            except Exception as e:
+                logger.warning("Chromium session-gate re-nav failed for %s: %s", req.url, e)
+
         return ScrapeResponse(
             html=html,
             status_code=status_code,
@@ -985,6 +1025,45 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
         final_url = page.url
         html = await page.content()
         logger.info("Firefox got %d chars HTML for %s (status=%d)", len(html), req.url, status_code)
+
+        # Session-gate detection: if visible text is tiny, the first visit
+        # likely just set cookies (e.g. Amazon 202 stub). Re-navigate.
+        _body_m = re.search(r"<body[^>]*>(.*?)</body>", html, re.DOTALL | re.IGNORECASE)
+        _bhtml = _body_m.group(1) if _body_m else html
+        _vis = re.sub(r"<script[^>]*>.*?</script>", " ", _bhtml, flags=re.DOTALL | re.IGNORECASE)
+        _vis = re.sub(r"<style[^>]*>.*?</style>", " ", _vis, flags=re.DOTALL | re.IGNORECASE)
+        _vis = re.sub(r"<noscript[^>]*>.*?</noscript>", " ", _vis, flags=re.DOTALL | re.IGNORECASE)
+        _vis_text = re.sub(r"<[^>]+>", " ", _vis).strip()
+        if len(_vis_text) < 300:
+            logger.info("Session-gate stub detected (%d chars), re-navigating %s", len(_vis_text), req.url)
+            try:
+                response = await page.goto(req.url, wait_until="domcontentloaded", timeout=req.timeout)
+                status_code = response.status if response else status_code
+                if response:
+                    resp_headers = dict(response.headers)
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=8000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(2000)
+                # Re-scroll to trigger lazy content
+                try:
+                    vh = await page.evaluate("window.innerHeight") or 800
+                    scroll_distance = 0
+                    while scroll_distance < 8000:
+                        await page.mouse.wheel(0, vh - 100)
+                        scroll_distance += vh - 100
+                        await page.wait_for_timeout(random.randint(150, 350))
+                    await page.wait_for_timeout(random.randint(200, 500))
+                    await page.evaluate("window.scrollTo(0, 0)")
+                    await page.wait_for_timeout(random.randint(100, 200))
+                except Exception:
+                    pass
+                final_url = page.url
+                html = await page.content()
+                logger.info("Firefox re-nav got %d chars HTML for %s (status=%d)", len(html), req.url, status_code)
+            except Exception as e:
+                logger.warning("Firefox session-gate re-nav failed for %s: %s", req.url, e)
 
         return ScrapeResponse(
             html=html,

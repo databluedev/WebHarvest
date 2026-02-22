@@ -349,6 +349,26 @@ def process_crawl(self, job_id: str, config: dict):
                             _skip = True
                             logger.warning(f"Skipping thin page ({_word_count} words): {url}")
 
+                        # Seed URL retry: if the very first page is thin
+                        # (e.g. Amazon session-gate stub), retry once —
+                        # cookies are now set from the first attempt.
+                        if _skip and pages_crawled == 0 and depth == 0:
+                            logger.info(f"Seed URL thin ({_word_count} words), retrying once: {url}")
+                            try:
+                                _retry_result = await asyncio.wait_for(
+                                    crawler.scrape_page(url),
+                                    timeout=60,
+                                )
+                                scrape_data = _retry_result["scrape_data"]
+                                discovered_links = _retry_result.get("discovered_links", [])
+                                md_text = (scrape_data.markdown or "").strip()
+                                _word_count = len(md_text.split())
+                                _skip = _word_count < 15
+                                if not _skip:
+                                    logger.info(f"Seed URL retry succeeded ({_word_count} words): {url}")
+                            except Exception as _retry_err:
+                                logger.warning(f"Seed URL retry failed for {url}: {_retry_err}")
+
                         if _skip:
                             # Still harvest links for frontier expansion
                             if discovered_links:
