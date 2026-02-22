@@ -162,35 +162,42 @@ async def _setup_route_blocking(
             after_scheme = url.split("//", 1)[1]
             hostname = after_scheme.split("/", 1)[0].split(":")[0].lower()
         except (IndexError, ValueError):
-            await route.continue_()
+            try:
+                await route.continue_()
+            except Exception:
+                pass
             return
 
-        # Block ad-serving / tracking domains
-        for domain in AD_SERVING_DOMAINS:
-            if domain in hostname:
-                await route.abort()
-                return
+        try:
+            # Block ad-serving / tracking domains
+            for domain in AD_SERVING_DOMAINS:
+                if domain in hostname:
+                    await route.abort()
+                    return
 
-        if block_media:
-            # Block heavy resource types
-            if request.resource_type in CRAWL_BLOCKED_RESOURCE_TYPES:
-                await route.abort()
-                return
+            if block_media:
+                # Block heavy resource types
+                if request.resource_type in CRAWL_BLOCKED_RESOURCE_TYPES:
+                    await route.abort()
+                    return
 
-            # Block media files by URL extension (Firecrawl pattern)
-            # Extract path portion (before query string) and check extension
-            try:
-                path_part = after_scheme.split("/", 1)[1].split("?")[0].lower()
-                dot_pos = path_part.rfind(".")
-                if dot_pos != -1:
-                    ext = path_part[dot_pos:]
-                    if ext in _BLOCKED_MEDIA_EXTENSIONS:
-                        await route.abort()
-                        return
-            except (IndexError, ValueError):
-                pass
+                # Block media files by URL extension (Firecrawl pattern)
+                # Extract path portion (before query string) and check extension
+                try:
+                    path_part = after_scheme.split("/", 1)[1].split("?")[0].lower()
+                    dot_pos = path_part.rfind(".")
+                    if dot_pos != -1:
+                        ext = path_part[dot_pos:]
+                        if ext in _BLOCKED_MEDIA_EXTENSIONS:
+                            await route.abort()
+                            return
+                except (IndexError, ValueError):
+                    pass
 
-        await route.continue_()
+            await route.continue_()
+        except Exception:
+            # Context/page closed mid-request — nothing to do
+            pass
 
     await context.route("**/*", _route_handler)
 
@@ -1511,11 +1518,14 @@ class CrawlSession:
                         await self._context.close()
                     except Exception:
                         pass
+                    self._context = None
                 # Double-check: another coroutine may have already recreated it
-                try:
-                    return await self._context.new_page()
-                except Exception:
-                    await self._recreate_context()
+                if self._context is not None:
+                    try:
+                        return await self._context.new_page()
+                    except Exception:
+                        pass
+                await self._recreate_context()
             return await self._context.new_page()
 
     async def _recreate_context(self):

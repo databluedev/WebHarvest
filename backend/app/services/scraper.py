@@ -698,11 +698,14 @@ async def _setup_request_interception(page, url: str) -> None:
     regex = _get_bot_detection_regex()
 
     async def _handle_route(route):
-        req_url = route.request.url
-        if regex.search(req_url):
-            await route.abort()
-        else:
-            await route.continue_()
+        try:
+            req_url = route.request.url
+            if regex.search(req_url):
+                await route.abort()
+            else:
+                await route.continue_()
+        except Exception:
+            pass
 
     await page.route("**/*", _handle_route)
 
