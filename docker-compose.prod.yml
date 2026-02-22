@@ -189,6 +189,7 @@ services:
       target: prod
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
         - CACHE_BUST=${CACHE_BUST:-v6}
     depends_on:
       - backend
@@ -270,6 +271,8 @@ services:
       - STEALTH_CHROMIUM_POOL_SIZE=4
       - STEALTH_FIREFOX_POOL_SIZE=2
       - STEALTH_HEADLESS=true
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SENTRY_ENVIRONMENT=production
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health')"]
       interval: 15s

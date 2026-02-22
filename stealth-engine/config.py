@@ -11,4 +11,10 @@ class StealthSettings(BaseSettings):
     model_config = {"env_prefix": "STEALTH_"}
 
 
+class SentrySettings(BaseSettings):
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str = "production"
+
+
 settings = StealthSettings()
+sentry_settings = SentrySettings()

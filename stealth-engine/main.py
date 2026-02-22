@@ -5,11 +5,21 @@ import random
 import re
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 from browser_pool import stealth_pool
-from config import settings
+from config import settings, sentry_settings
+
+# Initialize Sentry error tracking
+if sentry_settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=sentry_settings.SENTRY_DSN,
+        traces_sample_rate=0.1,
+        environment=sentry_settings.SENTRY_ENVIRONMENT,
+        send_default_pii=False,
+    )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
