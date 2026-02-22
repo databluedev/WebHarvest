@@ -178,16 +178,26 @@ def process_crawl(self, job_id: str, config: dict):
 
                     if not batch_items:
                         # Frontier is empty — but consumer may still be extracting
-                        # links from the previous batch. Wait for queue to drain
-                        # before giving up.
-                        if not extract_queue.empty():
-                            await extract_queue.join()
-                            empty_retries = 0
-                            continue  # Retry — consumer may have added new links
-                        elif empty_retries < max_empty_retries:
+                        # links from the previous batch.
+                        #
+                        # IMPORTANT: Queue.empty() only checks for items waiting
+                        # to be gotten. Items already taken by the consumer but
+                        # still being processed (task_done() not yet called) are
+                        # NOT detected. join() properly waits for ALL unfinished
+                        # items, and returns instantly if nothing is pending.
+                        try:
+                            await asyncio.wait_for(
+                                extract_queue.join(), timeout=60
+                            )
+                        except asyncio.TimeoutError:
+                            logger.warning(
+                                f"Extract queue drain timed out for {job_id}"
+                            )
+
+                        if empty_retries < max_empty_retries:
                             empty_retries += 1
                             await asyncio.sleep(1)
-                            continue  # Brief wait for consumer to finish
+                            continue  # Retry — consumer may have added new links
                         else:
                             break  # Truly no more URLs
 

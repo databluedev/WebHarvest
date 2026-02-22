@@ -3902,6 +3902,14 @@ def extract_content(
         content_hash = hashlib.md5(normalized.encode("utf-8", errors="replace")).hexdigest()
 
     metadata_dict = extract_metadata(raw_html, url, status_code, response_headers or {})
+
+    # Override word_count with markdown-based count — raw HTML body text
+    # undercounts on image-heavy pages (e.g. Amazon) where most content
+    # becomes visible only after markdown conversion (links, alt text, noscript).
+    if md_text:
+        metadata_dict["word_count"] = len(md_text.split())
+        metadata_dict["reading_time_seconds"] = max(1, round(len(md_text.split()) / 200)) * 60
+
     metadata = PageMetadata(**metadata_dict)
 
     return ScrapeData(
