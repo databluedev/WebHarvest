@@ -251,11 +251,18 @@ def process_crawl(self, job_id: str, config: dict):
                                     if _pinned_strategy is None:
                                         wt = fetch_result.get("winning_tier")
                                         if ws and wt is not None:
-                                            _pinned_strategy = ws
-                                            _pinned_tier = wt
-                                            logger.warning(
-                                                f"Pinned strategy: {ws} (tier {wt}) for crawl {job_id}"
-                                            )
+                                            if ws in ("advanced_prewarm", "google_search_chain"):
+                                                _pinned_strategy = "crawl_session"
+                                                _pinned_tier = 2
+                                                logger.warning(
+                                                    f"Pinned strategy: crawl_session (cookies from {ws}) for crawl {job_id}"
+                                                )
+                                            else:
+                                                _pinned_strategy = ws
+                                                _pinned_tier = wt
+                                                logger.warning(
+                                                    f"Pinned strategy: {ws} (tier {wt}) for crawl {job_id}"
+                                                )
                                     return {
                                         "url": url,
                                         "depth": depth,

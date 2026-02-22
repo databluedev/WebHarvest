@@ -577,6 +577,13 @@ class WebCrawler:
         )
         if fetch_result:
             fetch_result["request"] = request
+            # Transfer cookies from winning strategy into persistent session
+            ws = fetch_result.get("winning_strategy", "")
+            if ws and ws != "crawl_session" and self._crawl_session:
+                try:
+                    await self._crawl_session.sync_cookies_from_pool(url)
+                except Exception:
+                    pass
         return fetch_result
 
     def export_state(self) -> dict:

@@ -1662,6 +1662,20 @@ class CrawlSession:
                 pass
         return self._cookies
 
+    async def sync_cookies_from_pool(self, url: str):
+        """Import cookies saved by a non-session strategy into this live context."""
+        domain = self._pool._get_domain(url)
+        pool_cookies = self._pool._cookie_jar.get(domain)
+        if not pool_cookies:
+            return
+        if self._context:
+            try:
+                await self._context.add_cookies(pool_cookies)
+                self._cookies = pool_cookies
+                logger.info("CrawlSession: synced %d cookies from pool for %s", len(pool_cookies), domain)
+            except Exception as e:
+                logger.debug("CrawlSession: cookie sync failed for %s: %s", domain, e)
+
     async def stop(self):
         """Release resources: close context, release semaphore."""
         from app.core.metrics import active_browser_contexts
