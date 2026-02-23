@@ -499,7 +499,7 @@ class WebCrawler:
             "discovered_links": discovered_links,
         }
 
-    async def take_screenshot(self, url: str, raw_html: str) -> str | None:
+    async def take_screenshot(self, url: str, raw_html: str, full_page: bool = True) -> str | None:
         """Take a screenshot using the crawl session browser.
 
         Renders the raw HTML in a browser page with a <base> tag so relative
@@ -524,7 +524,7 @@ class WebCrawler:
             await page.set_content(html, wait_until="domcontentloaded")
             await page.wait_for_timeout(500)
             ss_bytes = await page.screenshot(
-                type="jpeg", quality=80, full_page=True
+                type="jpeg", quality=80, full_page=full_page
             )
             return base64.b64encode(ss_bytes).decode()
         except Exception as e:

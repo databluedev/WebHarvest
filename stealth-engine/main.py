@@ -39,6 +39,7 @@ class ScrapeRequest(BaseModel):
     cookies: dict[str, str] | None = None
     actions: list[dict] | None = None
     screenshot: bool = False
+    screenshot_full_page: bool = True
     mobile: bool = False
     proxy: dict | None = None
     discover_links: bool = Field(default=False, description="Deep JS navigation discovery — detect doc frameworks, expand sidebars, extract all nav links")
@@ -840,7 +841,7 @@ async def _scrape_chromium(req: ScrapeRequest) -> ScrapeResponse:
         screenshot_b64 = None
         if req.screenshot:
             await _wait_for_images(page)
-            ss = await page.screenshot(type="png", full_page=True)
+            ss = await page.screenshot(type="png", full_page=req.screenshot_full_page)
             screenshot_b64 = base64.b64encode(ss).decode()
 
         final_url = page.url
@@ -1029,7 +1030,7 @@ async def _scrape_firefox(req: ScrapeRequest) -> ScrapeResponse:
         screenshot_b64 = None
         if req.screenshot:
             await _wait_for_images(page)
-            ss = await page.screenshot(type="png", full_page=True)
+            ss = await page.screenshot(type="png", full_page=req.screenshot_full_page)
             screenshot_b64 = base64.b64encode(ss).decode()
 
         final_url = page.url

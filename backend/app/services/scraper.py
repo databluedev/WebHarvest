@@ -246,6 +246,8 @@ async def _fetch_via_stealth_engine(
         payload["actions"] = request.actions
     if proxy:
         payload["proxy"] = proxy
+    # Pass screenshot_mode to stealth engine
+    payload["screenshot_full_page"] = getattr(request, "screenshot_mode", "fullpage") != "viewport"
 
     client = await _get_stealth_client()
     resp = await client.post(f"{stealth_url}/scrape", json=payload)
@@ -1759,7 +1761,7 @@ async def scrape_url(
                 await page.wait_for_timeout(500)
                 await _wait_for_images(page)
                 screenshot_bytes = await page.screenshot(
-                    type="png", full_page=True
+                    type="png", full_page=(getattr(request, "screenshot_mode", "fullpage") != "viewport")
                 )
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
                 logger.info(f"Fallback screenshot rendered for {url}")
@@ -2591,7 +2593,7 @@ async def _fetch_with_browser_stealth(
         if "screenshot" in request.formats:
             await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
-                type="png", full_page=True
+                type="png", full_page=(getattr(request, "screenshot_mode", "fullpage") != "viewport")
             )
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
@@ -2775,7 +2777,7 @@ async def _fetch_with_browser_session(
         if "screenshot" in request.formats:
             await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
-                type="png", full_page=True
+                type="png", full_page=(getattr(request, "screenshot_mode", "fullpage") != "viewport")
             )
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
@@ -2972,7 +2974,7 @@ async def _fetch_with_google_search_chain(
         if "screenshot" in request.formats:
             await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
-                type="png", full_page=True
+                type="png", full_page=(getattr(request, "screenshot_mode", "fullpage") != "viewport")
             )
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 
@@ -3192,7 +3194,7 @@ async def _fetch_with_advanced_prewarm(
         if "screenshot" in request.formats:
             await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
-                type="png", full_page=True
+                type="png", full_page=(getattr(request, "screenshot_mode", "fullpage") != "viewport")
             )
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
 

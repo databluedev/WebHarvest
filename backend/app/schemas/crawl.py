@@ -20,6 +20,7 @@ class ScrapeOptions(BaseModel):
     mobile: bool = False
     mobile_device: str | None = None
     extract: ExtractConfig | None = None  # LLM extraction config for each page
+    screenshot_mode: str = "fullpage"  # "viewport" or "fullpage"
 
 
 class CrawlRequest(BaseModel):
