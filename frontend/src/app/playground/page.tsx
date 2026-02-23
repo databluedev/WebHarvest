@@ -830,7 +830,7 @@ function PlaygroundContent() {
                         <div className="flex gap-2">
                           {["duckduckgo", "brave", "google"].map((eng) => (
                             <button key={eng} onClick={() => setEngine(eng)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", engine === eng ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white/80")}>
-                              {eng === "duckduckgo" ? "DuckDuckGo" : eng === "brave" ? "Brave" : "Google (BYOK)"}
+                              {eng === "duckduckgo" ? "DuckDuckGo" : eng === "brave" ? "Brave" : "Google"}
                             </button>
                           ))}
                         </div>

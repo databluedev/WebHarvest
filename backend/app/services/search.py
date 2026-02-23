@@ -50,6 +50,35 @@ class DuckDuckGoSearch(SearchEngine):
         return results
 
 
+class GoogleScrapedSearch(SearchEngine):
+    """Search Google via DDGS google backend — no API key needed."""
+
+    async def search(self, query: str, num_results: int) -> list[SearchResult]:
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
+
+        results = []
+        try:
+            with DDGS() as ddgs:
+                for r in ddgs.text(
+                    query, max_results=num_results, backend="google"
+                ):
+                    results.append(
+                        SearchResult(
+                            url=r.get("href", r.get("url", "")),
+                            title=r.get("title", ""),
+                            snippet=r.get("body", r.get("description", "")),
+                        )
+                    )
+        except Exception as e:
+            logger.error(f"Google scraped search failed: {e}")
+            raise
+
+        return results
+
+
 class GoogleCustomSearch(SearchEngine):
     """Search using Google Custom Search JSON API (BYOK)."""
 
@@ -130,14 +159,18 @@ async def web_search(
 ) -> list[SearchResult]:
     """High-level search function with automatic fallback chain.
 
-    Default chain: primary engine -> DuckDuckGo -> Brave -> Google (if configured)
+    Default chain: primary engine -> DuckDuckGo -> Google -> Brave
+    Google engine works without API keys (scrapes via DDGS google backend).
+    When API keys are provided, uses Google Custom Search JSON API instead.
     """
     # Build the engine chain based on the requested engine
     engines: list[tuple[str, SearchEngine]] = []
 
     # Primary engine first
-    if engine == "google" and google_api_key and google_cx:
-        engines.append(("google", GoogleCustomSearch(google_api_key, google_cx)))
+    if engine == "google":
+        if google_api_key and google_cx:
+            engines.append(("google_api", GoogleCustomSearch(google_api_key, google_cx)))
+        engines.append(("google", GoogleScrapedSearch()))
     elif engine == "brave":
         brave_key = brave_api_key or settings.BRAVE_SEARCH_API_KEY
         if brave_key:
@@ -149,12 +182,15 @@ async def web_search(
     if engine != "duckduckgo":
         engines.append(("duckduckgo", DuckDuckGoSearch()))
 
+    if engine != "google":
+        engines.append(("google", GoogleScrapedSearch()))
+
     brave_key = brave_api_key or settings.BRAVE_SEARCH_API_KEY
     if engine != "brave" and brave_key:
         engines.append(("brave", BraveSearch(brave_key)))
 
     if engine != "google" and google_api_key and google_cx:
-        engines.append(("google", GoogleCustomSearch(google_api_key, google_cx)))
+        engines.append(("google_api", GoogleCustomSearch(google_api_key, google_cx)))
 
     # Try each engine in order
     last_error = None
