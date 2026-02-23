@@ -316,6 +316,59 @@ const InlineResultCard = memo(function InlineResultCard({
 
       {expanded && (
         <div className="border-t border-white/[0.08]">
+          {/* Summary bar */}
+          {(page.metadata || page.structured_data) && (
+            <div className="px-6 py-3 border-b border-white/[0.08] bg-white/[0.02] space-y-2">
+              {/* Meta description from OG or meta tags */}
+              {(page.structured_data?.open_graph?.description || page.structured_data?.meta_tags?.description) && (
+                <p className="text-[12px] text-white/50 line-clamp-2">
+                  {page.structured_data?.open_graph?.description || page.structured_data?.meta_tags?.description}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {page.metadata?.language && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    {page.metadata.language}
+                  </span>
+                )}
+                {page.metadata?.canonical_url && page.metadata.canonical_url !== page.url && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40 truncate max-w-xs">
+                    canonical: {page.metadata.canonical_url}
+                  </span>
+                )}
+                {page.structured_data?.open_graph?.type && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    og:{page.structured_data.open_graph.type}
+                  </span>
+                )}
+                {page.structured_data?.twitter_card?.card && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    twitter:{page.structured_data.twitter_card.card}
+                  </span>
+                )}
+                {page.structured_data?.json_ld?.length > 0 && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    {page.structured_data.json_ld.length} JSON-LD
+                  </span>
+                )}
+                {page.headings?.length > 0 && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    {page.headings.length} headings
+                  </span>
+                )}
+                {page.images?.length > 0 && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    {page.images.length} images
+                  </span>
+                )}
+                {page.links_detail?.total > 0 && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    {page.links_detail.total} links
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
           <div className="flex items-center border-b border-white/[0.08] bg-white/[0.01]">
             {availableTabs.map((tab) => {
               const Icon = tab.icon;
@@ -396,9 +449,55 @@ const InlineResultCard = memo(function InlineResultCard({
               </div>
             )}
             {activeTab === "structured" && hasStructured && (
-              <pre className="max-h-72 overflow-auto text-[13px] font-mono bg-black/40 p-6 text-amber-400/60 border border-white/[0.06]">
-                {JSON.stringify(page.structured_data, null, 2)}
-              </pre>
+              <div className="max-h-72 overflow-auto space-y-4">
+                {page.structured_data.json_ld && (
+                  <div>
+                    <h4 className="text-[11px] font-mono font-bold text-emerald-400/70 uppercase tracking-[0.2em] mb-2">JSON-LD (Schema.org)</h4>
+                    <pre className="text-[12px] font-mono bg-black/40 border border-white/[0.06] p-4 text-white/60 overflow-auto max-h-48 whitespace-pre-wrap">
+                      {JSON.stringify(page.structured_data.json_ld, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {page.structured_data.open_graph && Object.keys(page.structured_data.open_graph).length > 0 && (
+                  <div>
+                    <h4 className="text-[11px] font-mono font-bold text-emerald-400/70 uppercase tracking-[0.2em] mb-2">OpenGraph</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1 bg-black/40 border border-white/[0.06] p-4">
+                      {Object.entries(page.structured_data.open_graph).map(([key, val]: [string, any]) => (
+                        <div key={key} className="text-[12px] font-mono">
+                          <span className="text-white/40">og:{key}:</span>{" "}
+                          <span className="text-white/70">{String(val)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {page.structured_data.twitter_card && Object.keys(page.structured_data.twitter_card).length > 0 && (
+                  <div>
+                    <h4 className="text-[11px] font-mono font-bold text-emerald-400/70 uppercase tracking-[0.2em] mb-2">Twitter Card</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1 bg-black/40 border border-white/[0.06] p-4">
+                      {Object.entries(page.structured_data.twitter_card).map(([key, val]: [string, any]) => (
+                        <div key={key} className="text-[12px] font-mono">
+                          <span className="text-white/40">twitter:{key}:</span>{" "}
+                          <span className="text-white/70">{String(val)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {page.structured_data.meta_tags && Object.keys(page.structured_data.meta_tags).length > 0 && (
+                  <div>
+                    <h4 className="text-[11px] font-mono font-bold text-emerald-400/70 uppercase tracking-[0.2em] mb-2">Meta Tags</h4>
+                    <div className="space-y-1 bg-black/40 border border-white/[0.06] p-4 max-h-48 overflow-auto">
+                      {Object.entries(page.structured_data.meta_tags).map(([key, val]: [string, any]) => (
+                        <div key={key} className="text-[12px] font-mono">
+                          <span className="text-white/40">{key}:</span>{" "}
+                          <span className="text-white/70">{String(val)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             {activeTab === "headings" && hasHeadings && (
               <div className="space-y-1.5 max-h-72 overflow-auto">
