@@ -119,6 +119,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_SEARCH: int = 30
     MAX_SEARCH_RESULTS: int = 10
     BRAVE_SEARCH_API_KEY: str = ""
+    SEARXNG_URL: str = ""  # Self-hosted SearXNG instance (empty = disabled)
 
     # Data Retention
     DATA_RETENTION_DAYS: int = 30

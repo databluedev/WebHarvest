@@ -1,7 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from urllib.parse import quote_plus
 
 import httpx
 
@@ -150,113 +149,30 @@ class BraveSearch(SearchEngine):
         return results
 
 
-class PlaywrightGoogleSearch(SearchEngine):
-    """Search Google with a real Playwright browser — most reliable results.
+class SearXNGSearch(SearchEngine):
+    """Search via self-hosted SearXNG — aggregates Google, Bing, Brave, DDG."""
 
-    Uses the existing BrowserPool (stealth + fingerprinting) to navigate to
-    Google, render the SERP, and extract organic results from the DOM.
-    Falls through gracefully if the browser pool is unavailable.
-    """
+    def __init__(self, base_url: str):
+        self.base_url = base_url.rstrip("/")
 
     async def search(self, query: str, num_results: int) -> list[SearchResult]:
-        from app.services.browser import browser_pool
-
-        await browser_pool.initialize()
-
-        results: list[SearchResult] = []
-        search_url = (
-            f"https://www.google.com/search?q={quote_plus(query)}"
-            f"&num={min(num_results + 5, 20)}&hl=en"
-        )
-
-        async with browser_pool.get_page(stealth=True) as page:
-            await page.goto(search_url, wait_until="domcontentloaded", timeout=15000)
-
-            # Wait for organic results container
-            try:
-                await page.wait_for_selector("#search, #rso", timeout=5000)
-            except Exception:
-                pass  # Results may be in a different container
-
-            # Extract organic search results from the rendered DOM
-            raw = await page.evaluate(
-                """() => {
-                const results = [];
-                const seen = new Set();
-
-                // Google wraps each organic result in a div.g containing an h3
-                const containers = document.querySelectorAll(
-                    '#rso .g, #search .g, [data-sokoban-container] .g'
-                );
-
-                for (const g of containers) {
-                    const h3 = g.querySelector('h3');
-                    if (!h3) continue;
-
-                    const link = h3.closest('a');
-                    if (!link || !link.href) continue;
-
-                    let url = link.href;
-
-                    // Resolve Google redirect URLs (/url?q=...)
-                    try {
-                        const u = new URL(url);
-                        if (u.hostname.includes('google') && u.searchParams.has('q')) {
-                            url = u.searchParams.get('q');
-                        }
-                    } catch {}
-
-                    if (!url || !url.startsWith('http')) continue;
-                    if (url.includes('google.com/search')) continue;
-                    if (url.includes('accounts.google.com')) continue;
-                    if (seen.has(url)) continue;
-                    seen.add(url);
-
-                    const title = (h3.textContent || '').trim();
-                    if (!title) continue;
-
-                    // Extract snippet from the result container
-                    let snippet = '';
-
-                    // Try known snippet selectors first
-                    const snippetEl = g.querySelector(
-                        '[data-sncf="1"], .VwiC3b, [style*="-webkit-line-clamp"], span.st'
-                    );
-                    if (snippetEl) {
-                        snippet = (snippetEl.textContent || '').trim();
-                    }
-
-                    // Fallback: find the longest text block that isn't the title
-                    if (!snippet) {
-                        for (const el of g.querySelectorAll('div, span')) {
-                            if (el.querySelector('h3') || el.querySelector('cite')) continue;
-                            const t = (el.textContent || '').trim();
-                            if (t.length > 40 && t.length < 500
-                                && t.length > snippet.length && t !== title) {
-                                snippet = t;
-                            }
-                        }
-                    }
-
-                    results.push({ url, title, snippet });
-                }
-
-                return results;
-            }"""
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{self.base_url}/search",
+                params={"q": query, "format": "json", "pageno": 1},
             )
+            resp.raise_for_status()
+            data = resp.json()
 
-            for item in raw[:num_results]:
-                results.append(
-                    SearchResult(
-                        url=item["url"],
-                        title=item["title"],
-                        snippet=item.get("snippet", ""),
-                    )
+        results = []
+        for item in data.get("results", [])[:num_results]:
+            results.append(
+                SearchResult(
+                    url=item.get("url", ""),
+                    title=item.get("title", ""),
+                    snippet=item.get("content", ""),
                 )
-
-        if not results:
-            logger.warning("Playwright Google search returned 0 organic results")
-
+            )
         return results
 
 
@@ -270,16 +186,19 @@ async def web_search(
 ) -> list[SearchResult]:
     """High-level search function with automatic fallback chain.
 
-    Chains (Playwright Google is the most reliable — real browser + stealth):
-      google:     Playwright Google → Google API (if keys) → DDGS google → DuckDuckGo → Brave
-      duckduckgo: DuckDuckGo → Playwright Google → DDGS google → Brave
-      brave:      Brave → DuckDuckGo → Playwright Google → DDGS google
+    Chains (SearXNG aggregates Google + Bing + Brave + DDG):
+      google:     SearXNG → Google API (if keys) → DDGS google → DuckDuckGo → Brave
+      duckduckgo: DuckDuckGo → SearXNG → DDGS google → Brave
+      brave:      Brave → DuckDuckGo → SearXNG → DDGS google
     """
     engines: list[tuple[str, SearchEngine]] = []
 
+    searxng_url = settings.SEARXNG_URL
+
     # ── Primary engine ──────────────────────────────────────────────
     if engine == "google":
-        engines.append(("google_playwright", PlaywrightGoogleSearch()))
+        if searxng_url:
+            engines.append(("searxng", SearXNGSearch(searxng_url)))
         if google_api_key and google_cx:
             engines.append(("google_api", GoogleCustomSearch(google_api_key, google_cx)))
         engines.append(("google_scraped", GoogleScrapedSearch()))
@@ -298,8 +217,8 @@ async def web_search(
     if "duckduckgo" not in seen:
         fallbacks.append(("duckduckgo", DuckDuckGoSearch()))
 
-    if "google_playwright" not in seen:
-        fallbacks.append(("google_playwright", PlaywrightGoogleSearch()))
+    if "searxng" not in seen and searxng_url:
+        fallbacks.append(("searxng", SearXNGSearch(searxng_url)))
 
     if "google_scraped" not in seen:
         fallbacks.append(("google_scraped", GoogleScrapedSearch()))

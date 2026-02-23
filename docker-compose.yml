@@ -21,6 +21,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
+      - SEARXNG_URL=http://searxng:8080
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -49,6 +50,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
+      - SEARXNG_URL=http://searxng:8080
     command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 4 -Q scrape' /app/app
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
@@ -78,6 +80,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
+      - SEARXNG_URL=http://searxng:8080
     command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 2 -Q crawl' /app/app
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
@@ -105,6 +108,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SEARXNG_URL=http://searxng:8080
     command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 2 -Q search,map' /app/app
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
@@ -204,6 +208,20 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    volumes:
+      - ./searxng:/etc/searxng
+    environment:
+      - SEARXNG_SECRET=webharvest-searxng-secret
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   pgdata:
