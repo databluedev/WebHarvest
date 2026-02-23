@@ -673,7 +673,7 @@ function PlaygroundContent() {
   const toggleFormat = (format: string) => setFormats((prev) => prev.includes(format) ? prev.filter((f) => f !== format) : [...prev, format]);
 
   // Always include structured_data and headings so the summary bar has data
-  const effectiveFormats = [...new Set([...formats, "structured_data", "headings"])];
+  const effectiveFormats = Array.from(new Set(formats.concat(["structured_data", "headings"])));
 
   const handleGetCode = () => {
     let code = "";
