@@ -313,11 +313,15 @@ _BLOCK_PATTERNS = [
 # Exact domain matches
 _HARD_SITES_EXACT = {
     "google.com",
+    "youtube.com",
     "facebook.com",
     "instagram.com",
     "twitter.com",
     "x.com",
     "linkedin.com",
+    "reddit.com",
+    "tiktok.com",
+    "pinterest.com",
     "zillow.com",
     "indeed.com",
     "glassdoor.com",
