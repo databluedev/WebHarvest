@@ -150,16 +150,30 @@ class BraveSearch(SearchEngine):
 
 
 class SearXNGSearch(SearchEngine):
-    """Search via self-hosted SearXNG — aggregates Google, Bing, Brave, DDG."""
+    """Search via self-hosted SearXNG.
 
-    def __init__(self, base_url: str):
+    When `engines` is set (e.g. "google"), SearXNG queries only that
+    backend and preserves its native ranking — no blending.
+    When omitted, SearXNG aggregates all enabled engines.
+    """
+
+    def __init__(self, base_url: str, engines: str | None = None):
         self.base_url = base_url.rstrip("/")
+        self.engines = engines
 
     async def search(self, query: str, num_results: int) -> list[SearchResult]:
+        params: dict[str, str | int] = {
+            "q": query,
+            "format": "json",
+            "pageno": 1,
+        }
+        if self.engines:
+            params["engines"] = self.engines
+
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(
                 f"{self.base_url}/search",
-                params={"q": query, "format": "json", "pageno": 1},
+                params=params,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -196,9 +210,11 @@ async def web_search(
     searxng_url = settings.SEARXNG_URL
 
     # ── Primary engine ──────────────────────────────────────────────
+    # When user picks "google", tell SearXNG to use only Google backend
+    # so results match Google's native ranking (no blending).
     if engine == "google":
         if searxng_url:
-            engines.append(("searxng", SearXNGSearch(searxng_url)))
+            engines.append(("searxng", SearXNGSearch(searxng_url, engines="google")))
         if google_api_key and google_cx:
             engines.append(("google_api", GoogleCustomSearch(google_api_key, google_cx)))
         engines.append(("google_scraped", GoogleScrapedSearch()))
