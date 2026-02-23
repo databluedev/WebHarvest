@@ -73,7 +73,7 @@ services:
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=production
-    command: celery -A app.workers.celery_app worker -l warning -c 4 -Q scrape
+    command: celery -A app.workers.celery_app worker -l warning -c 3 -Q scrape
     restart: unless-stopped
     stop_grace_period: 30s
     healthcheck:
@@ -82,7 +82,7 @@ services:
       timeout: 10s
       retries: 3
     deploy:
-      replicas: 2
+      replicas: 3
       resources:
         limits:
           cpus: "2.0"
@@ -110,7 +110,7 @@ services:
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=production
-    command: celery -A app.workers.celery_app worker -l warning -c 2 -Q crawl
+    command: celery -A app.workers.celery_app worker -l warning -c 1 -Q crawl
     restart: unless-stopped
     stop_grace_period: 30s
     healthcheck:
@@ -119,7 +119,7 @@ services:
       timeout: 10s
       retries: 3
     deploy:
-      replicas: 2
+      replicas: 3
       resources:
         limits:
           cpus: "2.0"
