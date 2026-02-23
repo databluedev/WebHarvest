@@ -208,7 +208,7 @@ const InlineResultCard = memo(function InlineResultCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<ResultTab>("markdown");
-  const [screenshotData, setScreenshotData] = useState<string | null>(page.screenshot || null);
+  const [screenshotData, setScreenshotData] = useState<string | null>(null);
   const [screenshotLoading, setScreenshotLoading] = useState(false);
   const [htmlData, setHtmlData] = useState<string | null>(null);
   const [htmlLoading, setHtmlLoading] = useState(false);
@@ -259,10 +259,13 @@ const InlineResultCard = memo(function InlineResultCard({
     }
   }, [jobId, page.id, screenshotData, screenshotLoading, htmlData, htmlLoading]);
 
-  // Auto-load HTML when tab is selected (screenshot stays on-demand)
+  // Auto-load heavy fields when their tab is selected
   useEffect(() => {
     if (activeTab === "html" && hasHtml && page.html === "available" && !htmlData && !htmlLoading) {
       loadDetail("html");
+    }
+    if (activeTab === "screenshot" && hasScreenshot && !screenshotData && !screenshotLoading) {
+      loadDetail("screenshot");
     }
   }, [activeTab]);
 

@@ -162,7 +162,12 @@ export default function ScrapeDetailPage() {
     }
   }, [result]);
 
-  // Screenshot is loaded on-demand via button click (not auto-loaded)
+  // Auto-load screenshot when tab is selected
+  useEffect(() => {
+    if (activeTab === "screenshot" && result?.id && result?.screenshot && !screenshotData[result.id] && !screenshotLoading[result.id]) {
+      loadScreenshot(result.id);
+    }
+  }, [activeTab, result]);
 
   const getCopyText = (): string => {
     if (!result) return "";

@@ -90,10 +90,13 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
     }
   }, []);
 
-  // Auto-load HTML when tab is selected (screenshot stays on-demand)
+  // Auto-load heavy fields when their tab is selected
   useEffect(() => {
     if (activeTab === "html" && hasHtml && !htmlData && !htmlLoading) {
       loadDetail("html");
+    }
+    if (activeTab === "screenshot" && hasScreenshot && !screenshotData && !screenshotLoading) {
+      loadDetail("screenshot");
     }
   }, [activeTab]);
 

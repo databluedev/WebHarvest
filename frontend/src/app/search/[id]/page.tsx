@@ -85,6 +85,13 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
     }
   }, []);
 
+  // Auto-load screenshot when tab is selected
+  useEffect(() => {
+    if (activeTab === "screenshot" && hasScreenshot && !screenshotData && !screenshotLoading) {
+      loadScreenshot();
+    }
+  }, [activeTab]);
+
   const wordCount = item.metadata?.word_count || 0;
 
   return (
