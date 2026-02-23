@@ -350,7 +350,7 @@ def process_crawl(self, job_id: str, config: dict):
                                         pinned_strategy=_pinned_strategy,
                                         pinned_tier=_pinned_tier,
                                     ),
-                                    timeout=120,
+                                    timeout=45,
                                 )
                                 if fetch_result:
                                     html_len = len(fetch_result.get("raw_html", ""))
@@ -414,7 +414,7 @@ def process_crawl(self, job_id: str, config: dict):
                                 # the fast path already spent time trying.
                                 result = await asyncio.wait_for(
                                     crawler.scrape_page(url),
-                                    timeout=60,
+                                    timeout=30,
                                 )
                                 return {
                                     "url": url,
@@ -423,7 +423,7 @@ def process_crawl(self, job_id: str, config: dict):
                                     "discovered_links": result["discovered_links"],
                                 }
                             except asyncio.TimeoutError:
-                                logger.warning(f"Fetch timed out for {url} after 120s")
+                                logger.warning(f"Fetch timed out for {url} after 45s")
                                 return None
                             except Exception as e:
                                 logger.warning(f"Failed to fetch {url}: {e}")
