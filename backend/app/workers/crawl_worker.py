@@ -336,112 +336,104 @@ def process_crawl(self, job_id: str, config: dict):
 
                     async def fetch_one(url: str, depth: int) -> dict | None:
                         nonlocal _pinned_strategy, _pinned_tier
-                        async with semaphore:
-                            try:
-                                # Domain throttle — respect robots.txt Crawl-Delay
-                                from urllib.parse import urlparse as _urlparse
-                                from app.services.scraper import domain_throttle
+                        try:
+                            # Domain throttle — respect robots.txt Crawl-Delay
+                            from urllib.parse import urlparse as _urlparse
+                            from app.services.scraper import domain_throttle
 
-                                _domain = _urlparse(url).netloc
-                                if _domain:
-                                    _crawl_delay = crawler.get_crawl_delay(url)
-                                    _delay = max(0.1, _crawl_delay or 0.0)
-                                    await domain_throttle(_domain, delay=_delay)
+                            _domain = _urlparse(url).netloc
+                            if _domain:
+                                _crawl_delay = crawler.get_crawl_delay(url)
+                                _delay = max(0.1, _crawl_delay or 0.0)
+                                await domain_throttle(_domain, delay=_delay)
 
-                                fetch_result = await asyncio.wait_for(
-                                    crawler.fetch_page_only(
-                                        url,
-                                        pinned_strategy=_pinned_strategy,
-                                        pinned_tier=_pinned_tier,
-                                    ),
-                                    timeout=35,
+                            fetch_result = await asyncio.wait_for(
+                                crawler.fetch_page_only(
+                                    url,
+                                    pinned_strategy=_pinned_strategy,
+                                    pinned_tier=_pinned_tier,
+                                ),
+                                timeout=35,
+                            )
+                            if fetch_result:
+                                html_len = len(fetch_result.get("raw_html", ""))
+                                ws = fetch_result.get("winning_strategy", "?")
+                                sc = fetch_result.get("status_code", 0)
+                                logger.warning(
+                                    f"Fetched {url} via {ws} ({html_len} chars, {sc})"
                                 )
-                                if fetch_result:
-                                    html_len = len(fetch_result.get("raw_html", ""))
-                                    ws = fetch_result.get("winning_strategy", "?")
-                                    sc = fetch_result.get("status_code", 0)
-                                    logger.warning(
-                                        f"Fetched {url} via {ws} ({html_len} chars, {sc})"
+
+                                # Firecrawl-style escalation: if the page
+                                # returned a block status (401/403/429) or
+                                # looks blocked, unpin the strategy so the
+                                # next page retries all strategies fresh.
+                                _is_blocked = sc in (401, 403, 429)
+                                if not _is_blocked:
+                                    from app.services.scraper import _looks_blocked
+                                    raw = fetch_result.get("raw_html", "")
+                                    _is_blocked = await loop.run_in_executor(
+                                        None, _looks_blocked, raw
                                     )
 
-                                    # Firecrawl-style escalation: if the page
-                                    # returned a block status (401/403/429) or
-                                    # looks blocked, unpin the strategy so the
-                                    # next page retries all strategies fresh.
-                                    _is_blocked = sc in (401, 403, 429)
-                                    if not _is_blocked:
-                                        from app.services.scraper import _looks_blocked
-                                        raw = fetch_result.get("raw_html", "")
-                                        # Run off-event-loop to avoid blocking
-                                        # the consumer with regex on huge HTML.
-                                        _is_blocked = await loop.run_in_executor(
-                                            None, _looks_blocked, raw
-                                        )
+                                if _is_blocked and _pinned_strategy is not None:
+                                    logger.warning(
+                                        f"Strategy escalation: {ws} returned "
+                                        f"blocked ({sc}) for {url}, unpinning"
+                                    )
+                                    _pinned_strategy = None
+                                    _pinned_tier = None
 
-                                    if _is_blocked and _pinned_strategy is not None:
-                                        logger.warning(
-                                            f"Strategy escalation: {ws} returned "
-                                            f"blocked ({sc}) for {url}, unpinning"
-                                        )
-                                        _pinned_strategy = None
-                                        _pinned_tier = None
+                                if _is_blocked:
+                                    logger.warning(f"Skipping blocked page: {url}")
+                                    return None
 
-                                    # Don't queue blocked pages for extraction —
-                                    # they contain bot-detection garbage, not content.
-                                    if _is_blocked:
-                                        logger.warning(f"Skipping blocked page: {url}")
-                                        return None
-
-                                    # Pin strategy from first success
-                                    if _pinned_strategy is None:
-                                        wt = fetch_result.get("winning_tier")
-                                        if ws and wt is not None:
-                                            if ws in ("advanced_prewarm", "google_search_chain"):
-                                                _pinned_strategy = "crawl_session"
-                                                _pinned_tier = 2
-                                                logger.warning(
-                                                    f"Pinned strategy: crawl_session (cookies from {ws}) for crawl {job_id}"
-                                                )
-                                            else:
-                                                _pinned_strategy = ws
-                                                _pinned_tier = wt
-                                                logger.warning(
-                                                    f"Pinned strategy: {ws} (tier {wt}) for crawl {job_id}"
-                                                )
-                                    return {
-                                        "url": url,
-                                        "depth": depth,
-                                        "fetch_result": fetch_result,
-                                    }
-                                logger.warning(f"fetch_page_only returned None for {url}, trying scrape_page")
-                                # Fallback to full scrape — shorter timeout since
-                                # the fast path already spent time trying.
-                                result = await asyncio.wait_for(
-                                    crawler.scrape_page(url),
-                                    timeout=30,
-                                )
+                                # Pin strategy from first success
+                                if _pinned_strategy is None:
+                                    wt = fetch_result.get("winning_tier")
+                                    if ws and wt is not None:
+                                        if ws in ("advanced_prewarm", "google_search_chain"):
+                                            _pinned_strategy = "crawl_session"
+                                            _pinned_tier = 2
+                                            logger.warning(
+                                                f"Pinned strategy: crawl_session (cookies from {ws}) for crawl {job_id}"
+                                            )
+                                        else:
+                                            _pinned_strategy = ws
+                                            _pinned_tier = wt
+                                            logger.warning(
+                                                f"Pinned strategy: {ws} (tier {wt}) for crawl {job_id}"
+                                            )
                                 return {
                                     "url": url,
                                     "depth": depth,
-                                    "scrape_data": result["scrape_data"],
-                                    "discovered_links": result["discovered_links"],
+                                    "fetch_result": fetch_result,
                                 }
-                            except asyncio.TimeoutError:
-                                logger.warning(f"Fetch timed out for {url} after 35s")
-                                return None
-                            except Exception as e:
-                                logger.warning(f"Failed to fetch {url}: {e}")
-                                return None
+                            logger.warning(f"fetch_page_only returned None for {url}, trying scrape_page")
+                            result = await asyncio.wait_for(
+                                crawler.scrape_page(url),
+                                timeout=30,
+                            )
+                            return {
+                                "url": url,
+                                "depth": depth,
+                                "scrape_data": result["scrape_data"],
+                                "discovered_links": result["discovered_links"],
+                            }
+                        except asyncio.TimeoutError:
+                            logger.warning(f"Fetch timed out for {url} after 35s")
+                            return None
+                        except Exception as e:
+                            logger.warning(f"Failed to fetch {url}: {e}")
+                            return None
 
-                    tasks = [fetch_one(url, depth) for url, depth in batch_items]
-                    results = await asyncio.gather(*tasks)
-
-                    for result in results:
-                        if result is None:
-                            continue
+                    # Fetch sequentially and queue each result immediately
+                    # so the consumer can process pages while producer fetches.
+                    for url, depth in batch_items:
                         if pages_crawled >= request.max_pages or cancelled:
                             break
-                        await extract_queue.put(result)
+                        result = await fetch_one(url, depth)
+                        if result is not None:
+                            await extract_queue.put(result)
 
                 logger.warning(
                     f"Producer done for {job_id}: pages_crawled={pages_crawled}, "
