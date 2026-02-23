@@ -212,6 +212,8 @@ const InlineResultCard = memo(function InlineResultCard({
   const [activeTab, setActiveTab] = useState<ResultTab>("markdown");
   const [screenshotData, setScreenshotData] = useState<string | null>(page.screenshot || null);
   const [screenshotLoading, setScreenshotLoading] = useState(false);
+  const [htmlData, setHtmlData] = useState<string | null>(null);
+  const [htmlLoading, setHtmlLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const hasMarkdown = !!page.markdown;
@@ -242,24 +244,40 @@ const InlineResultCard = memo(function InlineResultCard({
     }
   }, []);
 
-  const loadScreenshot = useCallback(async () => {
-    if (screenshotData || screenshotLoading || !page.id) return;
-    setScreenshotLoading(true);
+  const loadDetail = useCallback(async (field: "screenshot" | "html") => {
+    if (!page.id) return;
+    if (field === "screenshot" && (screenshotData || screenshotLoading)) return;
+    if (field === "html" && (htmlData || htmlLoading)) return;
+    if (field === "screenshot") setScreenshotLoading(true);
+    else setHtmlLoading(true);
     try {
       const detail = await api.getJobResultDetail(jobId, page.id);
-      setScreenshotData(detail.screenshot || null);
+      if (field === "screenshot") setScreenshotData(detail.screenshot || null);
+      else setHtmlData(detail.html || null);
     } catch {
-      setScreenshotData(null);
+      if (field === "screenshot") setScreenshotData(null);
+      else setHtmlData(null);
     } finally {
-      setScreenshotLoading(false);
+      if (field === "screenshot") setScreenshotLoading(false);
+      else setHtmlLoading(false);
     }
-  }, [jobId, page.id, screenshotData, screenshotLoading]);
+  }, [jobId, page.id, screenshotData, screenshotLoading, htmlData, htmlLoading]);
+
+  // Auto-load HTML and screenshot when their tab is selected
+  useEffect(() => {
+    if (activeTab === "html" && hasHtml && page.html === "available" && !htmlData && !htmlLoading) {
+      loadDetail("html");
+    }
+    if (activeTab === "screenshot" && hasScreenshot && !screenshotData && !screenshotLoading) {
+      loadDetail("screenshot");
+    }
+  }, [activeTab]);
 
   const copyContent = () => {
     let text = "";
     switch (activeTab) {
       case "markdown": text = page.markdown || ""; break;
-      case "html": text = page.html || ""; break;
+      case "html": text = (page.html && page.html !== "available") ? page.html : (htmlData || ""); break;
       case "links": text = (page.links || []).join("\n"); break;
       default: text = JSON.stringify(page[activeTab], null, 2); break;
     }
@@ -377,7 +395,6 @@ const InlineResultCard = memo(function InlineResultCard({
                   key={tab.id}
                   onClick={() => {
                     setActiveTab(tab.id);
-                    if (tab.id === "screenshot" && !screenshotData && !screenshotLoading) loadScreenshot();
                   }}
                   className={cn(
                     "flex items-center gap-2 px-6 py-3.5 text-[12px] font-mono uppercase tracking-[0.15em] transition-all border-b-2 -mb-[1px]",
@@ -407,23 +424,30 @@ const InlineResultCard = memo(function InlineResultCard({
               </pre>
             )}
             {activeTab === "html" && hasHtml && (
-              <pre className="max-h-72 overflow-auto text-[13px] text-white/60 whitespace-pre-wrap font-mono bg-black/40 p-6 border border-white/[0.06]">
-                {page.html}
-              </pre>
+              page.html && page.html !== "available" ? (
+                <pre className="max-h-72 overflow-auto text-[13px] text-white/60 whitespace-pre-wrap font-mono bg-black/40 p-6 border border-white/[0.06]">
+                  {page.html}
+                </pre>
+              ) : htmlData ? (
+                <pre className="max-h-72 overflow-auto text-[13px] text-white/60 whitespace-pre-wrap font-mono bg-black/40 p-6 border border-white/[0.06]">
+                  {htmlData}
+                </pre>
+              ) : (
+                <div className="flex items-center gap-3 py-8 text-white/50 justify-center">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-[13px] font-mono uppercase tracking-wider">Loading HTML...</span>
+                </div>
+              )
             )}
             {activeTab === "screenshot" && hasScreenshot && (
               <div className="flex justify-center">
                 {screenshotData ? (
                   <img src={`data:image/jpeg;base64,${screenshotData}`} alt={`Screenshot of ${page.url}`} className="max-w-full border border-white/10" style={{ maxHeight: "500px" }} />
-                ) : screenshotLoading ? (
+                ) : (
                   <div className="flex items-center gap-3 py-8 text-white/50">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="text-[13px] font-mono uppercase tracking-wider">Loading...</span>
                   </div>
-                ) : (
-                  <button onClick={loadScreenshot} className="flex items-center gap-2 px-5 py-3 text-[13px] font-mono uppercase tracking-wider border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/[0.03] transition-all">
-                    <Camera className="h-4 w-4" /> Load Screenshot
-                  </button>
                 )}
               </div>
             )}

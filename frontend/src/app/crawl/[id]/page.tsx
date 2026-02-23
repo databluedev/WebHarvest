@@ -93,6 +93,16 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
     }
   }, []);
 
+  // Auto-load HTML and screenshot when their tab is selected
+  useEffect(() => {
+    if (activeTab === "html" && hasHtml && !htmlData && !htmlLoading) {
+      loadDetail("html");
+    }
+    if (activeTab === "screenshot" && hasScreenshot && !screenshotData && !screenshotLoading) {
+      loadDetail("screenshot");
+    }
+  }, [activeTab]);
+
   const linksSummary = page.links_detail || (page.links ? { total: page.links.length } : null);
   const wordCount = page.metadata?.word_count || 0;
   const readingTime = page.metadata?.reading_time_seconds
@@ -254,16 +264,11 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                   <pre className="max-h-96 overflow-auto text-xs text-white/70 whitespace-pre-wrap font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-4">
                     {htmlData}
                   </pre>
-                ) : htmlLoading ? (
+                ) : (
                   <div className="flex items-center gap-2 py-8 text-white/40 justify-center">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="text-sm">Loading HTML...</span>
                   </div>
-                ) : (
-                  <button onClick={() => loadDetail("html")} className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm border border-white/20 text-white/50 hover:text-white transition-colors">
-                    <Code className="h-4 w-4" />
-                    Load HTML
-                  </button>
                 )}
               </div>
             )}
@@ -277,16 +282,11 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                     className="max-w-full rounded-md border border-white/10 shadow-lg"
                     style={{ maxHeight: "600px" }}
                   />
-                ) : screenshotLoading ? (
+                ) : (
                   <div className="flex items-center gap-2 py-8 text-white/40">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="text-sm">Loading screenshot...</span>
                   </div>
-                ) : (
-                  <button onClick={() => loadDetail("screenshot")} className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm border border-white/20 text-white/50 hover:text-white transition-colors">
-                    <Camera className="h-4 w-4" />
-                    Load Screenshot
-                  </button>
                 )}
               </div>
             )}

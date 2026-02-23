@@ -164,6 +164,13 @@ export default function ScrapeDetailPage() {
     }
   }, [result]);
 
+  // Auto-load screenshot when tab is selected
+  useEffect(() => {
+    if (activeTab === "screenshot" && result?.id && !screenshotData[result.id] && !screenshotLoading[result.id]) {
+      loadScreenshot(result.id);
+    }
+  }, [activeTab, result?.id]);
+
   const getCopyText = (): string => {
     if (!result) return "";
     switch (activeTab) {
@@ -393,22 +400,10 @@ export default function ScrapeDetailPage() {
                             className="max-w-full border border-white/10 shadow-lg"
                             style={{ maxHeight: "600px" }}
                           />
-                        ) : screenshotLoading[result.id] ? (
+                        ) : (
                           <div className="flex flex-col items-center justify-center py-12">
                             <Loader2 className="h-6 w-6 animate-spin text-white/40 mb-2" />
                             <p className="text-sm text-white/40">Loading screenshot...</p>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center py-12">
-                            <Camera className="h-10 w-10 text-white/20 mb-3" />
-                            <button
-                              onClick={() => loadScreenshot(result.id)}
-                              className="border border-white/20 px-4 py-2 text-[12px] font-mono text-white/50 hover:text-white hover:border-white/40 transition-colors flex items-center gap-2"
-                            >
-                              <Camera className="h-4 w-4" />
-                              Load Screenshot
-                            </button>
-                            <p className="text-xs text-white/40 mt-2">Screenshots are loaded on demand</p>
                           </div>
                         )}
                       </div>
