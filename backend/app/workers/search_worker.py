@@ -159,16 +159,19 @@ def process_search(self, job_id: str, config: dict):
             completed = 0
             for sr in search_results:
                 try:
+                    # Search always uses only_main_content=False for richer results.
+                    # The lighter _clean_soup_light filter preserves more content from
+                    # JS-heavy pages (YouTube, SPAs) compared to _extract_main_tag.
                     scrape_request = ScrapeRequest(
                         url=sr.url,
                         formats=request.formats,
-                        only_main_content=request.only_main_content,
+                        only_main_content=False,
                         use_proxy=request.use_proxy,
                         headers=request.headers,
                         cookies=request.cookies,
                         mobile=request.mobile,
                         mobile_device=request.mobile_device,
-                        wait_for=2000,  # Extra wait for JS-heavy pages (YouTube, SPAs)
+                        wait_for=2000,  # Extra wait for JS-heavy pages
                     )
                     result = await asyncio.wait_for(
                         scrape_url(scrape_request, proxy_manager=proxy_manager),
