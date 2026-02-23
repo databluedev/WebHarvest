@@ -465,7 +465,7 @@ function PlaygroundContent() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [formats, setFormats] = useState<string[]>(["markdown"]);
+  const [formats, setFormats] = useState<string[]>(["markdown", "structured_data", "headings"]);
   const [htmlMode, setHtmlMode] = useState<"cleaned" | "raw">("cleaned");
   const [screenshotMode, setScreenshotMode] = useState<"viewport" | "fullpage">("fullpage");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -763,7 +763,7 @@ function PlaygroundContent() {
             {/* Controls */}
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                {activeEndpoint !== "map" && ["markdown", "html", "links", "screenshot"].map((fmt) => (
+                {activeEndpoint !== "map" && ["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"].map((fmt) => (
                   <button
                     key={fmt}
                     onClick={() => toggleFormat(fmt)}
@@ -774,7 +774,7 @@ function PlaygroundContent() {
                         : "border border-white/[0.08] text-white/50 hover:border-white/20 hover:text-white/70"
                     )}
                   >
-                    <span className="text-[14px] md:text-[16px]">◉</span> {fmt.charAt(0).toUpperCase() + fmt.slice(1)}
+                    <span className="text-[14px] md:text-[16px]">◉</span> {fmt === "structured_data" ? "Structured Data" : fmt.charAt(0).toUpperCase() + fmt.slice(1)}
                   </button>
                 ))}
 
