@@ -23,7 +23,10 @@ if settings.SENTRY_DSN:
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
         environment=settings.SENTRY_ENVIRONMENT,
         release=f"webharvest@{settings.APP_VERSION}",
-        send_default_pii=False,
+        send_default_pii=True,
+        enable_logs=True,
+        profile_session_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        profile_lifecycle="trace",
     )
 
 logger = logging.getLogger(__name__)
