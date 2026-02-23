@@ -16,7 +16,19 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-const SCRAPER_APIS = [
+type ApiStatus = "active" | "coming-soon";
+
+const SCRAPER_APIS: Array<{
+  id: string;
+  name: string;
+  description: string;
+  icon: typeof Search;
+  color: string;
+  bgGlow: string;
+  textColor: string;
+  borderColor: string;
+  status: ApiStatus;
+}> = [
   {
     id: "google-search",
     name: "Google Search",
@@ -26,7 +38,7 @@ const SCRAPER_APIS = [
     bgGlow: "bg-cyan-500/10",
     textColor: "text-cyan-400",
     borderColor: "border-cyan-500/20",
-    status: "coming-soon" as const,
+    status: "coming-soon",
   },
   {
     id: "google-shopping",
@@ -37,7 +49,7 @@ const SCRAPER_APIS = [
     bgGlow: "bg-amber-500/10",
     textColor: "text-amber-400",
     borderColor: "border-amber-500/20",
-    status: "coming-soon" as const,
+    status: "coming-soon",
   },
   {
     id: "google-maps",
@@ -48,7 +60,7 @@ const SCRAPER_APIS = [
     bgGlow: "bg-emerald-500/10",
     textColor: "text-emerald-400",
     borderColor: "border-emerald-500/20",
-    status: "coming-soon" as const,
+    status: "coming-soon",
   },
   {
     id: "google-news",
@@ -59,7 +71,7 @@ const SCRAPER_APIS = [
     bgGlow: "bg-violet-500/10",
     textColor: "text-violet-400",
     borderColor: "border-violet-500/20",
-    status: "coming-soon" as const,
+    status: "coming-soon",
   },
   {
     id: "google-jobs",
@@ -70,7 +82,7 @@ const SCRAPER_APIS = [
     bgGlow: "bg-pink-500/10",
     textColor: "text-pink-400",
     borderColor: "border-pink-500/20",
-    status: "coming-soon" as const,
+    status: "coming-soon",
   },
   {
     id: "amazon-product",
@@ -81,7 +93,7 @@ const SCRAPER_APIS = [
     bgGlow: "bg-orange-500/10",
     textColor: "text-orange-400",
     borderColor: "border-orange-500/20",
-    status: "coming-soon" as const,
+    status: "coming-soon",
   },
   {
     id: "linkedin-profile",
@@ -92,7 +104,7 @@ const SCRAPER_APIS = [
     bgGlow: "bg-blue-500/10",
     textColor: "text-blue-400",
     borderColor: "border-blue-500/20",
-    status: "coming-soon" as const,
+    status: "coming-soon",
   },
 ];
 
