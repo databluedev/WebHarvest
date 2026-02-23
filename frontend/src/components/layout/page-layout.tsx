@@ -4,11 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 
-type NavPage = "dashboard" | "playground" | "docs" | "jobs" | "settings" | "";
+type NavPage = "dashboard" | "playground" | "scrapper-pool" | "docs" | "jobs" | "settings" | "";
 
 const NAV_LINKS: { id: NavPage; label: string; href: string }[] = [
   { id: "dashboard", label: "Dashboard", href: "/dashboard" },
   { id: "playground", label: "Playground", href: "/playground" },
+  { id: "scrapper-pool", label: "Scrapper Pool", href: "/scrapper-pool" },
   { id: "docs", label: "API Docs", href: "/docs" },
   { id: "jobs", label: "Jobs", href: "/jobs" },
 ];
