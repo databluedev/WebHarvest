@@ -35,15 +35,7 @@ const FORMAT_OPTIONS: FormatOption[] = [
       { id: "raw", label: "Raw" },
     ],
   },
-  {
-    id: "screenshot",
-    label: "Screenshot",
-    icon: Camera,
-    subOptions: [
-      { id: "viewport", label: "Viewport" },
-      { id: "fullpage", label: "Full Page" },
-    ],
-  },
+  { id: "screenshot", label: "Screenshot", icon: Camera },
   {
     id: "structured_data",
     label: "JSON",
@@ -60,8 +52,6 @@ interface FormatSelectorProps {
   onToggleFormat: (format: string) => void;
   htmlMode?: "cleaned" | "raw";
   onHtmlModeChange?: (mode: "cleaned" | "raw") => void;
-  screenshotMode?: "viewport" | "fullpage";
-  onScreenshotModeChange?: (mode: "viewport" | "fullpage") => void;
 }
 
 export function FormatSelector({
@@ -71,8 +61,6 @@ export function FormatSelector({
   onToggleFormat,
   htmlMode = "cleaned",
   onHtmlModeChange,
-  screenshotMode = "fullpage",
-  onScreenshotModeChange,
 }: FormatSelectorProps) {
   const panelRef = useRef<HTMLDivElement>(null!);
 
@@ -166,28 +154,6 @@ export function FormatSelector({
                   </div>
                 )}
 
-                {/* Sub-options for Screenshot */}
-                {fmt.id === "screenshot" && isSelected && fmt.subOptions && (
-                  <div className="flex rounded-md overflow-hidden border border-border/40">
-                    {fmt.subOptions.map((sub) => (
-                      <button
-                        key={sub.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onScreenshotModeChange?.(sub.id as "viewport" | "fullpage");
-                        }}
-                        className={cn(
-                          "px-2.5 py-0.5 text-[10px] font-medium transition-colors",
-                          screenshotMode === sub.id
-                            ? "bg-muted text-foreground"
-                            : "text-muted-foreground/50 hover:text-muted-foreground"
-                        )}
-                      >
-                        {sub.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
 
                 {/* Edit options for JSON */}
                 {fmt.id === "structured_data" && isSelected && (

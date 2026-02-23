@@ -458,13 +458,9 @@ def process_crawl(self, job_id: str, config: dict):
                     _raw_for_ss = scrape_data.html
                 if not _raw_for_ss:
                     return None
-                # Determine full_page from scrape_options screenshot_mode
-                _scrape_opts = request.scrape_options
-                _ss_mode = getattr(_scrape_opts, "screenshot_mode", "fullpage") if _scrape_opts else "fullpage"
-                _full_page = _ss_mode != "viewport"
                 for _ss_attempt in range(2):
                     # Try crawl session first
-                    val = await crawler.take_screenshot(url, _raw_for_ss, full_page=_full_page)
+                    val = await crawler.take_screenshot(url, _raw_for_ss)
                     if val:
                         return val
                     # Fallback: browser_pool (independent browser instance)
@@ -480,7 +476,7 @@ def process_crawl(self, job_id: str, config: dict):
                             )
                             await _ss_page.wait_for_timeout(500)
                             _ss_bytes = await _ss_page.screenshot(
-                                type="png", full_page=_full_page
+                                type="png", full_page=False
                             )
                             return base64.b64encode(_ss_bytes).decode()
                     except Exception:

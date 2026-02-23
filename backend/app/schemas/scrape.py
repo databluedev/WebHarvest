@@ -66,7 +66,6 @@ class ScrapeRequest(BaseModel):
     webhook_url: str | None = None  # Webhook URL for job completion notification
     webhook_secret: str | None = None  # HMAC secret for webhook signature
     capture_network: bool = False  # Capture browser network requests/responses
-    screenshot_mode: str = "fullpage"  # "viewport" or "fullpage"
     css_selector: str | None = None  # CSS selector for targeted extraction
     xpath: str | None = None  # XPath expression for targeted extraction
     selectors: dict | None = None  # Multiple named selectors {name: {css/xpath: ...}}

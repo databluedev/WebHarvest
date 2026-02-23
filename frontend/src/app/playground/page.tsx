@@ -572,7 +572,6 @@ function PlaygroundContent() {
   const [error, setError] = useState("");
   const [formats, setFormats] = useState<string[]>(["markdown", "structured_data"]);
   const [htmlMode, setHtmlMode] = useState<"cleaned" | "raw">("cleaned");
-  const [screenshotMode, setScreenshotMode] = useState<"viewport" | "fullpage">("fullpage");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [onlyMainContent, setOnlyMainContent] = useState(true);
   const [waitFor, setWaitFor] = useState(0);
@@ -676,7 +675,7 @@ function PlaygroundContent() {
         case "scrape": {
           if (!url.trim()) return;
           const fullUrl = url.startsWith("http") ? url : `https://${url}`;
-          const params: any = { url: fullUrl, formats: effectiveFormats, only_main_content: onlyMainContent, wait_for: waitFor || undefined, use_proxy: useProxy || undefined, mobile: mobile || undefined, mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined, screenshot_mode: screenshotMode };
+          const params: any = { url: fullUrl, formats: effectiveFormats, only_main_content: onlyMainContent, wait_for: waitFor || undefined, use_proxy: useProxy || undefined, mobile: mobile || undefined, mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined };
           if (extractEnabled && extractPrompt) params.extract = { prompt: extractPrompt };
           if (headersText.trim()) { try { params.headers = JSON.parse(headersText); } catch {} }
           if (cookiesText.trim()) { try { params.cookies = JSON.parse(cookiesText); } catch {} }
@@ -688,7 +687,7 @@ function PlaygroundContent() {
           if (!url.trim()) return;
           const fullUrl = url.startsWith("http") ? url : `https://${url}`;
           const params: any = { url: fullUrl, max_pages: maxPages, max_depth: maxDepth, concurrency };
-          params.scrape_options = { formats: effectiveFormats, only_main_content: onlyMainContent, wait_for: waitFor || undefined, screenshot_mode: screenshotMode };
+          params.scrape_options = { formats: effectiveFormats, only_main_content: onlyMainContent, wait_for: waitFor || undefined };
           if (mobile) { params.scrape_options.mobile = true; if (mobileDevice) params.scrape_options.mobile_device = mobileDevice; }
           if (includePaths.trim()) params.include_paths = includePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
           if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
@@ -700,7 +699,7 @@ function PlaygroundContent() {
         }
         case "search": {
           if (!searchQuery.trim()) return;
-          const params: any = { query: searchQuery.trim(), num_results: numResults, engine, formats: effectiveFormats, only_main_content: onlyMainContent, use_proxy: useProxy || undefined, mobile: mobile || undefined, mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined, webhook_url: webhookUrl.trim() || undefined, webhook_secret: webhookSecret.trim() || undefined, screenshot_mode: screenshotMode };
+          const params: any = { query: searchQuery.trim(), num_results: numResults, engine, formats: effectiveFormats, only_main_content: onlyMainContent, use_proxy: useProxy || undefined, mobile: mobile || undefined, mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined, webhook_url: webhookUrl.trim() || undefined, webhook_secret: webhookSecret.trim() || undefined };
           if (extractEnabled && extractPrompt.trim()) params.extract = { prompt: extractPrompt.trim() };
           const res = await api.startSearch(params);
           if (res.success && res.job_id) setActiveJob({ id: res.job_id, type: "search", status: "running", target: searchQuery.trim(), total: numResults, completed: 0 });
@@ -1020,16 +1019,6 @@ function PlaygroundContent() {
                           <div className="flex gap-2">
                             <button onClick={() => setHtmlMode("cleaned")} className={cn("px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] transition-all", htmlMode === "cleaned" ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Cleaned</button>
                             <button onClick={() => setHtmlMode("raw")} className={cn("px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] transition-all", htmlMode === "raw" ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Raw</button>
-                          </div>
-                        </div>
-                      )}
-                      {/* Screenshot mode toggle */}
-                      {formats.includes("screenshot") && (
-                        <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
-                          <label className="text-[13px] font-mono text-white/70">Screenshot Mode</label>
-                          <div className="flex gap-2">
-                            <button onClick={() => setScreenshotMode("viewport")} className={cn("px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] transition-all", screenshotMode === "viewport" ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Viewport</button>
-                            <button onClick={() => setScreenshotMode("fullpage")} className={cn("px-4 py-1.5 text-[11px] font-mono uppercase tracking-[0.15em] transition-all", screenshotMode === "fullpage" ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/40")}>Full Page</button>
                           </div>
                         </div>
                       )}
