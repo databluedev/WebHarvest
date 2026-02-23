@@ -70,7 +70,11 @@ def process_crawl(self, job_id: str, config: dict):
         session_factory, db_engine = create_worker_session_factory()
 
         request = CrawlRequest(**config)
-        concurrency = max(1, min(request.concurrency, 2))
+        # Cap at 1 for browser-based crawls: parallel tabs in one browser
+        # context share a single renderer, causing starvation + timeouts.
+        # Sequential pages with lightweight scroll is faster overall.
+        # Horizontal scaling (3 crawl replicas) handles parallelism instead.
+        concurrency = 1
 
         # Load proxy manager if use_proxy is set
         proxy_manager = None
@@ -350,7 +354,7 @@ def process_crawl(self, job_id: str, config: dict):
                                         pinned_strategy=_pinned_strategy,
                                         pinned_tier=_pinned_tier,
                                     ),
-                                    timeout=45,
+                                    timeout=35,
                                 )
                                 if fetch_result:
                                     html_len = len(fetch_result.get("raw_html", ""))
@@ -423,7 +427,7 @@ def process_crawl(self, job_id: str, config: dict):
                                     "discovered_links": result["discovered_links"],
                                 }
                             except asyncio.TimeoutError:
-                                logger.warning(f"Fetch timed out for {url} after 45s")
+                                logger.warning(f"Fetch timed out for {url} after 35s")
                                 return None
                             except Exception as e:
                                 logger.warning(f"Failed to fetch {url}: {e}")
