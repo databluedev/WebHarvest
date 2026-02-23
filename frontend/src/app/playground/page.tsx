@@ -672,6 +672,9 @@ function PlaygroundContent() {
 
   const toggleFormat = (format: string) => setFormats((prev) => prev.includes(format) ? prev.filter((f) => f !== format) : [...prev, format]);
 
+  // Always include structured_data and headings so the summary bar has data
+  const effectiveFormats = [...new Set([...formats, "structured_data", "headings"])];
+
   const handleGetCode = () => {
     let code = "";
     const fullUrl = url.startsWith("http") ? url : `https://${url}`;
@@ -691,7 +694,7 @@ function PlaygroundContent() {
         case "scrape": {
           if (!url.trim()) return;
           const fullUrl = url.startsWith("http") ? url : `https://${url}`;
-          const params: any = { url: fullUrl, formats, only_main_content: onlyMainContent, wait_for: waitFor || undefined, use_proxy: useProxy || undefined, mobile: mobile || undefined, mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined };
+          const params: any = { url: fullUrl, formats: effectiveFormats, only_main_content: onlyMainContent, wait_for: waitFor || undefined, use_proxy: useProxy || undefined, mobile: mobile || undefined, mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined };
           if (extractEnabled && extractPrompt) params.extract = { prompt: extractPrompt };
           if (headersText.trim()) { try { params.headers = JSON.parse(headersText); } catch {} }
           if (cookiesText.trim()) { try { params.cookies = JSON.parse(cookiesText); } catch {} }
@@ -703,7 +706,7 @@ function PlaygroundContent() {
           if (!url.trim()) return;
           const fullUrl = url.startsWith("http") ? url : `https://${url}`;
           const params: any = { url: fullUrl, max_pages: maxPages, max_depth: maxDepth, concurrency };
-          params.scrape_options = { formats, only_main_content: onlyMainContent, wait_for: waitFor || undefined };
+          params.scrape_options = { formats: effectiveFormats, only_main_content: onlyMainContent, wait_for: waitFor || undefined };
           if (mobile) { params.scrape_options.mobile = true; if (mobileDevice) params.scrape_options.mobile_device = mobileDevice; }
           if (includePaths.trim()) params.include_paths = includePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
           if (excludePaths.trim()) params.exclude_paths = excludePaths.split(",").map((p: string) => p.trim()).filter(Boolean);
@@ -715,7 +718,7 @@ function PlaygroundContent() {
         }
         case "search": {
           if (!searchQuery.trim()) return;
-          const params: any = { query: searchQuery.trim(), num_results: numResults, engine, formats, only_main_content: onlyMainContent, use_proxy: useProxy || undefined, mobile: mobile || undefined, mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined, webhook_url: webhookUrl.trim() || undefined, webhook_secret: webhookSecret.trim() || undefined };
+          const params: any = { query: searchQuery.trim(), num_results: numResults, engine, formats: effectiveFormats, only_main_content: onlyMainContent, use_proxy: useProxy || undefined, mobile: mobile || undefined, mobile_device: (mobile && mobileDevice) ? mobileDevice : undefined, webhook_url: webhookUrl.trim() || undefined, webhook_secret: webhookSecret.trim() || undefined };
           if (extractEnabled && extractPrompt.trim()) params.extract = { prompt: extractPrompt.trim() };
           const res = await api.startSearch(params);
           if (res.success && res.job_id) setActiveJob({ id: res.job_id, type: "search", status: "running", target: searchQuery.trim(), total: numResults, completed: 0 });
