@@ -1,14 +1,45 @@
 import asyncio
 import logging
+import re
 import time as _time_mod
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 from uuid import UUID
+
+import httpx
 
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
 _WORKER_NAME = "search"
+
+# Domains that are unscrappable (JS-only, anti-bot) but have oEmbed/metadata APIs
+_VIDEO_DOMAINS = {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}
+
+
+def _is_video_url(url: str) -> bool:
+    """Check if URL is a video platform that can't be scraped."""
+    try:
+        domain = urlparse(url).netloc.lower()
+        return domain in _VIDEO_DOMAINS
+    except Exception:
+        return False
+
+
+async def _fetch_youtube_metadata(url: str) -> dict | None:
+    """Fetch video metadata via YouTube's free oEmbed API (no key needed)."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://www.youtube.com/oembed",
+                params={"url": url, "format": "json"},
+            )
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception as e:
+        logger.warning(f"YouTube oEmbed failed for {url}: {e}")
+    return None
 
 
 def _run_async(coro):
@@ -158,6 +189,44 @@ def process_search(self, job_id: str, config: dict):
             # Step 2: Scrape each search result
             completed = 0
             for sr in search_results:
+                # Fast-path: skip full scrape for video platforms (unscrappable)
+                # Use oEmbed API + search snippet instead of wasting 40s on doomed scrape
+                if _is_video_url(sr.url):
+                    oembed = await _fetch_youtube_metadata(sr.url)
+                    parts = []
+                    title = (oembed or {}).get("title") or sr.title
+                    author = (oembed or {}).get("author_name", "")
+                    if title:
+                        parts.append(f"# {title}\n")
+                    if author:
+                        parts.append(f"**Channel:** {author}\n")
+                    if sr.snippet:
+                        parts.append(f"{sr.snippet}\n")
+                    parts.append(f"\n*Source: [{sr.url}]({sr.url})*")
+                    video_md = "\n".join(parts)
+
+                    _req_fmts = set(request.formats)
+                    async with session_factory() as db:
+                        job_result = JobResult(
+                            job_id=UUID(job_id),
+                            url=sr.url,
+                            markdown=video_md if not _req_fmts or "markdown" in _req_fmts else None,
+                            metadata_={
+                                "title": title,
+                                "snippet": sr.snippet,
+                                "author": author,
+                                "source": "youtube_oembed",
+                            },
+                        )
+                        db.add(job_result)
+                        completed += 1
+                        job = await db.get(Job, UUID(job_id))
+                        if job:
+                            job.completed_pages = completed
+                        await db.commit()
+                    logger.info(f"Video fast-path for {sr.url} (oEmbed={'ok' if oembed else 'failed'})")
+                    continue
+
                 try:
                     # Search always uses only_main_content=False for richer results.
                     # The lighter _clean_soup_light filter preserves more content from
