@@ -513,12 +513,8 @@ class WebCrawler:
         page = None
         try:
             page = await self._crawl_session.new_page()
-            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
-            try:
-                await page.wait_for_load_state("networkidle", timeout=5000)
-            except Exception:
-                pass
-            await page.wait_for_timeout(1000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=10000)
+            await page.wait_for_timeout(500)
             ss_bytes = await page.screenshot(
                 type="jpeg", quality=80, full_page=False
             )

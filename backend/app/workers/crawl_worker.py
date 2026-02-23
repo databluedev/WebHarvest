@@ -318,7 +318,7 @@ def process_crawl(self, job_id: str, config: dict):
                         # items, and returns instantly if nothing is pending.
                         try:
                             await asyncio.wait_for(
-                                extract_queue.join(), timeout=60
+                                extract_queue.join(), timeout=30
                             )
                         except asyncio.TimeoutError:
                             logger.warning(
@@ -442,43 +442,31 @@ def process_crawl(self, job_id: str, config: dict):
                 extract_done.set()
 
             async def _capture_screenshot(crawler, url, item, scrape_data):
-                """Try crawl-session then browser-pool screenshot, with retry.
+                """Capture viewport screenshot using an independent browser page.
 
-                Navigates to the URL so images/CSS/lazy content load properly.
+                Uses browser_pool only (not crawl_session) to avoid conflicts
+                with the producer which uses crawl_session for fetching.
+                Single attempt with short timeouts to prevent stalling.
                 """
-                for _ss_attempt in range(2):
-                    # Try crawl session first
-                    val = await crawler.take_screenshot(url, "")
-                    if val:
-                        return val
-                    # Fallback: browser_pool (independent browser instance)
-                    try:
-                        from app.services.browser import browser_pool
+                try:
+                    from app.services.browser import browser_pool
 
-                        async with browser_pool.get_page(
-                            target_url=url
-                        ) as _ss_page:
-                            await _ss_page.goto(
-                                url,
-                                wait_until="domcontentloaded",
-                                timeout=15000,
-                            )
-                            try:
-                                await _ss_page.wait_for_load_state(
-                                    "networkidle", timeout=5000
-                                )
-                            except Exception:
-                                pass
-                            await _ss_page.wait_for_timeout(1000)
-                            _ss_bytes = await _ss_page.screenshot(
-                                type="png", full_page=False
-                            )
-                            return base64.b64encode(_ss_bytes).decode()
-                    except Exception:
-                        pass
-                    # Brief wait for browser to reinitialize
-                    if _ss_attempt == 0:
-                        await asyncio.sleep(2)
+                    async with browser_pool.get_page(
+                        target_url=url
+                    ) as _ss_page:
+                        await _ss_page.goto(
+                            url,
+                            wait_until="domcontentloaded",
+                            timeout=10000,
+                        )
+                        # Brief settle — no networkidle (can hang on streaming sites)
+                        await _ss_page.wait_for_timeout(500)
+                        _ss_bytes = await _ss_page.screenshot(
+                            type="png", full_page=False
+                        )
+                        return base64.b64encode(_ss_bytes).decode()
+                except Exception as e:
+                    logger.debug(f"Screenshot failed for {url}: {e}")
                 return None
 
             async def extract_consumer():
@@ -641,7 +629,7 @@ def process_crawl(self, job_id: str, config: dict):
                                     _capture_screenshot(
                                         crawler, url, item, scrape_data
                                     ),
-                                    timeout=45,
+                                    timeout=15,
                                 )
                             except (asyncio.TimeoutError, Exception) as _ss_err:
                                 logger.warning(
