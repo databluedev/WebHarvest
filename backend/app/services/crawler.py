@@ -500,29 +500,25 @@ class WebCrawler:
         }
 
     async def take_screenshot(self, url: str, raw_html: str) -> str | None:
-        """Take a screenshot using the crawl session browser.
+        """Take a screenshot by navigating to the URL in the crawl session.
 
-        Renders the raw HTML in a browser page with a <base> tag so relative
-        resources resolve.  Returns base64-encoded JPEG or None on failure.
+        Uses page.goto() so images, CSS, and lazy-loaded content render
+        properly (set_content doesn't load external resources reliably).
+        Returns base64-encoded JPEG or None on failure.
         """
         import base64
-        import re as _re
 
         if not self._crawl_session:
             return None
         page = None
         try:
             page = await self._crawl_session.new_page()
-            # Inject <base> so images/CSS with relative URLs load from the site
-            html = _re.sub(
-                r"(<head[^>]*>)",
-                rf'\1<base href="{url}">',
-                raw_html,
-                count=1,
-                flags=_re.IGNORECASE,
-            )
-            await page.set_content(html, wait_until="domcontentloaded")
-            await page.wait_for_timeout(500)
+            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=5000)
+            except Exception:
+                pass
+            await page.wait_for_timeout(1000)
             ss_bytes = await page.screenshot(
                 type="jpeg", quality=80, full_page=False
             )

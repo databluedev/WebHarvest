@@ -450,17 +450,13 @@ def process_crawl(self, job_id: str, config: dict):
                 extract_done.set()
 
             async def _capture_screenshot(crawler, url, item, scrape_data):
-                """Try crawl-session then browser-pool screenshot, with retry."""
-                _raw_for_ss = ""
-                if "fetch_result" in item:
-                    _raw_for_ss = item["fetch_result"].get("raw_html", "")
-                elif scrape_data.html:
-                    _raw_for_ss = scrape_data.html
-                if not _raw_for_ss:
-                    return None
+                """Try crawl-session then browser-pool screenshot, with retry.
+
+                Navigates to the URL so images/CSS/lazy content load properly.
+                """
                 for _ss_attempt in range(2):
                     # Try crawl session first
-                    val = await crawler.take_screenshot(url, _raw_for_ss)
+                    val = await crawler.take_screenshot(url, "")
                     if val:
                         return val
                     # Fallback: browser_pool (independent browser instance)
@@ -470,11 +466,18 @@ def process_crawl(self, job_id: str, config: dict):
                         async with browser_pool.get_page(
                             target_url=url
                         ) as _ss_page:
-                            await _ss_page.set_content(
-                                _raw_for_ss,
+                            await _ss_page.goto(
+                                url,
                                 wait_until="domcontentloaded",
+                                timeout=15000,
                             )
-                            await _ss_page.wait_for_timeout(500)
+                            try:
+                                await _ss_page.wait_for_load_state(
+                                    "networkidle", timeout=5000
+                                )
+                            except Exception:
+                                pass
+                            await _ss_page.wait_for_timeout(1000)
                             _ss_bytes = await _ss_page.screenshot(
                                 type="png", full_page=False
                             )

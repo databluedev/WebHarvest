@@ -1751,12 +1751,16 @@ async def scrape_url(
             metadata=PageMetadata(source_url=url, status_code=status_code or 0),
         )
 
-    # === Fallback screenshot: render HTML in browser if we have content but no screenshot ===
+    # === Fallback screenshot: navigate to URL in browser if we have content but no screenshot ===
     if "screenshot" in request.formats and not screenshot_b64 and raw_html:
         try:
             async with browser_pool.get_page(target_url=url) as page:
-                await page.set_content(raw_html, wait_until="domcontentloaded")
-                await page.wait_for_timeout(500)
+                await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=5000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(1000)
                 await _wait_for_images(page)
                 screenshot_bytes = await page.screenshot(
                     type="png", full_page=False
