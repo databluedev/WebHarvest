@@ -490,7 +490,7 @@ function PlaygroundContent() {
   const [webhookSecret, setWebhookSecret] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [numResults, setNumResults] = useState(5);
-  const [engine, setEngine] = useState("duckduckgo");
+  const [engine, setEngine] = useState("google");
   const [mapSearch, setMapSearch] = useState("");
   const [mapLimit, setMapLimit] = useState(100);
   const [includeSubdomains, setIncludeSubdomains] = useState(false);
@@ -828,9 +828,9 @@ function PlaygroundContent() {
                       <div className="space-y-2">
                         <label className="text-[11px] font-mono text-emerald-400/70 uppercase tracking-[0.2em]">Engine</label>
                         <div className="flex gap-2">
-                          {["duckduckgo", "brave", "google"].map((eng) => (
+                          {["google", "duckduckgo", "brave"].map((eng) => (
                             <button key={eng} onClick={() => setEngine(eng)} className={cn("px-5 py-2.5 text-[12px] font-mono uppercase tracking-wider transition-all", engine === eng ? "bg-white text-black font-bold" : "bg-white/[0.04] text-white/50 hover:bg-white/[0.08] hover:text-white/80")}>
-                              {eng === "duckduckgo" ? "DuckDuckGo" : eng === "brave" ? "Brave" : "Google"}
+                              {eng === "google" ? "Google" : eng === "duckduckgo" ? "DuckDuckGo" : "Brave"}
                             </button>
                           ))}
                         </div>

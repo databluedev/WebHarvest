@@ -1,6 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from urllib.parse import quote_plus
 
 import httpx
 
@@ -149,6 +150,116 @@ class BraveSearch(SearchEngine):
         return results
 
 
+class PlaywrightGoogleSearch(SearchEngine):
+    """Search Google with a real Playwright browser — most reliable results.
+
+    Uses the existing BrowserPool (stealth + fingerprinting) to navigate to
+    Google, render the SERP, and extract organic results from the DOM.
+    Falls through gracefully if the browser pool is unavailable.
+    """
+
+    async def search(self, query: str, num_results: int) -> list[SearchResult]:
+        from app.services.browser import browser_pool
+
+        await browser_pool.initialize()
+
+        results: list[SearchResult] = []
+        search_url = (
+            f"https://www.google.com/search?q={quote_plus(query)}"
+            f"&num={min(num_results + 5, 20)}&hl=en"
+        )
+
+        async with browser_pool.get_page(stealth=True) as page:
+            await page.goto(search_url, wait_until="domcontentloaded", timeout=15000)
+
+            # Wait for organic results container
+            try:
+                await page.wait_for_selector("#search, #rso", timeout=5000)
+            except Exception:
+                pass  # Results may be in a different container
+
+            # Extract organic search results from the rendered DOM
+            raw = await page.evaluate(
+                """() => {
+                const results = [];
+                const seen = new Set();
+
+                // Google wraps each organic result in a div.g containing an h3
+                const containers = document.querySelectorAll(
+                    '#rso .g, #search .g, [data-sokoban-container] .g'
+                );
+
+                for (const g of containers) {
+                    const h3 = g.querySelector('h3');
+                    if (!h3) continue;
+
+                    const link = h3.closest('a');
+                    if (!link || !link.href) continue;
+
+                    let url = link.href;
+
+                    // Resolve Google redirect URLs (/url?q=...)
+                    try {
+                        const u = new URL(url);
+                        if (u.hostname.includes('google') && u.searchParams.has('q')) {
+                            url = u.searchParams.get('q');
+                        }
+                    } catch {}
+
+                    if (!url || !url.startsWith('http')) continue;
+                    if (url.includes('google.com/search')) continue;
+                    if (url.includes('accounts.google.com')) continue;
+                    if (seen.has(url)) continue;
+                    seen.add(url);
+
+                    const title = (h3.textContent || '').trim();
+                    if (!title) continue;
+
+                    // Extract snippet from the result container
+                    let snippet = '';
+
+                    // Try known snippet selectors first
+                    const snippetEl = g.querySelector(
+                        '[data-sncf="1"], .VwiC3b, [style*="-webkit-line-clamp"], span.st'
+                    );
+                    if (snippetEl) {
+                        snippet = (snippetEl.textContent || '').trim();
+                    }
+
+                    // Fallback: find the longest text block that isn't the title
+                    if (!snippet) {
+                        for (const el of g.querySelectorAll('div, span')) {
+                            if (el.querySelector('h3') || el.querySelector('cite')) continue;
+                            const t = (el.textContent || '').trim();
+                            if (t.length > 40 && t.length < 500
+                                && t.length > snippet.length && t !== title) {
+                                snippet = t;
+                            }
+                        }
+                    }
+
+                    results.push({ url, title, snippet });
+                }
+
+                return results;
+            }"""
+            )
+
+            for item in raw[:num_results]:
+                results.append(
+                    SearchResult(
+                        url=item["url"],
+                        title=item["title"],
+                        snippet=item.get("snippet", ""),
+                    )
+                )
+
+        if not results:
+            logger.warning("Playwright Google search returned 0 organic results")
+
+        return results
+
+
 async def web_search(
     query: str,
     num_results: int = 5,
@@ -159,18 +270,19 @@ async def web_search(
 ) -> list[SearchResult]:
     """High-level search function with automatic fallback chain.
 
-    Default chain: primary engine -> DuckDuckGo -> Google -> Brave
-    Google engine works without API keys (scrapes via DDGS google backend).
-    When API keys are provided, uses Google Custom Search JSON API instead.
+    Chains (Playwright Google is the most reliable — real browser + stealth):
+      google:     Playwright Google → Google API (if keys) → DDGS google → DuckDuckGo → Brave
+      duckduckgo: DuckDuckGo → Playwright Google → DDGS google → Brave
+      brave:      Brave → DuckDuckGo → Playwright Google → DDGS google
     """
-    # Build the engine chain based on the requested engine
     engines: list[tuple[str, SearchEngine]] = []
 
-    # Primary engine first
+    # ── Primary engine ──────────────────────────────────────────────
     if engine == "google":
+        engines.append(("google_playwright", PlaywrightGoogleSearch()))
         if google_api_key and google_cx:
             engines.append(("google_api", GoogleCustomSearch(google_api_key, google_cx)))
-        engines.append(("google", GoogleScrapedSearch()))
+        engines.append(("google_scraped", GoogleScrapedSearch()))
     elif engine == "brave":
         brave_key = brave_api_key or settings.BRAVE_SEARCH_API_KEY
         if brave_key:
@@ -178,21 +290,30 @@ async def web_search(
     else:
         engines.append(("duckduckgo", DuckDuckGoSearch()))
 
-    # Fallback engines
-    if engine != "duckduckgo":
-        engines.append(("duckduckgo", DuckDuckGoSearch()))
+    # ── Fallback engines (deduplicated) ─────────────────────────────
+    seen = {name for name, _ in engines}
 
-    if engine != "google":
-        engines.append(("google", GoogleScrapedSearch()))
+    fallbacks: list[tuple[str, SearchEngine]] = []
+
+    if "duckduckgo" not in seen:
+        fallbacks.append(("duckduckgo", DuckDuckGoSearch()))
+
+    if "google_playwright" not in seen:
+        fallbacks.append(("google_playwright", PlaywrightGoogleSearch()))
+
+    if "google_scraped" not in seen:
+        fallbacks.append(("google_scraped", GoogleScrapedSearch()))
 
     brave_key = brave_api_key or settings.BRAVE_SEARCH_API_KEY
-    if engine != "brave" and brave_key:
-        engines.append(("brave", BraveSearch(brave_key)))
+    if "brave" not in seen and brave_key:
+        fallbacks.append(("brave", BraveSearch(brave_key)))
 
-    if engine != "google" and google_api_key and google_cx:
-        engines.append(("google_api", GoogleCustomSearch(google_api_key, google_cx)))
+    if "google_api" not in seen and google_api_key and google_cx:
+        fallbacks.append(("google_api", GoogleCustomSearch(google_api_key, google_cx)))
 
-    # Try each engine in order
+    engines.extend(fallbacks)
+
+    # ── Try each engine in order ────────────────────────────────────
     last_error = None
     for engine_name, search_engine in engines:
         try:

@@ -9,7 +9,7 @@ from app.schemas.scrape import ExtractConfig, PageMetadata
 class SearchRequest(BaseModel):
     query: str
     num_results: int = 5  # Number of results to scrape
-    engine: str = "duckduckgo"  # duckduckgo, google, or brave
+    engine: str = "google"  # google (Playwright), duckduckgo, or brave
     google_api_key: str | None = None  # For Google Custom Search
     google_cx: str | None = None  # Google Custom Search Engine ID
     brave_api_key: str | None = None  # For Brave Search API
