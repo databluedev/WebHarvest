@@ -70,7 +70,7 @@ def process_crawl(self, job_id: str, config: dict):
         session_factory, db_engine = create_worker_session_factory()
 
         request = CrawlRequest(**config)
-        concurrency = max(1, min(request.concurrency, 10))
+        concurrency = max(1, min(request.concurrency, 2))
 
         # Load proxy manager if use_proxy is set
         proxy_manager = None

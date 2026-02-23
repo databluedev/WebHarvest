@@ -2711,18 +2711,16 @@ async def _fetch_with_browser_session(
             steps=random.randint(8, 15),
         )
 
-        # Progressive scroll — scroll down in viewport-sized steps to
-        # trigger lazy loading and render all content (products, articles)
+        # Lightweight scroll for crawl mode — just 2 viewport heights
+        # to trigger basic lazy loading without overloading the browser.
+        # Full 8000px deep scrolling is for single scrapes, not crawls.
         scroll_distance = 0
-        max_scroll = 8000  # Cap at ~8 screen heights
-        step = vp["height"] - 100  # Slightly less than viewport
+        max_scroll = 2000
+        step = vp["height"] - 100
         while scroll_distance < max_scroll:
             await page.mouse.wheel(0, step)
             scroll_distance += step
-            await page.wait_for_timeout(random.randint(150, 350))
-
-        # Brief pause for final lazy loads to settle
-        await page.wait_for_timeout(random.randint(200, 500))
+            await page.wait_for_timeout(random.randint(100, 200))
 
         # Scroll back to top so full-page content() captures everything
         await page.evaluate("window.scrollTo(0, 0)")
