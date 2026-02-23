@@ -168,6 +168,7 @@ def process_search(self, job_id: str, config: dict):
                         cookies=request.cookies,
                         mobile=request.mobile,
                         mobile_device=request.mobile_device,
+                        wait_for=2000,  # Extra wait for JS-heavy pages (YouTube, SPAs)
                     )
                     result = await asyncio.wait_for(
                         scrape_url(scrape_request, proxy_manager=proxy_manager),
@@ -175,6 +176,23 @@ def process_search(self, job_id: str, config: dict):
                     )
 
                     _req_fmts = set(request.formats)
+
+                    # Enrich thin scrape results with search engine snippet
+                    markdown_content = result.markdown or ""
+                    word_count = len(markdown_content.split()) if markdown_content else 0
+
+                    if word_count < 50 and (sr.title or sr.snippet):
+                        enriched_parts = []
+                        if sr.title:
+                            enriched_parts.append(f"# {sr.title}\n")
+                        if sr.snippet:
+                            enriched_parts.append(f"{sr.snippet}\n")
+                        if markdown_content.strip():
+                            enriched_parts.append(f"\n---\n\n{markdown_content}")
+                        result.markdown = "\n".join(enriched_parts)
+                        logger.info(
+                            f"Enriched thin scrape ({word_count} words) for {sr.url} with search snippet"
+                        )
 
                     metadata = {}
                     if result.metadata:
@@ -231,11 +249,20 @@ def process_search(self, job_id: str, config: dict):
 
                 except Exception as e:
                     logger.warning(f"Failed to scrape search result {sr.url}: {e}")
-                    # Store the search result even if scraping fails
+                    # Store the search result with snippet as markdown fallback
+                    fallback_parts = []
+                    if sr.title:
+                        fallback_parts.append(f"# {sr.title}\n")
+                    if sr.snippet:
+                        fallback_parts.append(f"{sr.snippet}\n")
+                    fallback_parts.append(f"\n*Source: [{sr.url}]({sr.url})*")
+                    fallback_md = "\n".join(fallback_parts) if fallback_parts else None
+
                     async with session_factory() as db:
                         job_result = JobResult(
                             job_id=UUID(job_id),
                             url=sr.url,
+                            markdown=fallback_md,
                             metadata_={
                                 "title": sr.title,
                                 "snippet": sr.snippet,
