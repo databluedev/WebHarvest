@@ -973,28 +973,6 @@ def _strip_google_cache_banner(html: str) -> str:
     return html
 
 
-def _strip_wayback_toolbar(html: str) -> str:
-    """Remove Wayback Machine injected toolbar and scripts."""
-    html = re.sub(
-        r"<!-- BEGIN WAYBACK TOOLBAR INSERT -->.*?<!-- END WAYBACK TOOLBAR INSERT -->",
-        "",
-        html,
-        flags=re.DOTALL,
-    )
-    html = re.sub(
-        r"<script[^>]*(?:wombat|archive\.org)[^>]*>.*?</script>",
-        "",
-        html,
-        flags=re.DOTALL | re.IGNORECASE,
-    )
-    html = re.sub(
-        r"<(?:link|style)[^>]*(?:archive\.org|wayback)[^>]*(?:/>|>.*?</(?:link|style)>)",
-        "",
-        html,
-        flags=re.DOTALL | re.IGNORECASE,
-    )
-    return html
-
 
 # ---------------------------------------------------------------------------
 # Race helper — runs multiple strategy coroutines, returns first success
@@ -1184,7 +1162,7 @@ async def scrape_url(
     Tier 1: HTTP parallel → race(curl_cffi_multi, httpx)
     Tier 2: Browser race → race(chromium_stealth, firefox_stealth)
     Tier 3: Heavy race (hard sites) → race(google_search, advanced_prewarm)
-    Tier 4: Fallback parallel → race(google_cache, wayback)
+    Tier 4: Fallback → google_cache
     """
     from app.core.cache import get_cached_scrape, set_cached_scrape
     from app.core.metrics import scrape_duration_seconds
@@ -1694,7 +1672,7 @@ async def scrape_url(
             elapsed_ms = (time.time() - tier_start) * 1000
             await record_strategy_result(url, "tier3", 3, False, elapsed_ms)
 
-    # === Tier 4: Fallback parallel — race(google_cache, wayback) ===
+    # === Tier 4: Fallback — google_cache ===
     if not fetched:
         tier_start = time.time()
 
@@ -1702,10 +1680,6 @@ async def scrape_url(
             (
                 "google_cache",
                 _fetch_from_google_cache(url, request.timeout, proxy_url=proxy_url),
-            ),
-            (
-                "wayback",
-                _fetch_from_wayback_machine(url, request.timeout, proxy_url=proxy_url),
             ),
         ]
 
@@ -3287,65 +3261,6 @@ async def _fetch_from_google_cache(
 
 
 # ---------------------------------------------------------------------------
-# Strategy 8: Wayback Machine fallback
-# ---------------------------------------------------------------------------
-
-
-async def _fetch_from_wayback_machine(
-    url: str, timeout: int, proxy_url: str | None = None
-) -> tuple[str, int, dict[str, str]]:
-    """Fetch from Wayback Machine — last resort, content may be stale."""
-    timeout_seconds = timeout / 1000
-
-    if proxy_url:
-        client = httpx.AsyncClient(
-            follow_redirects=True, timeout=timeout_seconds, proxy=proxy_url
-        )
-        _close_client = True
-    else:
-        client = await _get_httpx_client()
-        _close_client = False
-
-    try:
-        # 1. Check availability
-        api_url = f"https://archive.org/wayback/available?url={quote_plus(url)}&timestamp=20260219"
-        resp = await client.get(api_url, timeout=timeout_seconds)
-        if resp.status_code != 200:
-            return "", 0, {}
-
-        data = resp.json()
-        snapshots = data.get("archived_snapshots", {})
-        closest = snapshots.get("closest", {})
-        if not closest.get("available"):
-            return "", 0, {}
-
-        snapshot_url = closest["url"]
-        # Use id_ modifier for raw content without Wayback toolbar
-        if "/web/" in snapshot_url:
-            parts = snapshot_url.split("/web/", 1)
-            ts_and_url = parts[1]
-            slash_idx = ts_and_url.find("/")
-            if slash_idx > 0:
-                ts = ts_and_url[:slash_idx]
-                rest = ts_and_url[slash_idx:]
-                snapshot_url = f"{parts[0]}/web/{ts}id_{rest}"
-
-        # 2. Fetch snapshot
-        resp2 = await client.get(snapshot_url)
-        if resp2.status_code >= 400 or not resp2.text:
-            return "", resp2.status_code, {}
-
-        html = _strip_wayback_toolbar(resp2.text)
-
-        resp_headers = {k.lower(): v for k, v in resp2.headers.items()}
-        resp_headers["x-webharvest-source"] = "wayback-machine"
-        return html, 200, resp_headers
-    finally:
-        if _close_client:
-            await client.aclose()
-
-
-# ---------------------------------------------------------------------------
 # Split functions for pipeline extraction (crawl mode)
 # ---------------------------------------------------------------------------
 
@@ -3787,16 +3702,12 @@ async def scrape_url_fetch_only(
             winning_strategy = race.winner_name
             winning_tier = 3
 
-    # === Tier 4: Fallback ===
+    # === Tier 4: Fallback — google_cache ===
     if not fetched:
         fallback_coros = [
             (
                 "google_cache",
                 _fetch_from_google_cache(url, request.timeout, proxy_url=proxy_url),
-            ),
-            (
-                "wayback",
-                _fetch_from_wayback_machine(url, request.timeout, proxy_url=proxy_url),
             ),
         ]
 
