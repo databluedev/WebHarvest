@@ -167,6 +167,58 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
       {/* Expanded content */}
       {expanded && (
         <div className="border-t border-white/10">
+          {/* Summary bar */}
+          {(page.metadata || page.structured_data) && (
+            <div className="px-4 py-3 border-b border-white/10 bg-white/[0.02] space-y-2">
+              {(page.structured_data?.open_graph?.description || page.structured_data?.meta_tags?.description) && (
+                <p className="text-xs text-white/50 line-clamp-2">
+                  {page.structured_data?.open_graph?.description || page.structured_data?.meta_tags?.description}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {page.metadata?.language && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    {page.metadata.language}
+                  </span>
+                )}
+                {page.metadata?.canonical_url && page.metadata.canonical_url !== page.url && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40 truncate max-w-xs">
+                    canonical: {page.metadata.canonical_url}
+                  </span>
+                )}
+                {page.structured_data?.open_graph?.type && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    og:{page.structured_data.open_graph.type}
+                  </span>
+                )}
+                {page.structured_data?.twitter_card?.card && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    twitter:{page.structured_data.twitter_card.card}
+                  </span>
+                )}
+                {page.structured_data?.json_ld?.length > 0 && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    {page.structured_data.json_ld.length} JSON-LD
+                  </span>
+                )}
+                {page.headings?.length > 0 && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    {page.headings.length} headings
+                  </span>
+                )}
+                {page.images?.length > 0 && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    {page.images.length} images
+                  </span>
+                )}
+                {(page.links_detail?.total || page.links?.length) > 0 && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                    {page.links_detail?.total || page.links?.length} links
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
           {/* Tab bar */}
           <div className="flex gap-1 p-2 border-b border-white/10 bg-white/[0.02] overflow-x-auto">
             {availableTabs.map((tab) => {

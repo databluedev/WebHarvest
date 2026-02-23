@@ -249,39 +249,78 @@ export default function ScrapeDetailPage() {
                 </div>
 
                 {result?.metadata && (
-                  <div className="flex gap-3 mt-4 pt-4 border-t border-white/10">
-                    {result.metadata.status_code && (
-                      <span
-                        className={`text-[11px] font-mono px-2 py-0.5 border ${
-                          result.metadata.status_code === 200
-                            ? "border-emerald-500/30 text-emerald-400"
-                            : result.metadata.status_code >= 400
-                            ? "border-red-500/30 text-red-400"
-                            : "border-white/20 text-white/50"
-                        }`}
-                      >
-                        {result.metadata.status_code}
-                      </span>
+                  <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                    <div className="flex flex-wrap gap-3">
+                      {result.metadata.status_code && (
+                        <span
+                          className={`text-[11px] font-mono px-2 py-0.5 border ${
+                            result.metadata.status_code === 200
+                              ? "border-emerald-500/30 text-emerald-400"
+                              : result.metadata.status_code >= 400
+                              ? "border-red-500/30 text-red-400"
+                              : "border-white/20 text-white/50"
+                          }`}
+                        >
+                          {result.metadata.status_code}
+                        </span>
+                      )}
+                      {result.metadata.word_count > 0 && (
+                        <span className="text-[11px] font-mono px-2 py-0.5 border border-white/20 text-white/50">
+                          {result.metadata.word_count.toLocaleString()} words
+                        </span>
+                      )}
+                      {result.metadata.reading_time_seconds > 0 && (
+                        <span className="text-[11px] font-mono px-2 py-0.5 border border-white/20 text-white/50 flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {Math.ceil(result.metadata.reading_time_seconds / 60)}m read
+                        </span>
+                      )}
+                      {result.metadata.language && (
+                        <span className="text-[11px] font-mono px-2 py-0.5 border border-white/20 text-white/50">
+                          {result.metadata.language}
+                        </span>
+                      )}
+                      {result.metadata.title && (
+                        <span className="text-xs text-white/40 truncate">{result.metadata.title}</span>
+                      )}
+                    </div>
+                    {(result.structured_data?.open_graph?.description || result.structured_data?.meta_tags?.description) && (
+                      <p className="text-xs text-white/40 line-clamp-2">
+                        {result.structured_data?.open_graph?.description || result.structured_data?.meta_tags?.description}
+                      </p>
                     )}
-                    {result.metadata.word_count > 0 && (
-                      <span className="text-[11px] font-mono px-2 py-0.5 border border-white/20 text-white/50">
-                        {result.metadata.word_count.toLocaleString()} words
-                      </span>
-                    )}
-                    {result.metadata.reading_time_seconds > 0 && (
-                      <span className="text-[11px] font-mono px-2 py-0.5 border border-white/20 text-white/50 flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {Math.ceil(result.metadata.reading_time_seconds / 60)}m read
-                      </span>
-                    )}
-                    {result.metadata.title && (
-                      <span className="text-xs text-white/40 truncate">{result.metadata.title}</span>
-                    )}
-                    {result.metadata.canonical_url && result.metadata.canonical_url !== result.url && (
-                      <span className="text-xs text-white/40 truncate flex items-center gap-1">
-                        Canonical: <a href={result.metadata.canonical_url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 transition-colors">{result.metadata.canonical_url}</a>
-                      </span>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {result.metadata.canonical_url && result.metadata.canonical_url !== result.url && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40 truncate flex items-center gap-1">
+                          canonical: <a href={result.metadata.canonical_url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 transition-colors">{result.metadata.canonical_url}</a>
+                        </span>
+                      )}
+                      {result.structured_data?.open_graph?.type && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                          og:{result.structured_data.open_graph.type}
+                        </span>
+                      )}
+                      {result.structured_data?.twitter_card?.card && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                          twitter:{result.structured_data.twitter_card.card}
+                        </span>
+                      )}
+                      {result.structured_data?.json_ld?.length > 0 && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                          {result.structured_data.json_ld.length} JSON-LD
+                        </span>
+                      )}
+                      {result.headings?.length > 0 && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                          {result.headings.length} headings
+                        </span>
+                      )}
+                      {result.images?.length > 0 && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                          {result.images.length} images
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
 
