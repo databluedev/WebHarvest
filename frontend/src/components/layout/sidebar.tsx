@@ -24,6 +24,7 @@ import {
   Activity,
   Eye,
   Clock,
+  Layers,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -41,6 +42,12 @@ const navSections = [
       { href: "/playground?endpoint=crawl", label: "Crawl", icon: Globe },
       { href: "/playground?endpoint=search", label: "Search", icon: Search },
       { href: "/playground?endpoint=map", label: "Map", icon: Map },
+    ],
+  },
+  {
+    label: "Scrapper Pool",
+    items: [
+      { href: "/scrapper-pool", label: "Scrapper Pool", icon: Layers },
     ],
   },
   {

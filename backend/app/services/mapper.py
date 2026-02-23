@@ -2,8 +2,9 @@ import asyncio
 import gzip
 import logging
 import random
+import re
 import xml.etree.ElementTree as ET
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, parse_qs, urlencode
 
 import httpx
 from bs4 import BeautifulSoup
@@ -11,6 +12,78 @@ from bs4 import BeautifulSoup
 from app.schemas.map import MapRequest, LinkResult
 
 logger = logging.getLogger(__name__)
+
+# ── URL Normalization ────────────────────────────────────────────
+# Tracking / analytics params that NEVER change page content.
+# These are universally safe to strip on any website.
+_TRACKING_PARAMS = frozenset({
+    # Google / GA
+    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+    "utm_id", "utm_source_platform", "utm_creative_format", "utm_marketing_tactic",
+    "_ga", "_gl", "_gid", "gclid", "gclsrc", "dclid", "gbraid", "wbraid",
+    # Facebook / Meta
+    "fbclid", "fb_action_ids", "fb_action_types", "fb_source", "fb_ref",
+    # Microsoft / LinkedIn
+    "msclkid", "li_fat_id",
+    # Twitter / X
+    "twclid",
+    # HubSpot
+    "_hsenc", "_hsmi", "hsa_cam", "hsa_grp", "hsa_mt", "hsa_src",
+    "hsa_ad", "hsa_acc", "hsa_net", "hsa_ver", "hsa_la", "hsa_ol",
+    "hsa_kw", "hsa_tgt",
+    # Mailchimp
+    "mc_cid", "mc_eid",
+    # Adobe / Marketo
+    "sc_campaign", "sc_channel", "sc_content", "sc_medium", "sc_outcome",
+    "sc_geo", "sc_country",
+    # Generic tracking / session
+    "ref", "referer", "referrer", "source", "medium",
+    "trk", "trkInfo", "trackingId",
+    "intcmp", "icid", "int_cmp",
+    "transaction_id",
+    # Session identifiers
+    "sid", "sessionid", "jsessionid", "phpsessid", "aspsessionid",
+    # Misc
+    "mkt_tok", "oly_anon_id", "oly_enc_id", "otc", "vero_id",
+    "wickedid", "browser_id", "yclid", "ymclid",
+})
+
+# Paths that indicate non-content / auth-required pages
+_JUNK_PATH_SEGMENTS = frozenset({
+    "/wishlist", "/cart", "/checkout", "/login", "/signin", "/signup",
+    "/register", "/account", "/my-account", "/profile", "/address",
+    "/saved", "/oauth", "/callback", "/api/", "/graphql",
+    "/password", "/forgot-password", "/reset-password",
+    "/admin", "/wp-admin", "/wp-login",
+})
+
+
+def _normalize_url_for_map(url: str) -> str:
+    """Strip tracking params and normalize a URL for deduplication."""
+    try:
+        parsed = urlparse(url)
+        if not parsed.query:
+            return url
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        cleaned = {
+            k: v for k, v in params.items()
+            if k.lower() not in _TRACKING_PARAMS
+        }
+        if not cleaned:
+            return parsed._replace(query="", fragment="").geturl()
+        new_query = urlencode(cleaned, doseq=True)
+        return parsed._replace(query=new_query, fragment="").geturl()
+    except Exception:
+        return url
+
+
+def _is_junk_url(url: str) -> bool:
+    """Return True if the URL is a non-content page (auth, cart, admin, etc.)."""
+    try:
+        path = urlparse(url).path.lower()
+        return any(seg in path for seg in _JUNK_PATH_SEGMENTS)
+    except Exception:
+        return False
 
 # Rotating headers for HTTP requests
 _HEADERS_LIST = [
@@ -152,6 +225,62 @@ async def _fetch_with_stealth_engine(url: str) -> str:
                 return data.get("html", "")
     except Exception as e:
         logger.debug(f"Stealth engine failed for {url}: {e}")
+    return ""
+
+
+async def _fetch_guaranteed(url: str) -> str:
+    """4-tier resilient fetch: curl_cffi → httpx → stealth engine → browser.
+
+    Used for critical files like robots.txt where failure means losing all
+    sitemap discovery. Each tier is tried in order until one succeeds.
+    """
+    # Tier 1 & 2: HTTP-level fetches (fast)
+    text, status = await _fetch_url(url, timeout=15)
+    if status == 200 and text and len(text.strip()) > 10:
+        logger.info(f"Guaranteed fetch OK via HTTP for {url} ({len(text)} chars)")
+        return text
+
+    # Tier 3: Stealth engine (handles anti-bot)
+    logger.info(f"HTTP fetch failed for {url}, trying stealth engine")
+    html = await _fetch_with_stealth_engine(url)
+    if html and len(html.strip()) > 10:
+        # Stealth engine returns full HTML page — extract text content
+        # For robots.txt, the raw text is inside the HTML body
+        soup = BeautifulSoup(html, "lxml")
+        body_text = soup.get_text(separator="\n")
+        if body_text and ("user-agent" in body_text.lower() or "sitemap" in body_text.lower()):
+            logger.info(f"Guaranteed fetch OK via stealth engine for {url}")
+            return body_text
+        # If stealth returned usable HTML but not a robots.txt text file,
+        # still return the raw html for sitemap XML fetches
+        if html.strip().startswith("<?xml") or "<urlset" in html or "<sitemapindex" in html:
+            logger.info(f"Guaranteed fetch OK via stealth engine (XML) for {url}")
+            return html
+
+    # Tier 4: Full browser (nuclear option)
+    logger.info(f"Stealth engine failed for {url}, trying browser")
+    try:
+        from app.services.browser import browser_pool
+
+        async with browser_pool.get_page(target_url=url) as page:
+            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=8000)
+            except Exception:
+                pass
+            # For text files (robots.txt), content is inside <pre> or body
+            content = await page.evaluate("() => document.body ? document.body.innerText : ''")
+            if content and len(content.strip()) > 10:
+                logger.info(f"Guaranteed fetch OK via browser for {url} ({len(content)} chars)")
+                return content
+            # Fallback: return full page HTML (for XML sitemaps rendered in browser)
+            full_html = await page.content()
+            if full_html:
+                return full_html
+    except Exception as e:
+        logger.warning(f"Browser fetch also failed for {url}: {e}")
+
+    logger.warning(f"All 4 tiers failed for {url}")
     return ""
 
 
@@ -335,21 +464,40 @@ async def map_website(request: MapRequest) -> list[LinkResult]:
     2. Quick crawl of homepage + linked pages (with anti-detection)
     3. Browser fallback for blocked sites
     4. Optional search/keyword filtering
+
+    All URLs are normalized (tracking params stripped) and deduplicated.
+    Junk URLs (login, cart, admin, etc.) are filtered out.
     """
     url = request.url
     all_links: dict[str, LinkResult] = {}
 
-    # Strategy 1: Sitemap discovery
+    def _add_link(link: LinkResult):
+        """Add a link with normalization, dedup, and junk filtering."""
+        clean_url = _normalize_url_for_map(link.url)
+        if clean_url in all_links:
+            return
+        if _is_junk_url(clean_url):
+            return
+        all_links[clean_url] = LinkResult(
+            url=clean_url,
+            title=link.title,
+            description=link.description,
+            lastmod=getattr(link, "lastmod", None),
+            priority=getattr(link, "priority", None),
+        )
+
+    # Strategy 1: Sitemap discovery (HIGHEST PRIORITY — canonical URLs)
     if request.use_sitemap:
         sitemap_links = await _parse_sitemaps(url)
         for link in sitemap_links:
-            all_links[link.url] = link
+            _add_link(link)
+        if sitemap_links:
+            logger.info(f"Sitemap strategy yielded {len(all_links)} clean URLs")
 
     # Strategy 2: Quick homepage crawl with anti-detection
     homepage_links = await _crawl_homepage(url, request.include_subdomains)
     for link in homepage_links:
-        if link.url not in all_links:
-            all_links[link.url] = link
+        _add_link(link)
 
     # Strategy 3: Deep JS Navigation Discovery — the god-tier strategy for doc sites.
     # Renders the page with a real browser, detects the doc framework (GitBook,
@@ -374,39 +522,35 @@ async def map_website(request: MapRequest) -> list[LinkResult]:
                 f"{f' (framework: {doc_framework})' if doc_framework else ''}"
             )
             for link_url in discovered_links:
-                if link_url not in all_links:
-                    parsed = urlparse(link_url)
-                    link_domain = parsed.netloc
-                    if link_domain.startswith("www."):
-                        link_domain = link_domain[4:]
-                    # Filter by domain
-                    if request.include_subdomains:
-                        base_parts = base_domain.split(".")
-                        parsed_parts = link_domain.split(".")
-                        if len(base_parts) >= 2 and len(parsed_parts) >= 2:
-                            base_root = ".".join(base_parts[-2:])
-                            parsed_root = ".".join(parsed_parts[-2:])
-                            if base_root != parsed_root:
-                                continue
-                    elif link_domain != base_domain:
-                        continue
-                    # Extract title from HTML for this URL if we have the HTML
-                    all_links[link_url] = LinkResult(url=link_url, title=None, description=None)
+                parsed_link = urlparse(link_url)
+                link_domain = parsed_link.netloc
+                if link_domain.startswith("www."):
+                    link_domain = link_domain[4:]
+                # Filter by domain
+                if request.include_subdomains:
+                    base_parts = base_domain.split(".")
+                    parsed_parts = link_domain.split(".")
+                    if len(base_parts) >= 2 and len(parsed_parts) >= 2:
+                        base_root = ".".join(base_parts[-2:])
+                        parsed_root = ".".join(parsed_parts[-2:])
+                        if base_root != parsed_root:
+                            continue
+                elif link_domain != base_domain:
+                    continue
+                _add_link(LinkResult(url=link_url, title=None, description=None))
 
         # Also extract standard links from the deep-discovery HTML
         if html and len(all_links) < request.limit:
             html_links = _extract_links_from_html(html, url, base_domain, request.include_subdomains)
             for link in html_links:
-                if link.url not in all_links:
-                    all_links[link.url] = link
+                _add_link(link)
 
     # Strategy 4: If we still got very few links, try basic browser fallback
     if len(all_links) < 5:
         logger.info(f"Few links found for {url}, trying browser fallback")
         browser_links = await _crawl_homepage_browser(url, request.include_subdomains)
         for link in browser_links:
-            if link.url not in all_links:
-                all_links[link.url] = link
+            _add_link(link)
 
     # Strategy 5: Deep BFS crawl if we still have room under the limit
     if len(all_links) < request.limit:
@@ -426,8 +570,7 @@ async def map_website(request: MapRequest) -> list[LinkResult]:
                 limit=remaining,
             )
             for link in deep_links:
-                if link.url not in all_links:
-                    all_links[link.url] = link
+                _add_link(link)
 
     # Strategy 6: Filter by search term
     if request.search:
@@ -451,71 +594,159 @@ async def map_website(request: MapRequest) -> list[LinkResult]:
 
 
 async def _parse_sitemaps(base_url: str) -> list[LinkResult]:
-    """Parse sitemap.xml and sitemap index files with full spec compliance."""
-    links = []
+    """Discover and parse ALL sitemaps using a multi-strategy approach.
+
+    Strategy:
+        1. GUARANTEED fetch of robots.txt (4-tier cascade)
+        2. Extract every Sitemap: directive from robots.txt
+        3. If robots.txt had no sitemaps, try standard CMS fallback paths
+        4. Check homepage HTML for <link rel="sitemap"> references
+        5. Recursively follow sitemap indexes to discover all sub-sitemaps
+        6. Deduplicate results
+    """
     parsed = urlparse(base_url)
     domain = f"{parsed.scheme}://{parsed.netloc}"
 
-    # Try common sitemap locations
-    sitemap_urls = [
-        f"{domain}/sitemap.xml",
-        f"{domain}/sitemap_index.xml",
-        f"{domain}/sitemap/sitemap.xml",
-    ]
+    # ── Step 1 & 2: robots.txt — the MOST important file ──────────
+    sitemap_urls: list[str] = []
 
-    # Also check robots.txt for sitemap references
+    robots_text = await _fetch_guaranteed(f"{domain}/robots.txt")
+    if robots_text:
+        for line in robots_text.splitlines():
+            stripped = line.strip()
+            # Case-insensitive match for "Sitemap:" directive
+            if re.match(r"^sitemap\s*:", stripped, re.IGNORECASE):
+                # Handle both "Sitemap: url" and "Sitemap:url" (no space)
+                sm_url = re.split(r"^sitemap\s*:\s*", stripped, flags=re.IGNORECASE)[-1].strip()
+                if sm_url and sm_url.startswith("http"):
+                    sitemap_urls.append(sm_url)
+        if sitemap_urls:
+            logger.info(
+                f"robots.txt discovery: found {len(sitemap_urls)} sitemap(s) "
+                f"for {domain}: {sitemap_urls[:5]}"
+            )
+        else:
+            logger.info(f"robots.txt fetched for {domain} but contained no Sitemap: directives")
+    else:
+        logger.warning(f"robots.txt fetch failed completely for {domain}")
+
+    # ── Step 3: Standard CMS fallback paths (only if robots.txt had nothing) ──
+    if not sitemap_urls:
+        fallback_paths = [
+            "/sitemap.xml",
+            "/sitemap_index.xml",
+            "/sitemap-index.xml",
+            "/wp-sitemap.xml",
+            "/sitemap.xml.gz",
+            "/sitemap/sitemap.xml",
+            "/sitemaps/sitemap.xml",
+        ]
+        sitemap_urls = [f"{domain}{p}" for p in fallback_paths]
+        logger.info(f"No sitemaps from robots.txt, trying {len(sitemap_urls)} standard paths")
+
+    # ── Step 4: Check homepage HTML for <link rel="sitemap"> ──────
     try:
-        text, status = await _fetch_url(f"{domain}/robots.txt", timeout=10)
-        if status == 200 and text:
-            for line in text.splitlines():
-                if line.lower().startswith("sitemap:"):
-                    sm_url = line.split(":", 1)[1].strip()
-                    if sm_url not in sitemap_urls:
-                        sitemap_urls.append(sm_url)
-    except Exception:
-        pass
+        homepage_text, homepage_status = await _fetch_url(base_url, timeout=15)
+        if homepage_status == 200 and homepage_text:
+            soup = BeautifulSoup(homepage_text, "lxml")
+            for link_tag in soup.find_all("link", rel=True):
+                rels = [r.lower() for r in link_tag.get("rel", [])]
+                if "sitemap" in rels:
+                    href = link_tag.get("href", "").strip()
+                    if href:
+                        abs_href = urljoin(base_url, href)
+                        if abs_href not in sitemap_urls:
+                            sitemap_urls.append(abs_href)
+                            logger.info(f"Found sitemap in HTML <link>: {abs_href}")
+    except Exception as e:
+        logger.debug(f"Homepage <link> sitemap check failed: {e}")
 
-    for sitemap_url in sitemap_urls:
+    # ── Step 5: Fetch and recursively parse all discovered sitemaps ──
+    all_links: list[LinkResult] = []
+    visited_sitemaps: set[str] = set()
+
+    async def _recursive_parse(url: str, depth: int = 0):
+        """Recursively fetch and parse a sitemap, following indexes."""
+        if url in visited_sitemaps or depth > 3:
+            return
+        visited_sitemaps.add(url)
+
+        xml_text = await _fetch_sitemap_content(url)
+        if not xml_text:
+            return
+
         try:
-            # Fetch sitemap content (handle gzip)
-            xml_text = await _fetch_sitemap_content(sitemap_url)
-            if not xml_text:
-                continue
-
-            # Use iterparse for streaming XML (memory efficient for large sitemaps)
             root = ET.fromstring(xml_text)
-            ns = {
-                "sm": "http://www.sitemaps.org/schemas/sitemap/0.9",
-                "image": "http://www.google.com/schemas/sitemap-image/1.1",
-            }
+        except ET.ParseError as e:
+            logger.debug(f"XML parse error for {url}: {e}")
+            return
 
-            # Check if it's a sitemap index
-            sitemap_index_entries = root.findall(".//sm:sitemap/sm:loc", ns)
-            if sitemap_index_entries:
-                # Process up to 200 sub-sitemaps
-                for entry in sitemap_index_entries[:200]:
-                    if entry.text:
-                        sub_xml = await _fetch_sitemap_content(entry.text.strip())
-                        if sub_xml:
-                            try:
-                                sub_root = ET.fromstring(sub_xml)
-                                sub_links = _parse_single_sitemap_xml(sub_root, ns)
-                                links.extend(sub_links)
-                            except Exception:
-                                pass
-            else:
-                # Regular sitemap
-                sub_links = _parse_single_sitemap_xml(root, ns)
-                links.extend(sub_links)
+        ns = {
+            "sm": "http://www.sitemaps.org/schemas/sitemap/0.9",
+            "image": "http://www.google.com/schemas/sitemap-image/1.1",
+        }
 
-        except Exception as e:
-            logger.debug(f"Failed to parse sitemap {sitemap_url}: {e}")
+        # Check if it's a sitemap index (contains <sitemap><loc> entries)
+        index_entries = root.findall(".//sm:sitemap/sm:loc", ns)
+        # Also handle sitemaps without namespace prefix
+        if not index_entries:
+            index_entries = root.findall(".//{http://www.sitemaps.org/schemas/sitemap/0.9}sitemap/{http://www.sitemaps.org/schemas/sitemap/0.9}loc")
+        # Also try no-namespace (some sites serve sitemaps without xmlns)
+        if not index_entries:
+            index_entries = root.findall(".//sitemap/loc")
 
-    return links
+        if index_entries:
+            logger.info(f"Sitemap index at {url}: {len(index_entries)} sub-sitemaps (depth={depth})")
+            for entry in index_entries[:500]:
+                if entry.text:
+                    sub_url = entry.text.strip()
+                    await _recursive_parse(sub_url, depth + 1)
+        else:
+            # It's a URL set — extract all URLs
+            sub_links = _parse_single_sitemap_xml(root, ns)
+            if sub_links:
+                logger.info(f"Sitemap {url}: extracted {len(sub_links)} URLs")
+                all_links.extend(sub_links)
+
+    # Deduplicate sitemap URLs before fetching
+    seen_sitemap_urls = set()
+    unique_sitemap_urls = []
+    for sm_url in sitemap_urls:
+        if sm_url not in seen_sitemap_urls:
+            seen_sitemap_urls.add(sm_url)
+            unique_sitemap_urls.append(sm_url)
+
+    for sm_url in unique_sitemap_urls:
+        await _recursive_parse(sm_url)
+
+    # ── Step 6: Deduplicate results ───────────────────────────────
+    seen_urls: set[str] = set()
+    deduped: list[LinkResult] = []
+    for link in all_links:
+        normalized = _normalize_url_for_map(link.url)
+        if normalized not in seen_urls:
+            seen_urls.add(normalized)
+            deduped.append(LinkResult(
+                url=normalized,
+                title=link.title,
+                description=link.description,
+                lastmod=link.lastmod,
+                priority=link.priority,
+            ))
+
+    logger.info(
+        f"Sitemap discovery complete for {domain}: "
+        f"{len(all_links)} raw → {len(deduped)} deduplicated URLs "
+        f"from {len(visited_sitemaps)} sitemaps"
+    )
+    return deduped
 
 
 async def _fetch_sitemap_content(url: str) -> str | None:
-    """Fetch sitemap content, handling gzipped .xml.gz files."""
+    """Fetch sitemap content with gzip support and stealth fallback.
+
+    Tries HTTP first (fast), falls back to stealth/browser for blocked sites.
+    """
     if url.endswith(".gz"):
         # Fetch as bytes and decompress
         raw_bytes, status = await _fetch_bytes(url, timeout=20)
@@ -527,18 +758,57 @@ async def _fetch_sitemap_content(url: str) -> str | None:
         except Exception as e:
             logger.debug(f"Failed to decompress gzipped sitemap {url}: {e}")
             return None
-    else:
-        text, status = await _fetch_url(url, timeout=15)
-        if status != 200 or not text:
-            return None
-        return text
+
+    # Try HTTP first (fast path — most sitemap XML files are not anti-bot protected)
+    text, status = await _fetch_url(url, timeout=15)
+    if status == 200 and text:
+        # Sanity check: does it look like XML?
+        stripped = text.strip()
+        if stripped.startswith("<?xml") or stripped.startswith("<urlset") or stripped.startswith("<sitemapindex"):
+            return text
+        # Some servers return HTML error pages with 200 status — reject those
+        if "<html" in stripped[:200].lower():
+            logger.debug(f"Sitemap {url} returned HTML instead of XML, trying stealth")
+        else:
+            return text
+
+    # Stealth fallback for anti-bot protected sitemap files
+    logger.debug(f"HTTP failed for sitemap {url} (status={status}), trying stealth")
+    stealth_text = await _fetch_with_stealth_engine(url)
+    if stealth_text:
+        # Stealth engine wraps content in HTML — extract the XML
+        if "<?xml" in stealth_text or "<urlset" in stealth_text or "<sitemapindex" in stealth_text:
+            # Try to extract raw XML from any HTML wrapper
+            soup = BeautifulSoup(stealth_text, "lxml")
+            # The XML might be inside a <pre> tag
+            pre = soup.find("pre")
+            if pre:
+                return pre.get_text()
+            # Or it might be the full content
+            body_text = soup.get_text()
+            if "<?xml" in body_text or "<urlset" in body_text:
+                return body_text
+            return stealth_text
+
+    return None
 
 
 def _parse_single_sitemap_xml(root: ET.Element, ns: dict) -> list[LinkResult]:
     """Extract URLs from a sitemap XML element with lastmod, priority, and image support."""
     links = []
-    for url_el in root.findall(".//sm:url", ns):
+    # Try with namespace first, then without (some sites skip xmlns)
+    url_elements = root.findall(".//sm:url", ns)
+    if not url_elements:
+        url_elements = root.findall(".//{http://www.sitemaps.org/schemas/sitemap/0.9}url")
+    if not url_elements:
+        url_elements = root.findall(".//url")
+
+    for url_el in url_elements:
         loc = url_el.find("sm:loc", ns)
+        if loc is None:
+            loc = url_el.find("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")
+        if loc is None:
+            loc = url_el.find("loc")
         if loc is None or not loc.text:
             continue
 
