@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar, SidebarProvider, MobileMenuButton } from "@/components/layout/sidebar";
-import { api } from "@/lib/api";
 import {
   Layers,
   Search,
