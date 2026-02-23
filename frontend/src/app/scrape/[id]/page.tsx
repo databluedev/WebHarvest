@@ -15,7 +15,6 @@ import {
   Link2,
   Camera,
   Braces,
-  List,
   Clock,
   FileCode,
   ArrowUpRight,
@@ -27,7 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-type TabId = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract" | "table";
+type TabId = "markdown" | "html" | "screenshot" | "links" | "structured" | "images" | "extract" | "table";
 
 export default function ScrapeDetailPage() {
   const router = useRouter();
@@ -146,7 +145,6 @@ export default function ScrapeDetailPage() {
         { id: "screenshot", label: "Screenshot", icon: Camera, available: !!result.screenshot },
         { id: "links", label: `Links${result.links ? ` (${result.links.length})` : ""}`, icon: Link2, available: !!(result.links?.length || result.links_detail) },
         { id: "structured", label: "Structured Data", icon: Braces, available: !!(result.structured_data && Object.keys(result.structured_data).length > 0) },
-        { id: "headings", label: `Headings${result.headings ? ` (${result.headings.length})` : ""}`, icon: List, available: !!result.headings?.length },
         { id: "images", label: `Images${result.images ? ` (${result.images.length})` : ""}`, icon: ImageIcon, available: !!result.images?.length },
         { id: "extract", label: "AI Extract", icon: Sparkles, available: !!result.extract },
         { id: "table", label: "Table", icon: Table2, available: true },
@@ -164,12 +162,7 @@ export default function ScrapeDetailPage() {
     }
   }, [result]);
 
-  // Auto-load screenshot when tab is selected
-  useEffect(() => {
-    if (activeTab === "screenshot" && result?.id && !screenshotData[result.id] && !screenshotLoading[result.id]) {
-      loadScreenshot(result.id);
-    }
-  }, [activeTab, result?.id]);
+  // Screenshot is loaded on-demand via button click (not auto-loaded)
 
   const getCopyText = (): string => {
     if (!result) return "";
@@ -179,7 +172,6 @@ export default function ScrapeDetailPage() {
       case "links": return result.links?.join("\n") || "";
       case "extract": return JSON.stringify(result.extract, null, 2);
       case "structured": return JSON.stringify(result.structured_data, null, 2);
-      case "headings": return JSON.stringify(result.headings, null, 2);
       case "images": return JSON.stringify(result.images, null, 2);
       case "table": return "";
       default: return "";
@@ -317,11 +309,6 @@ export default function ScrapeDetailPage() {
                           {result.structured_data.json_ld.length} JSON-LD
                         </span>
                       )}
-                      {result.headings?.length > 0 && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
-                          {result.headings.length} headings
-                        </span>
-                      )}
                       {result.images?.length > 0 && (
                         <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
                           {result.images.length} images
@@ -400,11 +387,18 @@ export default function ScrapeDetailPage() {
                             className="max-w-full border border-white/10 shadow-lg"
                             style={{ maxHeight: "600px" }}
                           />
-                        ) : (
+                        ) : screenshotLoading[result.id] ? (
                           <div className="flex flex-col items-center justify-center py-12">
                             <Loader2 className="h-6 w-6 animate-spin text-white/40 mb-2" />
                             <p className="text-sm text-white/40">Loading screenshot...</p>
                           </div>
+                        ) : (
+                          <button
+                            onClick={() => loadScreenshot(result.id)}
+                            className="flex items-center gap-2 px-5 py-3 text-sm font-mono border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/[0.03] transition-all"
+                          >
+                            <Camera className="h-4 w-4" /> Load Screenshot
+                          </button>
                         )}
                       </div>
                     )}
@@ -534,22 +528,6 @@ export default function ScrapeDetailPage() {
                       </div>
                     )}
 
-                    {activeTab === "headings" && result.headings && (
-                      <div className="max-h-[600px] overflow-auto bg-[#0a0a0a] border border-white/10 p-4 space-y-1">
-                        {result.headings.map((h: any, i: number) => (
-                          <div
-                            key={i}
-                            className="flex items-center gap-2 text-xs"
-                            style={{ paddingLeft: `${(h.level - 1) * 16}px` }}
-                          >
-                            <span className="border border-white/20 text-white/40 text-[10px] font-mono px-1.5 py-0 shrink-0">
-                              H{h.level}
-                            </span>
-                            <span className={`text-white/70 ${h.level === 1 ? "font-semibold" : ""}`}>{h.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
 
                     {activeTab === "images" && result.images && (
                       <div className="max-h-[600px] overflow-auto bg-[#0a0a0a] border border-white/10 p-4">
@@ -597,7 +575,6 @@ export default function ScrapeDetailPage() {
                         ["Internal Links", result.links_detail?.internal?.count != null ? String(result.links_detail.internal.count) : "\u2014"],
                         ["External Links", result.links_detail?.external?.count != null ? String(result.links_detail.external.count) : "\u2014"],
                         ["Images", result.images?.length != null ? String(result.images.length) : "\u2014"],
-                        ["Headings", result.headings?.length != null ? String(result.headings.length) : "\u2014"],
                       ];
                       return (
                         <div>

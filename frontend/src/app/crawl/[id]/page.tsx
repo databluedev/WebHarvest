@@ -17,7 +17,6 @@ import {
   Link2,
   Camera,
   Braces,
-  List,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -33,7 +32,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract";
+type TabType = "markdown" | "html" | "screenshot" | "links" | "structured" | "images" | "extract";
 
 const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { page: any; index: number; jobId: string }) {
   const [expanded, setExpanded] = useState(false);
@@ -50,7 +49,6 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
   const hasScreenshot = !!page.screenshot;
   const hasLinks = page.links?.length > 0 || page.links_detail;
   const hasStructured = page.structured_data && Object.keys(page.structured_data).length > 0;
-  const hasHeadings = page.headings?.length > 0;
   const hasImages = page.images?.length > 0;
   const hasExtract = !!page.extract;
 
@@ -79,7 +77,6 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
     { id: "screenshot", label: "Screenshot", icon: Camera, available: hasScreenshot },
     { id: "links", label: "Links", icon: Link2, available: hasLinks },
     { id: "structured", label: "Structured Data", icon: Braces, available: hasStructured },
-    { id: "headings", label: "Headings", icon: List, available: hasHeadings },
     { id: "images", label: "Images", icon: ImageIcon, available: hasImages },
     { id: "extract", label: "AI Extract", icon: Sparkles, available: hasExtract },
   ];
@@ -93,13 +90,10 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
     }
   }, []);
 
-  // Auto-load HTML and screenshot when their tab is selected
+  // Auto-load HTML when tab is selected (screenshot stays on-demand)
   useEffect(() => {
     if (activeTab === "html" && hasHtml && !htmlData && !htmlLoading) {
       loadDetail("html");
-    }
-    if (activeTab === "screenshot" && hasScreenshot && !screenshotData && !screenshotLoading) {
-      loadDetail("screenshot");
     }
   }, [activeTab]);
 
@@ -211,11 +205,6 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                     {page.structured_data.json_ld.length} JSON-LD
                   </span>
                 )}
-                {page.headings?.length > 0 && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
-                    {page.headings.length} headings
-                  </span>
-                )}
                 {page.images?.length > 0 && (
                   <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
                     {page.images.length} images
@@ -282,11 +271,18 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                     className="max-w-full rounded-md border border-white/10 shadow-lg"
                     style={{ maxHeight: "600px" }}
                   />
-                ) : (
+                ) : screenshotLoading ? (
                   <div className="flex items-center gap-2 py-8 text-white/40">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="text-sm">Loading screenshot...</span>
                   </div>
+                ) : (
+                  <button
+                    onClick={() => loadDetail("screenshot")}
+                    className="flex items-center gap-2 px-5 py-3 text-sm font-mono border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/[0.03] transition-all"
+                  >
+                    <Camera className="h-4 w-4" /> Load Screenshot
+                  </button>
                 )}
               </div>
             )}
@@ -443,22 +439,6 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
               </div>
             )}
 
-            {activeTab === "headings" && hasHeadings && (
-              <div className="space-y-1">
-                {page.headings.map((h: any, i: number) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2 text-xs"
-                    style={{ paddingLeft: `${(h.level - 1) * 16}px` }}
-                  >
-                    <span className="inline-flex items-center rounded-md border border-white/20 px-1.5 py-0 text-[10px] font-mono text-white/50 shrink-0">
-                      H{h.level}
-                    </span>
-                    <span className={`text-white/70 ${h.level === 1 ? "font-semibold" : ""}`}>{h.text}</span>
-                  </div>
-                ))}
-              </div>
-            )}
 
             {activeTab === "images" && hasImages && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

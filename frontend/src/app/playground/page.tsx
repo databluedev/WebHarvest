@@ -18,7 +18,6 @@ import {
   Link2,
   Camera,
   Braces,
-  List,
   Image as ImageIcon,
   Sparkles,
   ExternalLink,
@@ -180,7 +179,6 @@ const formatIcons: Record<string, { icon: any; label: string }> = {
   links: { icon: Link2, label: "Links" },
   screenshot: { icon: Camera, label: "Screenshot" },
   structured_data: { icon: Braces, label: "JSON" },
-  headings: { icon: List, label: "Summary" },
   images: { icon: ImageIcon, label: "Images" },
 };
 
@@ -197,7 +195,7 @@ async function handleDownload(job: any) {
 
 // ── Inline Result Card ───────────────────────────────────────
 
-type ResultTab = "markdown" | "html" | "screenshot" | "links" | "structured" | "headings" | "images" | "extract";
+type ResultTab = "markdown" | "html" | "screenshot" | "links" | "structured" | "images" | "extract";
 
 const InlineResultCard = memo(function InlineResultCard({
   page,
@@ -221,7 +219,6 @@ const InlineResultCard = memo(function InlineResultCard({
   const hasScreenshot = !!page.screenshot;
   const hasLinks = page.links?.length > 0 || page.links_detail;
   const hasStructured = page.structured_data && Object.keys(page.structured_data).length > 0;
-  const hasHeadings = page.headings?.length > 0;
   const hasImages = page.images?.length > 0;
   const hasExtract = !!page.extract;
 
@@ -231,7 +228,6 @@ const InlineResultCard = memo(function InlineResultCard({
     { id: "screenshot", label: "Screenshot", icon: Camera, available: hasScreenshot },
     { id: "links", label: "Links", icon: Link2, available: hasLinks },
     { id: "structured", label: "JSON", icon: Braces, available: hasStructured },
-    { id: "headings", label: "Headings", icon: List, available: hasHeadings },
     { id: "images", label: "Images", icon: ImageIcon, available: hasImages },
     { id: "extract", label: "AI Extract", icon: Sparkles, available: hasExtract },
   ];
@@ -263,13 +259,10 @@ const InlineResultCard = memo(function InlineResultCard({
     }
   }, [jobId, page.id, screenshotData, screenshotLoading, htmlData, htmlLoading]);
 
-  // Auto-load HTML and screenshot when their tab is selected
+  // Auto-load HTML when tab is selected (screenshot stays on-demand)
   useEffect(() => {
     if (activeTab === "html" && hasHtml && page.html === "available" && !htmlData && !htmlLoading) {
       loadDetail("html");
-    }
-    if (activeTab === "screenshot" && hasScreenshot && !screenshotData && !screenshotLoading) {
-      loadDetail("screenshot");
     }
   }, [activeTab]);
 
@@ -369,11 +362,6 @@ const InlineResultCard = memo(function InlineResultCard({
                     {page.structured_data.json_ld.length} JSON-LD
                   </span>
                 )}
-                {page.headings?.length > 0 && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
-                    {page.headings.length} headings
-                  </span>
-                )}
                 {page.images?.length > 0 && (
                   <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
                     {page.images.length} images
@@ -443,11 +431,15 @@ const InlineResultCard = memo(function InlineResultCard({
               <div className="flex justify-center">
                 {screenshotData ? (
                   <img src={`data:image/jpeg;base64,${screenshotData}`} alt={`Screenshot of ${page.url}`} className="max-w-full border border-white/10" style={{ maxHeight: "500px" }} />
-                ) : (
+                ) : screenshotLoading ? (
                   <div className="flex items-center gap-3 py-8 text-white/50">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="text-[13px] font-mono uppercase tracking-wider">Loading...</span>
                   </div>
+                ) : (
+                  <button onClick={() => loadDetail("screenshot")} className="flex items-center gap-2 px-5 py-3 text-[13px] font-mono uppercase tracking-wider border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/[0.03] transition-all">
+                    <Camera className="h-4 w-4" /> Load Screenshot
+                  </button>
                 )}
               </div>
             )}
@@ -523,16 +515,6 @@ const InlineResultCard = memo(function InlineResultCard({
                 )}
               </div>
             )}
-            {activeTab === "headings" && hasHeadings && (
-              <div className="space-y-1.5 max-h-72 overflow-auto">
-                {page.headings.map((h: any, i: number) => (
-                  <div key={i} className="flex items-center gap-3 text-[13px]" style={{ paddingLeft: `${(h.level - 1) * 16}px` }}>
-                    <span className="text-[10px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 shrink-0">H{h.level}</span>
-                    <span className={h.level === 1 ? "font-medium text-white" : "text-white/60"}>{h.text}</span>
-                  </div>
-                ))}
-              </div>
-            )}
             {activeTab === "images" && hasImages && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-72 overflow-auto">
                 {page.images.map((img: any, i: number) => (
@@ -588,7 +570,7 @@ function PlaygroundContent() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [formats, setFormats] = useState<string[]>(["markdown", "structured_data", "headings"]);
+  const [formats, setFormats] = useState<string[]>(["markdown", "structured_data"]);
   const [htmlMode, setHtmlMode] = useState<"cleaned" | "raw">("cleaned");
   const [screenshotMode, setScreenshotMode] = useState<"viewport" | "fullpage">("fullpage");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -672,8 +654,8 @@ function PlaygroundContent() {
 
   const toggleFormat = (format: string) => setFormats((prev) => prev.includes(format) ? prev.filter((f) => f !== format) : [...prev, format]);
 
-  // Always include structured_data and headings so the summary bar has data
-  const effectiveFormats = Array.from(new Set(formats.concat(["structured_data", "headings"])));
+  // Always include structured_data so the summary bar has data
+  const effectiveFormats = Array.from(new Set(formats.concat(["structured_data"])));
 
   const handleGetCode = () => {
     let code = "";
@@ -889,7 +871,7 @@ function PlaygroundContent() {
             {/* Controls */}
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                {activeEndpoint !== "map" && ["markdown", "html", "links", "screenshot", "structured_data", "headings", "images"].map((fmt) => (
+                {activeEndpoint !== "map" && ["markdown", "html", "links", "screenshot", "images"].map((fmt) => (
                   <button
                     key={fmt}
                     onClick={() => toggleFormat(fmt)}
@@ -900,7 +882,7 @@ function PlaygroundContent() {
                         : "border border-white/[0.08] text-white/50 hover:border-white/20 hover:text-white/70"
                     )}
                   >
-                    <span className="text-[14px] md:text-[16px]">◉</span> {fmt === "structured_data" ? "Structured Data" : fmt.charAt(0).toUpperCase() + fmt.slice(1)}
+                    <span className="text-[14px] md:text-[16px]">◉</span> {fmt.charAt(0).toUpperCase() + fmt.slice(1)}
                   </button>
                 ))}
 
