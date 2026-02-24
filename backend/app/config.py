@@ -113,7 +113,8 @@ class Settings(BaseSettings):
 
     # Proxy
     USE_BUILTIN_PROXIES: bool = False
-    BUILTIN_PROXY_URL: str = ""  # System-wide proxy URL — auto-used for hard sites (e.g. http://user:pass@proxy:port)
+    BUILTIN_PROXY_URL: str = ""  # Comma-separated proxy URLs — last-resort for blocked sites (e.g. http://user:pass@proxy:port,socks5://ip:port)
+    BUILTIN_PROXY_LIST_URL: str = ""  # API URL that returns JSON proxy list (e.g. GeoNode API) — refreshed every 10 min
     SCRAPE_DO_API_KEY: str = ""  # scrape.do proxy API key — auto-used for hard sites
 
     # Search

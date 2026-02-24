@@ -1725,14 +1725,15 @@ async def scrape_url(
             await record_strategy_result(url, winning_strategy, 4, True, elapsed_ms)
 
     # --- Proxy retry: if all tiers failed and builtin proxy is available, retry with proxy ---
-    if not fetched and not proxy_url and settings.BUILTIN_PROXY_URL:
-        from app.services.proxy import ProxyManager as _PM
-        _builtin_pm = _PM.from_urls([settings.BUILTIN_PROXY_URL])
-        _builtin_obj = _builtin_pm.get_random()
+    _has_builtin = settings.BUILTIN_PROXY_URL or settings.BUILTIN_PROXY_LIST_URL
+    if not fetched and not proxy_url and _has_builtin:
+        from app.services.proxy import get_builtin_proxy_manager
+        _builtin_pm = await get_builtin_proxy_manager()
+        _builtin_obj = _builtin_pm.get_random() if _builtin_pm else None
         if _builtin_obj:
             _bp_url = _builtin_pm.to_httpx(_builtin_obj)
             _bp_pw = _builtin_pm.to_playwright(_builtin_obj)
-            logger.info(f"All tiers failed for {url}, retrying with builtin proxy")
+            logger.info(f"All tiers failed for {url}, retrying with builtin proxy ({_builtin_obj.host}:{_builtin_obj.port})")
 
             # Retry browser strategies with proxy (most likely to succeed)
             tier_start = time.time()
@@ -3788,14 +3789,15 @@ async def scrape_url_fetch_only(
             winning_tier = 4
 
     # --- Proxy retry: if all tiers failed and builtin proxy is available ---
-    if not fetched and not proxy_url and settings.BUILTIN_PROXY_URL:
-        from app.services.proxy import ProxyManager as _PM
-        _builtin_pm = _PM.from_urls([settings.BUILTIN_PROXY_URL])
-        _builtin_obj = _builtin_pm.get_random()
+    _has_builtin = settings.BUILTIN_PROXY_URL or settings.BUILTIN_PROXY_LIST_URL
+    if not fetched and not proxy_url and _has_builtin:
+        from app.services.proxy import get_builtin_proxy_manager
+        _builtin_pm = await get_builtin_proxy_manager()
+        _builtin_obj = _builtin_pm.get_random() if _builtin_pm else None
         if _builtin_obj:
             _bp_url = _builtin_pm.to_httpx(_builtin_obj)
             _bp_pw = _builtin_pm.to_playwright(_builtin_obj)
-            logger.info(f"Fetch-only: all tiers failed for {url}, retrying with builtin proxy")
+            logger.info(f"Fetch-only: all tiers failed for {url}, retrying with builtin proxy ({_builtin_obj.host}:{_builtin_obj.port})")
 
             tier_start = time.time()
             # Try HTTP with proxy first (cheapest)

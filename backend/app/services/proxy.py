@@ -1,5 +1,6 @@
 import logging
 import random
+import time
 from dataclasses import dataclass
 from urllib.parse import urlparse, urlunparse
 from uuid import UUID
@@ -10,6 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.redis import redis_client as _redis
 
 logger = logging.getLogger(__name__)
+
+# --- Builtin proxy pool (cached in-memory, refreshed from API) ---
+_builtin_proxy_cache: list[str] = []
+_builtin_proxy_cache_time: float = 0
+_BUILTIN_CACHE_TTL = 600  # 10 minutes
 
 
 @dataclass
@@ -133,3 +139,80 @@ class ProxyManager:
                 netloc += f":{parsed.port}"
             return urlunparse((parsed.scheme, netloc, parsed.path, "", "", ""))
         return url
+
+
+async def _fetch_proxy_list(api_url: str) -> list[str]:
+    """Fetch proxy list from API (GeoNode, ProxyScrape, etc.).
+
+    Supports JSON responses with common formats:
+    - {"data": [{"protocols": ["socks5"], "ip": "...", "port": "..."}, ...]}  (GeoNode)
+    - [{"ip": "...", "port": ..., "type": "..."}, ...]
+    """
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(api_url)
+            resp.raise_for_status()
+            data = resp.json()
+
+        proxies = []
+        # GeoNode format: {"data": [...]}
+        items = data.get("data", data) if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            return []
+
+        for item in items:
+            ip = item.get("ip", "")
+            port = item.get("port", "")
+            if not ip or not port:
+                continue
+            # Determine protocol
+            protocols = item.get("protocols", [])
+            if isinstance(protocols, list) and protocols:
+                proto = protocols[0]
+            else:
+                proto = item.get("type", item.get("protocol", "http"))
+            proxy_url = f"{proto}://{ip}:{port}"
+            proxies.append(proxy_url)
+
+        logger.info(f"Fetched {len(proxies)} proxies from API")
+        return proxies
+    except Exception as e:
+        logger.warning(f"Failed to fetch proxy list from {api_url}: {e}")
+        return []
+
+
+async def get_builtin_proxy_manager() -> ProxyManager | None:
+    """Get a ProxyManager from builtin proxy config (env vars).
+
+    Sources (in order of priority):
+    1. BUILTIN_PROXY_URL — comma-separated static proxy URLs
+    2. BUILTIN_PROXY_LIST_URL — API endpoint returning JSON proxy list (cached 10 min)
+
+    Returns None if no builtin proxies are configured.
+    """
+    global _builtin_proxy_cache, _builtin_proxy_cache_time
+
+    from app.config import settings
+
+    urls: list[str] = []
+
+    # 1. Static URLs from env var (comma-separated)
+    if settings.BUILTIN_PROXY_URL:
+        urls.extend(u.strip() for u in settings.BUILTIN_PROXY_URL.split(",") if u.strip())
+
+    # 2. Dynamic list from API (cached)
+    if settings.BUILTIN_PROXY_LIST_URL:
+        now = time.time()
+        if not _builtin_proxy_cache or (now - _builtin_proxy_cache_time) > _BUILTIN_CACHE_TTL:
+            fresh = await _fetch_proxy_list(settings.BUILTIN_PROXY_LIST_URL)
+            if fresh:
+                _builtin_proxy_cache = fresh
+                _builtin_proxy_cache_time = now
+        urls.extend(_builtin_proxy_cache)
+
+    if not urls:
+        return None
+
+    return ProxyManager.from_urls(urls)
