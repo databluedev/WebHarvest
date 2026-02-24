@@ -29,16 +29,13 @@ engines:
     engine: brave
     shortcut: br
     disabled: false
-  # Shopping engines
+  # Shopping engines (module names use underscores)
   - name: google shopping
-    engine: google shopping
+    engine: google_shopping
     shortcut: gshop
     disabled: false
-  - name: duckduckgo shopping
-    engine: duckduckgo extra
-    shortcut: ddgs
-    categories: shopping
+  - name: ebay
+    engine: ebay
+    shortcut: eb
     disabled: false
-    about:
-      website: https://duckduckgo.com/
-    search_type: shopping
+    categories: shopping
