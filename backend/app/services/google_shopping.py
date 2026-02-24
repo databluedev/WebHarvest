@@ -169,7 +169,7 @@ def _parse_price_string(text: str) -> tuple[float | None, str | None]:
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Lightweight standalone Playwright fetch
+# Lightweight standalone Playwright fetch (with minimal stealth)
 # ═══════════════════════════════════════════════════════════════════
 
 _USER_AGENT = (
@@ -178,13 +178,53 @@ _USER_AGENT = (
     "Chrome/131.0.0.0 Safari/537.36"
 )
 
+# Minimal stealth patches — just the critical detection vectors.
+# Google checks: navigator.webdriver, chrome.runtime, permissions query.
+# These few patches bypass the CAPTCHA without a full stealth framework.
+_STEALTH_SCRIPTS = [
+    # 1. Hide navigator.webdriver (the #1 detection flag)
+    """
+    Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+    });
+    """,
+    # 2. Fake chrome.runtime so Google sees a real Chrome browser
+    """
+    window.chrome = {
+        runtime: { id: undefined, connect: function(){}, sendMessage: function(){} },
+        loadTimes: function(){},
+        csi: function(){},
+    };
+    """,
+    # 3. Fake permissions query (Notification permission = 'denied' in headless)
+    """
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) =>
+        parameters.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : originalQuery(parameters);
+    """,
+    # 4. Fake plugins array (headless has 0 plugins)
+    """
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+    });
+    """,
+    # 5. Fake languages (headless sometimes has empty array)
+    """
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en'],
+    });
+    """,
+]
+
 
 async def _fetch_shopping_rendered(url: str) -> str | None:
     """Fetch Google Shopping page with a lightweight standalone Playwright.
 
-    Launches a fresh Chromium instance, navigates, extracts HTML, closes.
-    No browser pool, no stealth plugins, no fingerprinting — just a minimal
-    headless browser to render Google Shopping's JS.
+    Launches a fresh Chromium, applies minimal stealth patches to avoid
+    Google's CAPTCHA, navigates, extracts HTML, closes. No browser pool,
+    no heavy stealth framework — just the critical anti-detection bits.
     """
     pw = None
     browser = None
@@ -203,6 +243,7 @@ async def _fetch_shopping_rendered(url: str) -> str | None:
                 "--disable-default-apps",
                 "--disable-sync",
                 "--no-first-run",
+                "--disable-blink-features=AutomationControlled",
             ],
         )
         context = await browser.new_context(
@@ -210,6 +251,11 @@ async def _fetch_shopping_rendered(url: str) -> str | None:
             viewport={"width": 1366, "height": 768},
             locale="en-US",
         )
+
+        # Apply minimal stealth patches before any page loads
+        for script in _STEALTH_SCRIPTS:
+            await context.add_init_script(script)
+
         page = await context.new_page()
 
         # Block images/fonts/media for speed
@@ -231,7 +277,7 @@ async def _fetch_shopping_rendered(url: str) -> str | None:
         # Wait for product cards to render
         try:
             await page.wait_for_selector(
-                "div.sh-dgr__content", timeout=8000
+                "div.sh-dgr__content", timeout=10000
             )
         except Exception:
             try:
@@ -242,7 +288,7 @@ async def _fetch_shopping_rendered(url: str) -> str | None:
                 logger.warning("Shopping product cards did not render")
 
         # Let remaining JS settle
-        await asyncio.sleep(1)
+        await asyncio.sleep(1.5)
 
         # Accept cookies if prompt appears
         try:
@@ -568,52 +614,75 @@ def _parse_shopping_total(soup: BeautifulSoup) -> str | None:
 async def _search_via_searxng_shopping(
     query: str, num: int, page: int, lang: str
 ) -> GoogleShoppingResponse | None:
-    """Fetch shopping results from SearXNG."""
+    """Fetch shopping results from SearXNG.
+
+    Tries the 'shopping' category first. If it returns 0 results (engines
+    not configured), falls back to 'general' category with 'buy <query>'
+    to get product-like results.
+    """
     if not settings.SEARXNG_URL:
         return None
 
     base_url = settings.SEARXNG_URL.rstrip("/")
-    params: dict[str, str | int] = {
-        "q": query,
-        "format": "json",
-        "categories": "shopping",
-        "pageno": page,
-        "language": lang,
-    }
 
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(f"{base_url}/search", params=params)
-            resp.raise_for_status()
-            data = resp.json()
+    # Try shopping category first, then general as fallback
+    attempts = [
+        {"q": query, "format": "json", "categories": "shopping",
+         "pageno": page, "language": lang},
+        {"q": f"buy {query}", "format": "json", "categories": "general",
+         "pageno": page, "language": lang},
+    ]
 
-        products: list[GoogleShoppingProduct] = []
-        offset = (page - 1) * num
-        for i, item in enumerate(data.get("results", [])[:num]):
-            price_text = item.get("price", "")
-            price_value, currency = _parse_price_string(str(price_text))
-            products.append(
-                GoogleShoppingProduct(
-                    position=offset + i + 1,
-                    title=item.get("title", ""),
-                    url=item.get("url", ""),
-                    image_url=item.get("thumbnail") or item.get("img_src"),
-                    price=str(price_text) if price_text else None,
-                    price_value=price_value,
-                    currency=currency,
-                    merchant=item.get("engine"),
+    for params in attempts:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(f"{base_url}/search", params=params)
+                resp.raise_for_status()
+                data = resp.json()
+
+            results_list = data.get("results", [])
+            logger.info(
+                "SearXNG [%s] returned %d results for '%s'",
+                params.get("categories"),
+                len(results_list),
+                params.get("q"),
+            )
+
+            if not results_list:
+                continue
+
+            products: list[GoogleShoppingProduct] = []
+            offset = (page - 1) * num
+            for i, item in enumerate(results_list[:num]):
+                price_text = item.get("price", "")
+                price_value, currency = _parse_price_string(str(price_text))
+                products.append(
+                    GoogleShoppingProduct(
+                        position=offset + i + 1,
+                        title=item.get("title", ""),
+                        url=item.get("url", ""),
+                        image_url=item.get("thumbnail") or item.get("img_src"),
+                        price=str(price_text) if price_text else None,
+                        price_value=price_value,
+                        currency=currency,
+                        merchant=item.get("engine"),
+                    )
                 )
-            )
 
-        related = [RelatedSearch(query=s) for s in data.get("suggestions", [])]
+            related = [
+                RelatedSearch(query=s)
+                for s in data.get("suggestions", [])
+            ]
 
-        if products:
-            return GoogleShoppingResponse(
-                query=query, time_taken=0, products=products,
-                related_searches=related,
+            if products:
+                return GoogleShoppingResponse(
+                    query=query, time_taken=0, products=products,
+                    related_searches=related,
+                )
+        except Exception as e:
+            logger.warning(
+                "SearXNG %s search failed: %s", params.get("categories"), e
             )
-    except Exception as e:
-        logger.warning("SearXNG shopping search failed: %s", e)
 
     return None
 
