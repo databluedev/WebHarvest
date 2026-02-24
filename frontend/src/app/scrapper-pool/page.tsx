@@ -32,7 +32,7 @@ const SCRAPER_APIS: Array<{
     description: "Search results with titles, links, snippets, and positions",
     icon: Search,
     accent: "cyan",
-    status: "coming-soon",
+    status: "active",
   },
   {
     id: "google-shopping",

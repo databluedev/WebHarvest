@@ -609,6 +609,52 @@ class ApiClient {
   getSSEUrl(jobId: string): string {
     return `${API_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(this.getToken() || "")}`;
   }
+
+  // ── Scrapper Pool: Google ────────────────────────────────
+  async googleSearch(params: {
+    query: string;
+    num_results?: number;
+    page?: number;
+    language?: string;
+    country?: string;
+    safe_search?: boolean;
+    time_range?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      query: string;
+      total_results?: string;
+      time_taken: number;
+      organic_results: Array<{
+        position: number;
+        title: string;
+        url: string;
+        displayed_url?: string;
+        snippet?: string;
+        date?: string;
+        sitelinks?: Array<{ title: string; url: string }>;
+      }>;
+      featured_snippet?: {
+        title: string;
+        url: string;
+        content: string;
+        type: string;
+      };
+      people_also_ask?: Array<{ question: string; snippet?: string }>;
+      related_searches?: Array<{ query: string }>;
+      knowledge_panel?: {
+        title: string;
+        type?: string;
+        description?: string;
+        source?: string;
+        image_url?: string;
+        attributes?: Record<string, string>;
+      };
+    }>("/v1/data/google/search", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
 }
 
 export const API_BASE_URL = API_URL;

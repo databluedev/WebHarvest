@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_SCRAPE: int = 100
     RATE_LIMIT_CRAWL: int = 20
     RATE_LIMIT_MAP: int = 50
+    RATE_LIMIT_DATA_API: int = 60  # Scrapper Pool data APIs
 
     # Scraping
     DEFAULT_TIMEOUT: int = 30000  # ms
