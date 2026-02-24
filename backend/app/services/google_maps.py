@@ -140,258 +140,197 @@ def _build_place_url(
 
 
 # ═══════════════════════════════════════════════════════════════════
-# nodriver fetch
+# nodriver fetch (uses persistent browser pool)
 # ═══════════════════════════════════════════════════════════════════
 
 
 async def _fetch_maps_search(
     url: str, num_results: int = 20
 ) -> str | None:
-    """Fetch Google Maps search results page using nodriver.
+    """Fetch Google Maps search results page using the persistent browser pool.
 
+    Uses NoDriverPool to avoid the 5-10s browser startup cost on each call.
+    Fast redirect detection: checks URL after 2s instead of waiting for
+    selector timeouts (saves 10+ seconds on city-name searches).
     Scrolls the results feed to load more places if needed.
     """
-    from app.services.nodriver_helper import fetch_page_nodriver
+    from app.services.nodriver_helper import NoDriverPool
 
-    # Calculate how many scroll rounds we need
-    # Google Maps loads ~20 results initially, then ~20 per scroll
-    scrolls_needed = min(
-        _MAX_SCROLL_ROUNDS,
-        max(0, (num_results - 20) // 20),
-    )
-
-    if scrolls_needed == 0:
-        # Simple fetch — no scrolling needed
-        html, _ = await fetch_page_nodriver(
-            url,
-            wait_selector="div[role='feed']",
-            wait_selector_fallback="div.Nv2PK",
-            wait_time=4,
-        )
-        return html
-
-    # Need scrolling — use nodriver directly for more control
-    display = None
+    pool = NoDriverPool.get()
+    tab = None
     try:
-        import nodriver as uc
-        from pyvirtualdisplay import Display
-
-        from app.services.nodriver_helper import find_chrome_binary
-
-        chrome_path = find_chrome_binary()
-        if not chrome_path:
-            logger.warning("No Chrome binary found for Maps")
+        tab = await pool.acquire_tab(url)
+        if tab is None:
+            logger.warning("Maps search: failed to acquire tab")
             return None
 
-        display = Display(visible=False, size=(1920, 1080))
-        display.start()
+        # Brief initial wait for navigation
+        await tab.sleep(1)
 
-        browser = await uc.start(
-            headless=False,
-            browser_executable_path=chrome_path,
-            sandbox=False,
-            lang="en-US",
-            browser_args=[
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--window-size=1920,1080",
-                "--disable-gpu",
-            ],
-        )
-
-        try:
-            tab = await browser.get(url)
-
-            # Wait for results feed
-            try:
-                await tab.select("div[role='feed']", timeout=12)
-            except Exception:
-                try:
-                    await tab.select("div.Nv2PK", timeout=8)
-                except Exception:
-                    logger.warning("Maps feed did not render")
-
-            await tab.sleep(3)
-
-            # Scroll to load more results
-            for i in range(scrolls_needed):
-                await tab.evaluate(
-                    """
-                    const feed = document.querySelector("div[role='feed']");
-                    if (feed) feed.scrollTo(0, feed.scrollHeight);
-                    """
-                )
-                await tab.sleep(2)
-
-                # Check how many results we have
-                count = await tab.evaluate(
-                    "document.querySelectorAll('div[role=\"article\"]').length"
-                )
-                logger.info("Maps scroll %d: %s results loaded", i + 1, count)
-                if count and int(count) >= num_results:
-                    break
-
-            await tab.sleep(1)
+        # Fast redirect detection: check URL immediately
+        current_url = str(await tab.evaluate("window.location.href") or "")
+        if "/maps/place/" in current_url:
+            # Google redirected to a place page (e.g. city name search).
+            # Return HTML immediately for fallback parsing as place_details.
+            logger.info("Maps redirect to place detected, returning for fallback")
             html = await tab.get_content()
-            if not html:
-                html = await tab.evaluate(
-                    "document.documentElement.outerHTML"
-                )
             return html
 
-        finally:
-            browser.stop()
+        # Poll for search cards — check every 0.5s, max 3.5s
+        cards_found = False
+        for attempt in range(7):  # 7 × 0.5s = max 3.5s wait
+            card_count = await tab.evaluate(
+                "document.querySelectorAll('div.Nv2PK').length"
+            )
+            if card_count and int(card_count) > 0:
+                cards_found = True
+                logger.info(
+                    "Maps search: %s cards at attempt %d", card_count, attempt
+                )
+                break
+            await tab.sleep(0.5)
+
+        if not cards_found:
+            logger.info("Maps search: no cards after polling")
+
+        # Scroll to load more results if needed
+        scrolls_needed = min(
+            _MAX_SCROLL_ROUNDS,
+            max(0, (num_results - 20) // 20),
+        )
+        for i in range(scrolls_needed):
+            await tab.evaluate(
+                """
+                const feed = document.querySelector("div[role='feed']");
+                if (feed) feed.scrollTo(0, feed.scrollHeight);
+                """
+            )
+            await tab.sleep(2)
+            count = await tab.evaluate(
+                "document.querySelectorAll('div[role=\"article\"]').length"
+            )
+            logger.info("Maps scroll %d: %s results loaded", i + 1, count)
+            if count and int(count) >= num_results:
+                break
+
+        html = await tab.get_content()
+        if not html:
+            html = await tab.evaluate("document.documentElement.outerHTML")
+        return html
 
     except Exception as e:
         logger.warning("Maps search fetch failed: %s", e)
         return None
     finally:
-        if display:
-            try:
-                display.stop()
-            except Exception:
-                pass
+        if tab:
+            await pool.release_tab(tab)
 
 
 async def _fetch_maps_details(url: str) -> tuple[str | None, dict]:
-    """Fetch Google Maps place details page using nodriver.
+    """Fetch Google Maps place details page using the persistent browser pool.
 
     Requires a URL with /data= parameter to trigger the details panel.
-    Without it, Google Maps shows only the map and DOM elements stay empty.
     Polls for actual text content before grabbing the HTML.
 
     Returns:
-        (html, metadata) — metadata has coordinates extracted via JS since
-        Google Maps resolves them client-side and they aren't in the static HTML.
+        (html, metadata) — metadata has coordinates extracted via JS.
     """
-    display = None
+    from app.services.nodriver_helper import NoDriverPool
+
+    pool = NoDriverPool.get()
+    tab = None
     try:
-        import nodriver as uc
-        from pyvirtualdisplay import Display
+        tab = await pool.acquire_tab(url)
+        if tab is None:
+            logger.warning("Maps details: failed to acquire tab")
+            return None, {}
 
-        from app.services.nodriver_helper import find_chrome_binary
-
-        chrome_path = find_chrome_binary()
-        if not chrome_path:
-            logger.warning("No Chrome binary found for Maps details")
-            return None
-
-        display = Display(visible=False, size=(1920, 1080))
-        display.start()
-
-        browser = await uc.start(
-            headless=False,
-            browser_executable_path=chrome_path,
-            sandbox=False,
-            lang="en-US",
-            browser_args=[
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--window-size=1920,1080",
-                "--disable-gpu",
-            ],
-        )
-
+        # Wait for the page structure
         try:
-            tab = await browser.get(url)
+            await tab.select("div[role='main']", timeout=8)
+        except Exception:
+            pass
 
-            # Wait for the page structure
-            try:
-                await tab.select("div[role='main']", timeout=12)
-            except Exception:
-                pass
+        await tab.sleep(1)
 
-            await tab.sleep(2)
+        # Dismiss promo overlays if present
+        await tab.evaluate("""
+            (() => {
+                const btn = document.querySelector(
+                    'button[jsaction*="reveal.card.close"], '
+                    + '[role="dialog"] button[aria-label="Close"]'
+                );
+                if (btn) btn.click();
+            })()
+        """)
 
-            # Dismiss promo overlays if present
-            await tab.evaluate("""
+        # Poll for actual content — the details panel loads asynchronously
+        for attempt in range(10):
+            has_content = await tab.evaluate("""
                 (() => {
-                    const btn = document.querySelector(
-                        'button[jsaction*="reveal.card.close"], '
-                        + '[role="dialog"] button[aria-label="Close"]'
-                    );
-                    if (btn) btn.click();
+                    const h1 = document.querySelector('h1.DUwDvf, div[role="main"] h1');
+                    const addr = document.querySelector('[data-item-id="address"]');
+                    const title = h1 ? h1.innerText.trim() : '';
+                    return title.length > 0 || addr !== null;
                 })()
             """)
+            if has_content:
+                logger.info("Maps details content ready at attempt %d", attempt)
+                break
+            await tab.sleep(0.5)
 
-            # Poll for actual content — the details panel loads asynchronously
-            for attempt in range(12):
-                has_content = await tab.evaluate("""
-                    (() => {
-                        const h1 = document.querySelector('h1.DUwDvf, div[role="main"] h1');
-                        const addr = document.querySelector('[data-item-id="address"]');
-                        const title = h1 ? h1.innerText.trim() : '';
-                        return title.length > 0 || addr !== null;
-                    })()
-                """)
-                if has_content:
-                    logger.info("Maps details content ready at attempt %d", attempt)
-                    break
-                await tab.sleep(1)
+        # Brief settle time for remaining sections (hours, reviews)
+        await tab.sleep(1)
 
-            # Extra settle time for remaining sections (hours, reviews)
-            await tab.sleep(2)
-
-            # Extract coordinates via JS — Google Maps resolves them
-            # client-side and they don't appear in the static HTML
-            metadata: dict = {}
-            try:
-                coords_json = await tab.evaluate("""
-                    (() => {
-                        // Strategy 1: Current URL may have updated @lat,lng
-                        const url = window.location.href;
-                        const m = url.match(/@([\\.\\d-]+),([\\.\\d-]+)/);
-                        if (m) {
-                            const lat = parseFloat(m[1]);
-                            const lng = parseFloat(m[2]);
+        # Extract coordinates via JS
+        metadata: dict = {}
+        try:
+            coords_json = await tab.evaluate("""
+                (() => {
+                    const url = window.location.href;
+                    const m = url.match(/@([\\.\\d-]+),([\\.\\d-]+)/);
+                    if (m) {
+                        const lat = parseFloat(m[1]);
+                        const lng = parseFloat(m[2]);
+                        if (Math.abs(lat) > 0.01 || Math.abs(lng) > 0.01) {
+                            return JSON.stringify({lat, lng});
+                        }
+                    }
+                    const og = document.querySelector('meta[property="og:image"]');
+                    if (og) {
+                        const c = og.content || '';
+                        const m2 = c.match(/center=([\\d.-]+)%2C([\\d.-]+)/);
+                        if (m2) {
+                            const lat = parseFloat(m2[1]);
+                            const lng = parseFloat(m2[2]);
                             if (Math.abs(lat) > 0.01 || Math.abs(lng) > 0.01) {
                                 return JSON.stringify({lat, lng});
                             }
                         }
-                        // Strategy 2: Extract from og:image staticmap URL
-                        const og = document.querySelector('meta[property="og:image"]');
-                        if (og) {
-                            const c = og.content || '';
-                            const m2 = c.match(/center=([\\d.-]+)%2C([\\d.-]+)/);
-                            if (m2) {
-                                const lat = parseFloat(m2[1]);
-                                const lng = parseFloat(m2[2]);
-                                if (Math.abs(lat) > 0.01 || Math.abs(lng) > 0.01) {
-                                    return JSON.stringify({lat, lng});
-                                }
-                            }
-                        }
-                        return null;
-                    })()
-                """)
-                if coords_json and coords_json != "null":
-                    import json as _json
+                    }
+                    return null;
+                })()
+            """)
+            if coords_json and coords_json != "null":
+                import json as _json
 
-                    coords = _json.loads(coords_json)
-                    metadata["latitude"] = coords["lat"]
-                    metadata["longitude"] = coords["lng"]
-            except Exception:
-                pass
+                coords = _json.loads(coords_json)
+                metadata["latitude"] = coords["lat"]
+                metadata["longitude"] = coords["lng"]
+        except Exception:
+            pass
 
-            html = await tab.get_content()
-            if not html:
-                html = await tab.evaluate(
-                    "document.documentElement.outerHTML"
-                )
-            return html, metadata
-
-        finally:
-            browser.stop()
+        html = await tab.get_content()
+        if not html:
+            html = await tab.evaluate("document.documentElement.outerHTML")
+        return html, metadata
 
     except Exception as e:
         logger.warning("Maps details fetch failed: %s", e)
         return None, {}
     finally:
-        if display:
-            try:
-                display.stop()
-            except Exception:
-                pass
+        if tab:
+            await pool.release_tab(tab)
 
 
 # ═══════════════════════════════════════════════════════════════════
