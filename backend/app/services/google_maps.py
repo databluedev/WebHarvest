@@ -32,7 +32,7 @@ from app.schemas.data_google import (
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 300  # 5 minutes
-_MAX_SCROLL_ROUNDS = 5  # Max scroll iterations for loading more results
+_MAX_SCROLL_ROUNDS = 15  # Max scroll iterations for loading more results
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -319,25 +319,48 @@ async def _fetch_maps_search(
         if not cards_found:
             logger.info("Maps search: no cards after polling")
 
-        # Scroll to load more results if needed
-        scrolls_needed = min(
-            _MAX_SCROLL_ROUNDS,
-            max(0, (num_results - 20) // 20),
-        )
-        for i in range(scrolls_needed):
+        # Scroll the feed to load ALL results.
+        # Google Maps lazy-loads ~7-10 cards at a time.
+        # Scroll first, then count — repeat until no new cards appear.
+        prev_count = 0
+        stale_rounds = 0
+        for i in range(_MAX_SCROLL_ROUNDS):
+            # Scroll the feed
             await tab.evaluate(
                 """
                 const feed = document.querySelector("div[role='feed']");
                 if (feed) feed.scrollTo(0, feed.scrollHeight);
                 """
             )
-            await tab.sleep(2)
-            count = await tab.evaluate(
-                "document.querySelectorAll('div[role=\"article\"]').length"
+            await tab.sleep(1.5)
+
+            # Count cards after scroll
+            count_raw = await tab.evaluate(
+                "document.querySelectorAll('div.Nv2PK').length"
             )
-            logger.info("Maps scroll %d: %s results loaded", i + 1, count)
-            if count and int(count) >= num_results:
+            current_count = int(count_raw) if count_raw else 0
+            logger.info("Maps scroll %d: %d cards", i + 1, current_count)
+
+            # Enough results — stop
+            if current_count >= num_results:
+                logger.info(
+                    "Maps scroll: hit target %d, stopping", num_results
+                )
                 break
+
+            # No new cards loaded — all results are in
+            if current_count == prev_count:
+                stale_rounds += 1
+                if stale_rounds >= 2:
+                    logger.info(
+                        "Maps scroll: no new cards after %d stale scrolls (%d total)",
+                        stale_rounds, current_count,
+                    )
+                    break
+            else:
+                stale_rounds = 0
+
+            prev_count = current_count
 
         html = await tab.get_content()
         if not html:
