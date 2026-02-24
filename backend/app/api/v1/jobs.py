@@ -106,9 +106,9 @@ async def retry_job(
         created_at=datetime.now(timezone.utc),
     )
     db.add(new_job)
-    await db.flush()
+    await db.commit()
 
-    # Dispatch to the correct Celery queue
+    # Dispatch to the correct Celery queue (job is now visible to workers)
     new_job_id = str(new_job.id)
     config = original_job.config or {}
 

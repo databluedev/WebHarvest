@@ -59,6 +59,12 @@ def process_map(self, job_id: str, config: dict):
         async with session_factory() as db:
             job = await db.get(Job, UUID(job_id))
             if not job:
+                # Safety: DB commit may still be in-flight — retry once
+                import asyncio as _aio
+                await _aio.sleep(2)
+                job = await db.get(Job, UUID(job_id))
+            if not job:
+                logger.error(f"Map job {job_id} not found in DB — aborting")
                 return
             job.status = "running"
             job.started_at = datetime.now(timezone.utc)

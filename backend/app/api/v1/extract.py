@@ -195,9 +195,9 @@ async def _start_async_extract(
         total_pages=len(request.urls),
     )
     db.add(job)
-    await db.flush()
+    await db.commit()
 
-    # Queue the extraction task
+    # Queue the extraction task (job is now visible to workers)
     process_extract.delay(str(job.id), request.model_dump())
 
     return ExtractStartResponse(

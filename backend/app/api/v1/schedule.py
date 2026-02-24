@@ -307,9 +307,9 @@ async def trigger_schedule(
         config=config,
     )
     db.add(job)
-    await db.flush()
+    await db.commit()
 
-    # Dispatch to the appropriate worker
+    # Dispatch to the appropriate worker (job is now visible to workers)
     if schedule.schedule_type == "crawl":
         from app.workers.crawl_worker import process_crawl
 

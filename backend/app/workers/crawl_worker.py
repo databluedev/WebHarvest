@@ -93,6 +93,12 @@ def process_crawl(self, job_id: str, config: dict):
         async with session_factory() as db:
             job = await db.get(Job, UUID(job_id))
             if not job:
+                # Safety: DB commit may still be in-flight — retry once
+                import asyncio as _aio
+                await _aio.sleep(2)
+                job = await db.get(Job, UUID(job_id))
+            if not job:
+                logger.error(f"Crawl job {job_id} not found in DB — aborting")
                 return
             user_id = job.user_id
             job.status = "running"

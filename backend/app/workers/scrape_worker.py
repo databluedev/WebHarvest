@@ -74,6 +74,11 @@ def process_scrape(self, job_id: str, url: str, config: dict):
                 # Update job status
                 job = await db.get(Job, UUID(job_id))
                 if not job:
+                    # Safety: DB commit may still be in-flight — retry once
+                    await asyncio.sleep(2)
+                    job = await db.get(Job, UUID(job_id))
+                if not job:
+                    logger.error(f"Scrape job {job_id} not found in DB — aborting")
                     return
 
                 job.status = "running"

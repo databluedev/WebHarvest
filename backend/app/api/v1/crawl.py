@@ -132,7 +132,8 @@ async def start_crawl(
     if request.max_pages > settings.MAX_CRAWL_PAGES:
         request.max_pages = settings.MAX_CRAWL_PAGES
 
-    # Create job record
+    # Create job record — commit BEFORE dispatching to Celery so the
+    # worker can find the row when it starts (avoids race condition).
     job = Job(
         user_id=user.id,
         type="crawl",
@@ -140,9 +141,9 @@ async def start_crawl(
         config=request.model_dump(),
     )
     db.add(job)
-    await db.flush()
+    await db.commit()
 
-    # Queue the crawl task
+    # Queue the crawl task (job is now visible to workers)
     process_crawl.delay(str(job.id), request.model_dump())
 
     return CrawlStartResponse(

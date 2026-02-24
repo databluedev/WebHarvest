@@ -65,9 +65,9 @@ async def map_site(
         total_pages=0,
     )
     db.add(job)
-    await db.flush()
+    await db.commit()
 
-    # Dispatch to Celery worker (non-blocking)
+    # Dispatch to Celery worker (job is now visible to workers)
     process_map.delay(str(job.id), request.model_dump())
 
     return MapResponse(

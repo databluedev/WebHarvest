@@ -114,9 +114,9 @@ async def start_search(
         total_pages=request.num_results,
     )
     db.add(job)
-    await db.flush()
+    await db.commit()
 
-    # Queue the search task
+    # Queue the search task (job is now visible to workers)
     process_search.delay(str(job.id), request.model_dump())
 
     search_jobs_total.labels(status="started").inc()
