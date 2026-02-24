@@ -391,7 +391,7 @@ export default function ScrapperPoolPage() {
                             onChange={(e) => setNumResults(Number(e.target.value))}
                             className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-cyan-500/40 transition-colors"
                           >
-                            {[5, 10, 20, 30, 50].map((n) => (
+                            {[5, 10, 20, 30, 50, 75, 100].map((n) => (
                               <option key={n} value={n}>{n}</option>
                             ))}
                           </select>
