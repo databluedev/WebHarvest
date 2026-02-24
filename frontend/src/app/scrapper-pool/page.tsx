@@ -150,13 +150,8 @@ export default function ScrapperPoolPage() {
   const [mapsPlaceId, setMapsPlaceId] = useState("");
   const [mapsCid, setMapsCid] = useState("");
   const [mapsType, setMapsType] = useState("");
-  const [mapsNumResults, setMapsNumResults] = useState(20);
   const [mapsLanguage, setMapsLanguage] = useState("en");
-  const [mapsCountry, setMapsCountry] = useState("");
   const [mapsSortBy, setMapsSortBy] = useState("");
-  const [mapsMinRating, setMapsMinRating] = useState(0);
-  const [mapsPriceLevel, setMapsPriceLevel] = useState(0);
-  const [mapsIncludeReviews, setMapsIncludeReviews] = useState(false);
 
   const handleCardClick = (apiId: string, status: ApiStatus) => {
     if (status !== "active") return;
@@ -224,13 +219,9 @@ export default function ScrapperPoolPage() {
         ...(mapsPlaceId && { place_id: mapsPlaceId.trim() }),
         ...(mapsCid && { cid: mapsCid.trim() }),
         ...(mapsType && { type: mapsType }),
-        num_results: mapsNumResults,
         language: mapsLanguage,
-        ...(mapsCountry && { country: mapsCountry }),
         ...(mapsSortBy && { sort_by: mapsSortBy }),
-        ...(mapsMinRating > 0 && { min_rating: mapsMinRating }),
-        ...(mapsPriceLevel > 0 && { price_level: mapsPriceLevel }),
-        include_reviews: mapsIncludeReviews,
+        include_reviews: true,
       });
       setResult(res);
     } catch (err: any) {
@@ -1097,115 +1088,21 @@ export default function ScrapperPoolPage() {
                       </div>
                     </div>
 
-                    {/* Sort + Results */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Sort By</label>
-                        <div className="relative">
-                          <select
-                            value={mapsSortBy}
-                            onChange={(e) => setMapsSortBy(e.target.value)}
-                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
-                          >
-                            <option value="">Relevance</option>
-                            <option value="rating">Rating</option>
-                            <option value="reviews">Reviews</option>
-                            <option value="distance">Distance</option>
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Results</label>
-                        <div className="relative">
-                          <select
-                            value={mapsNumResults}
-                            onChange={(e) => setMapsNumResults(Number(e.target.value))}
-                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
-                          >
-                            {[5, 10, 20, 30, 50, 100].map((n) => (
-                              <option key={n} value={n}>{n}</option>
-                            ))}
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Min Rating + Price Level */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Min Rating</label>
-                        <div className="flex gap-2">
-                          {[0, 3, 3.5, 4, 4.5].map((r) => (
-                            <button
-                              key={r}
-                              onClick={() => setMapsMinRating(r)}
-                              className={`px-3 py-2 text-[12px] font-mono border transition-colors ${
-                                mapsMinRating === r
-                                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                                  : "border-white/10 text-white/30 hover:text-white/60"
-                              }`}
-                            >
-                              {r === 0 ? "Any" : `${r}+`}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Price Level</label>
-                        <div className="flex gap-2">
-                          {[0, 1, 2, 3, 4].map((p) => (
-                            <button
-                              key={p}
-                              onClick={() => setMapsPriceLevel(p)}
-                              className={`px-3 py-2 text-[12px] font-mono border transition-colors ${
-                                mapsPriceLevel === p
-                                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                                  : "border-white/10 text-white/30 hover:text-white/60"
-                              }`}
-                            >
-                              {p === 0 ? "Any" : "$".repeat(p)}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Country + Reviews toggle */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Country</label>
-                        <div className="relative">
-                          <select
-                            value={mapsCountry}
-                            onChange={(e) => setMapsCountry(e.target.value)}
-                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
-                          >
-                            <option value="">Any</option>
-                            <option value="us">United States</option>
-                            <option value="gb">United Kingdom</option>
-                            <option value="ca">Canada</option>
-                            <option value="au">Australia</option>
-                            <option value="de">Germany</option>
-                            <option value="fr">France</option>
-                            <option value="in">India</option>
-                            <option value="jp">Japan</option>
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
-                        </div>
-                      </div>
-                      <div className="flex items-end pb-1">
-                        <button
-                          onClick={() => setMapsIncludeReviews(!mapsIncludeReviews)}
-                          className={`w-full border py-3 text-[12px] uppercase tracking-[0.15em] font-mono transition-colors ${
-                            mapsIncludeReviews
-                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
-                              : "border-white/10 text-white/30 hover:text-white/60"
-                          }`}
+                    {/* Sort By */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Sort By</label>
+                      <div className="relative">
+                        <select
+                          value={mapsSortBy}
+                          onChange={(e) => setMapsSortBy(e.target.value)}
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
                         >
-                          {mapsIncludeReviews ? "Reviews: ON" : "Include Reviews"}
-                        </button>
+                          <option value="">Relevance</option>
+                          <option value="rating">Rating</option>
+                          <option value="reviews">Reviews</option>
+                          <option value="distance">Distance</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
                       </div>
                     </div>
 

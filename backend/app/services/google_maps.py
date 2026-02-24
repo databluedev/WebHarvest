@@ -1211,6 +1211,37 @@ async def google_maps(
             if "captcha" not in html_lower and "unusual traffic" not in html_lower:
                 places = _parse_search_results(html)
                 logger.info("Maps search: %d places parsed", len(places))
+
+                # Fallback: if no search cards found, Google may have
+                # navigated to a single place (e.g. searching a city name).
+                # Try parsing the page as a place details view.
+                if not places:
+                    # Extract coords from og:image since the search fetcher
+                    # doesn't do JS-based coordinate extraction
+                    meta: dict = {}
+                    og = BeautifulSoup(html, "lxml").select_one(
+                        "meta[property='og:image']"
+                    )
+                    if og:
+                        c = og.get("content", "")
+                        cm = re.search(r"center=([\d.-]+)%2C([\d.-]+)", c)
+                        if cm:
+                            try:
+                                meta["latitude"] = float(cm.group(1))
+                                meta["longitude"] = float(cm.group(2))
+                            except ValueError:
+                                pass
+
+                    place = _parse_place_details(
+                        html, include_reviews, reviews_limit, metadata=meta
+                    )
+                    if place:
+                        places.append(place)
+                        search_type = "place_details"
+                        logger.info(
+                            "Maps fallback: parsed as place details '%s'",
+                            place.title,
+                        )
             else:
                 logger.warning("Google CAPTCHA detected during Maps search")
 
