@@ -1246,15 +1246,18 @@ async def scrape_url(
 
     hard_site = _is_hard_site(url)
 
-    # Auto-inject builtin proxy for hard sites when no user proxy is configured
-    if not proxy_url and hard_site and settings.BUILTIN_PROXY_URL:
+    # Auto-inject builtin proxy when no user proxy is configured:
+    # - Hard sites: always (they need proxy to avoid blocks)
+    # - Any site: when user explicitly requests proxy via use_proxy=True
+    _use_proxy_requested = getattr(request, "use_proxy", False)
+    if not proxy_url and settings.BUILTIN_PROXY_URL and (hard_site or _use_proxy_requested):
         from app.services.proxy import ProxyManager as _PM
         _builtin_pm = _PM.from_urls([settings.BUILTIN_PROXY_URL])
         _builtin_obj = _builtin_pm.get_random()
         if _builtin_obj:
             proxy_url = _builtin_pm.to_httpx(_builtin_obj)
             proxy_playwright = _builtin_pm.to_playwright(_builtin_obj)
-            logger.info(f"Using builtin proxy for hard site {domain}")
+            logger.info(f"Using builtin proxy for {domain} (hard_site={hard_site}, use_proxy={_use_proxy_requested})")
 
     needs_browser = bool(
         request.actions or "screenshot" in request.formats or request.wait_for > 0
@@ -3347,15 +3350,16 @@ async def scrape_url_fetch_only(
 
     hard_site = _is_hard_site(url)
 
-    # Auto-inject builtin proxy for hard sites when no user proxy is configured
-    if not proxy_url and hard_site and settings.BUILTIN_PROXY_URL:
+    # Auto-inject builtin proxy when no user proxy is configured
+    _use_proxy_requested = getattr(request, "use_proxy", False)
+    if not proxy_url and settings.BUILTIN_PROXY_URL and (hard_site or _use_proxy_requested):
         from app.services.proxy import ProxyManager as _PM
         _builtin_pm = _PM.from_urls([settings.BUILTIN_PROXY_URL])
         _builtin_obj = _builtin_pm.get_random()
         if _builtin_obj:
             proxy_url = _builtin_pm.to_httpx(_builtin_obj)
             proxy_playwright = _builtin_pm.to_playwright(_builtin_obj)
-            logger.info(f"Using builtin proxy for hard site {urlparse(url).netloc}")
+            logger.info(f"Using builtin proxy for {urlparse(url).netloc} (hard_site={hard_site}, use_proxy={_use_proxy_requested})")
 
     needs_browser = bool(
         request.actions or "screenshot" in request.formats or request.wait_for > 0
