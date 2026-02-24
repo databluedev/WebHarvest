@@ -113,6 +113,7 @@ class Settings(BaseSettings):
 
     # Proxy
     USE_BUILTIN_PROXIES: bool = False
+    BUILTIN_PROXY_URL: str = ""  # System-wide proxy URL — auto-used for hard sites (e.g. http://user:pass@proxy:port)
     SCRAPE_DO_API_KEY: str = ""  # scrape.do proxy API key — auto-used for hard sites
 
     # Search

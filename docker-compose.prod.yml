@@ -31,6 +31,7 @@ services:
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SEARXNG_URL=http://searxng:8080
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
+      - BUILTIN_PROXY_URL=${BUILTIN_PROXY_URL:-}
       - LOG_FORMAT=json
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=production
@@ -71,6 +72,7 @@ services:
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SEARXNG_URL=http://searxng:8080
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
+      - BUILTIN_PROXY_URL=${BUILTIN_PROXY_URL:-}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=production
     command: celery -A app.workers.celery_app worker -l warning -c 3 -Q scrape
@@ -108,6 +110,7 @@ services:
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SEARXNG_URL=http://searxng:8080
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
+      - BUILTIN_PROXY_URL=${BUILTIN_PROXY_URL:-}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=production
     command: celery -A app.workers.celery_app worker -l warning -c 1 -Q crawl
@@ -143,6 +146,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - SEARXNG_URL=http://searxng:8080
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
+      - BUILTIN_PROXY_URL=${BUILTIN_PROXY_URL:-}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=production
     command: celery -A app.workers.celery_app worker -l warning -c 2 -Q search,map

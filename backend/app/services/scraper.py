@@ -1245,6 +1245,17 @@ async def scrape_url(
             proxy_playwright = proxy_manager.to_playwright(proxy_obj)
 
     hard_site = _is_hard_site(url)
+
+    # Auto-inject builtin proxy for hard sites when no user proxy is configured
+    if not proxy_url and hard_site and settings.BUILTIN_PROXY_URL:
+        from app.services.proxy import ProxyManager as _PM
+        _builtin_pm = _PM.from_urls([settings.BUILTIN_PROXY_URL])
+        _builtin_obj = _builtin_pm.get_random()
+        if _builtin_obj:
+            proxy_url = _builtin_pm.to_httpx(_builtin_obj)
+            proxy_playwright = _builtin_pm.to_playwright(_builtin_obj)
+            logger.info(f"Using builtin proxy for hard site {domain}")
+
     needs_browser = bool(
         request.actions or "screenshot" in request.formats or request.wait_for > 0
     )
@@ -3335,6 +3346,17 @@ async def scrape_url_fetch_only(
             proxy_playwright = proxy_manager.to_playwright(proxy_obj)
 
     hard_site = _is_hard_site(url)
+
+    # Auto-inject builtin proxy for hard sites when no user proxy is configured
+    if not proxy_url and hard_site and settings.BUILTIN_PROXY_URL:
+        from app.services.proxy import ProxyManager as _PM
+        _builtin_pm = _PM.from_urls([settings.BUILTIN_PROXY_URL])
+        _builtin_obj = _builtin_pm.get_random()
+        if _builtin_obj:
+            proxy_url = _builtin_pm.to_httpx(_builtin_obj)
+            proxy_playwright = _builtin_pm.to_playwright(_builtin_obj)
+            logger.info(f"Using builtin proxy for hard site {urlparse(url).netloc}")
+
     needs_browser = bool(
         request.actions or "screenshot" in request.formats or request.wait_for > 0
     )

@@ -22,6 +22,7 @@ services:
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SEARXNG_URL=http://searxng:8080
+      - BUILTIN_PROXY_URL=${BUILTIN_PROXY_URL:-}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -51,6 +52,7 @@ services:
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SEARXNG_URL=http://searxng:8080
+      - BUILTIN_PROXY_URL=${BUILTIN_PROXY_URL:-}
     command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 3 -Q scrape' /app/app
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
@@ -81,6 +83,7 @@ services:
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SEARXNG_URL=http://searxng:8080
+      - BUILTIN_PROXY_URL=${BUILTIN_PROXY_URL:-}
     command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 1 -Q crawl' /app/app
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
@@ -109,6 +112,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - SEARXNG_URL=http://searxng:8080
+      - BUILTIN_PROXY_URL=${BUILTIN_PROXY_URL:-}
     command: watchfiles --filter python 'celery -A app.workers.celery_app worker -l info -c 2 -Q search,map' /app/app
     healthcheck:
       test: ["CMD", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
