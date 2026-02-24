@@ -43,6 +43,7 @@ def _run_async(coro):
     bind=True,
     max_retries=3,
     autoretry_for=(Exception,),
+    dont_autoretry_for=(ValueError, KeyError, TypeError),
     retry_backoff=True,
     retry_backoff_max=120,
     retry_jitter=True,

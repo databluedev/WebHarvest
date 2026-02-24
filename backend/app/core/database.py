@@ -59,6 +59,7 @@ def create_worker_session_factory():
         _worker_kwargs["max_overflow"] = 2
         _worker_kwargs["pool_pre_ping"] = True
         _worker_kwargs["pool_recycle"] = 3600
+        _worker_kwargs["pool_timeout"] = 10
 
     worker_engine = create_async_engine(settings.DATABASE_URL, **_worker_kwargs)
     return async_sessionmaker(
