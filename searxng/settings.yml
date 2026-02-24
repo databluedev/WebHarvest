@@ -29,3 +29,16 @@ engines:
     engine: brave
     shortcut: br
     disabled: false
+  # Shopping engines
+  - name: google shopping
+    engine: google shopping
+    shortcut: gshop
+    disabled: false
+  - name: duckduckgo shopping
+    engine: duckduckgo extra
+    shortcut: ddgs
+    categories: shopping
+    disabled: false
+    about:
+      website: https://duckduckgo.com/
+    search_type: shopping

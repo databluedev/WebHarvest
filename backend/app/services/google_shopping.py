@@ -1,11 +1,8 @@
 """Google Shopping scraper — fetches and parses Google Shopping results.
 
-Google Shopping is fully JavaScript-rendered. curl_cffi and standalone
-headless Chrome both get CAPTCHA'd by Google's bot detection.
-
 Strategy chain (per page):
-1. browser_pool (stealth Playwright) — bypasses CAPTCHA, renders JS
-2. SearXNG shopping category (fallback, no filters)
+1. SearXNG (google shopping + duckduckgo shopping engines) — fast, no browser
+2. browser_pool (stealth Playwright + proxy) — fallback, renders JS
 
 Results are cached in Redis for 5 minutes.
 """
@@ -618,13 +615,25 @@ async def _fetch_single_shopping_page(
     sort_by: str | None,
     min_rating: int | None,
 ) -> GoogleShoppingResponse | None:
-    """Fetch one page: lightweight Playwright → SearXNG fallback."""
+    """Fetch one page: SearXNG first (fast) → browser_pool fallback."""
+    logger.info("Google Shopping page %d for '%s'", page, query)
+
+    # Strategy 1: SearXNG (fast, no browser, no CAPTCHA)
+    result = await _search_via_searxng_shopping(
+        query, _RESULTS_PER_PAGE, page, lang
+    )
+    if result and result.products:
+        logger.info(
+            "Shopping via SearXNG: %d products", len(result.products)
+        )
+        return result
+
+    # Strategy 2: browser_pool with stealth (slower, may get CAPTCHA'd)
     url = _build_shopping_url(
         query, _RESULTS_PER_PAGE, page, lang, country, sort_by, min_rating,
     )
-    logger.info("Google Shopping page %d: %s", page, url)
+    logger.info("SearXNG had no results, trying browser: %s", url)
 
-    # Strategy 1: Lightweight standalone Playwright
     html = await _fetch_shopping_rendered(url)
     if html:
         html_lower = html.lower()
@@ -642,16 +651,6 @@ async def _fetch_single_shopping_page(
                 )
             except Exception as e:
                 logger.warning("Shopping HTML parsing failed: %s", e)
-
-    # Strategy 2: SearXNG fallback (no filters but works without browser)
-    result = await _search_via_searxng_shopping(
-        query, _RESULTS_PER_PAGE, page, lang
-    )
-    if result and result.products:
-        logger.info(
-            "Shopping via SearXNG: %d products", len(result.products)
-        )
-        return result
 
     return None
 
@@ -672,8 +671,7 @@ async def google_shopping(
 ) -> GoogleShoppingResponse:
     """Search Google Shopping and return structured product data.
 
-    Uses a lightweight standalone Playwright (no browser pool) since
-    Google Shopping is JS-rendered. Falls back to SearXNG.
+    SearXNG primary (fast, no CAPTCHA), browser_pool fallback.
     Filters: sort_by (price/rating/reviews), min_rating (1-4 stars).
     Results cached in Redis for 5 minutes.
     """
