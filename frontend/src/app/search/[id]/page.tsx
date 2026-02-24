@@ -385,7 +385,7 @@ export default function SearchStatusPage() {
     fetchStatus();
   }, [jobId]);
 
-  // SSE for real-time updates — falls back to polling on failure
+  // Always poll for status — SSE is unreliable through reverse proxies
   useEffect(() => {
     if (!polling || !jobId) return;
     if (status && ["completed", "failed", "cancelled"].includes(status.status)) {
@@ -393,34 +393,32 @@ export default function SearchStatusPage() {
       return;
     }
 
+    // Always poll as primary update mechanism
+    const interval = setInterval(fetchStatus, 2000);
+
+    // SSE as bonus for faster updates
+    let es: EventSource | null = null;
     const token = api.getToken();
-    if (!token) return;
-
-    const { API_BASE_URL } = require("@/lib/api");
-    const url = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
-
-    try {
-      const es = new EventSource(url);
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          fetchStatus();
-          if (data.done || ["completed", "failed", "cancelled"].includes(data.status)) {
-            setPolling(false);
-            es.close();
-          }
-        } catch {}
-      };
-      es.onerror = () => {
-        es.close();
-        const interval = setInterval(fetchStatus, 2000);
-        return () => clearInterval(interval);
-      };
-      return () => es.close();
-    } catch {
-      const interval = setInterval(fetchStatus, 2000);
-      return () => clearInterval(interval);
+    if (token) {
+      const { API_BASE_URL } = require("@/lib/api");
+      const url = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
+      try {
+        es = new EventSource(url);
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            fetchStatus();
+            if (data.done || ["completed", "failed", "cancelled"].includes(data.status)) {
+              setPolling(false);
+              es?.close();
+            }
+          } catch {}
+        };
+        es.onerror = () => { es?.close(); es = null; };
+      } catch {}
     }
+
+    return () => { es?.close(); clearInterval(interval); };
   }, [polling, status?.status]);
 
   const fetchStatus = useCallback(async () => {

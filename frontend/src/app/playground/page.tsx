@@ -640,11 +640,19 @@ function PlaygroundContent() {
   useEffect(() => {
     if (!activeJob || ["completed", "failed", "cancelled"].includes(activeJob.status)) return;
     const jobId = activeJob.id; const jobType = activeJob.type;
+    const onDone = () => { api.getUsageHistory({ per_page: 9 }).then(r => setRecentJobs(r.jobs || [])).catch(() => {}); };
+    // Always poll — SSE is unreliable through reverse proxies (Traefik/nginx buffer streams)
+    const iv = setInterval(async () => {
+      const s = await fetchJobStatus(jobId, jobType);
+      if (s && ["completed", "failed", "cancelled"].includes(s)) { clearInterval(iv); pollRef.current = null; onDone(); }
+    }, 2000);
+    pollRef.current = iv;
+    // SSE as bonus for faster updates (triggers immediate fetch on each event)
     try {
       const es = new EventSource(api.getSSEUrl(jobId)); sseRef.current = es;
-      es.onmessage = async () => { const s = await fetchJobStatus(jobId, jobType); if (s && ["completed","failed","cancelled"].includes(s)) { es.close(); sseRef.current = null; api.getUsageHistory({ per_page: 9 }).then(r => setRecentJobs(r.jobs||[])).catch(()=>{}); } };
-      es.onerror = () => { es.close(); sseRef.current = null; const iv = setInterval(async () => { const s = await fetchJobStatus(jobId, jobType); if (s && ["completed","failed","cancelled"].includes(s)) { clearInterval(iv); pollRef.current = null; api.getUsageHistory({ per_page: 9 }).then(r => setRecentJobs(r.jobs||[])).catch(()=>{}); } }, 2000); pollRef.current = iv; };
-    } catch { const iv = setInterval(async () => { const s = await fetchJobStatus(jobId, jobType); if (s && ["completed","failed","cancelled"].includes(s)) { clearInterval(iv); pollRef.current = null; api.getUsageHistory({ per_page: 9 }).then(r => setRecentJobs(r.jobs||[])).catch(()=>{}); } }, 2000); pollRef.current = iv; }
+      es.onmessage = async () => { const s = await fetchJobStatus(jobId, jobType); if (s && ["completed", "failed", "cancelled"].includes(s)) { es.close(); sseRef.current = null; } };
+      es.onerror = () => { es.close(); sseRef.current = null; };
+    } catch {}
     fetchJobStatus(jobId, jobType);
     return () => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   }, [activeJob?.id, activeJob?.status, fetchJobStatus]);

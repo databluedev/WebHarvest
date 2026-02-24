@@ -49,7 +49,7 @@ export default function ScrapeDetailPage() {
     fetchStatus();
   }, [jobId]);
 
-  // SSE for real-time updates — falls back to polling on failure
+  // Always poll for status — SSE is unreliable through reverse proxies
   const sseRef = useRef<EventSource | null>(null);
   useEffect(() => {
     if (!polling || !jobId) return;
@@ -58,40 +58,32 @@ export default function ScrapeDetailPage() {
       return;
     }
 
+    // Always poll as primary update mechanism
+    const interval = setInterval(fetchStatus, 2000);
+
+    // SSE as bonus for faster updates
     const token = api.getToken();
-    if (!token) return;
-
-    const { API_BASE_URL } = require("@/lib/api");
-    const url = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
-
-    try {
-      const es = new EventSource(url);
-      sseRef.current = es;
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.done || data.status === "completed" || data.status === "failed") {
+    if (token) {
+      const { API_BASE_URL } = require("@/lib/api");
+      const url = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
+      try {
+        const es = new EventSource(url);
+        sseRef.current = es;
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
             fetchStatus();
-            setPolling(false);
-            es.close();
-          } else {
-            fetchStatus();
-          }
-        } catch {}
-      };
-      es.onerror = () => {
-        es.close();
-        sseRef.current = null;
-        // Fall back to polling
-        const interval = setInterval(fetchStatus, 2000);
-        return () => clearInterval(interval);
-      };
-      return () => { es.close(); sseRef.current = null; };
-    } catch {
-      // No SSE support — poll
-      const interval = setInterval(fetchStatus, 2000);
-      return () => clearInterval(interval);
+            if (data.done || data.status === "completed" || data.status === "failed") {
+              setPolling(false);
+              es.close();
+            }
+          } catch {}
+        };
+        es.onerror = () => { es.close(); sseRef.current = null; };
+      } catch {}
     }
+
+    return () => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } clearInterval(interval); };
   }, [polling, status?.status]);
 
   const fetchStatus = useCallback(async () => {

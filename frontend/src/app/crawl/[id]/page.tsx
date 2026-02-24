@@ -509,7 +509,7 @@ export default function CrawlStatusPage() {
     fetchStatus(1);
   }, [jobId]);
 
-  // SSE for real-time updates — falls back to polling on failure
+  // Always poll for status — SSE is unreliable through reverse proxies
   useEffect(() => {
     if (!polling || !jobId) return;
     if (status && ["completed", "failed", "cancelled"].includes(status.status)) {
@@ -519,46 +519,37 @@ export default function CrawlStatusPage() {
 
     let cancelled = false;
     let es: EventSource | null = null;
-    let interval: ReturnType<typeof setInterval> | null = null;
 
-    const startPolling = () => {
-      if (cancelled || interval) return;
-      interval = setInterval(() => {
-        if (!cancelled) fetchStatus(1);
-      }, 2000);
-    };
+    // Always poll as primary update mechanism
+    const interval = setInterval(() => {
+      if (!cancelled) fetchStatus(1);
+    }, 2000);
 
+    // SSE as bonus for faster updates
     const token = api.getToken();
-    if (!token) return;
-
-    const { API_BASE_URL } = require("@/lib/api");
-    const sseUrl = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
-
-    try {
-      es = new EventSource(sseUrl);
-      es.onmessage = (event) => {
-        if (cancelled) return;
-        try {
-          const data = JSON.parse(event.data);
-          fetchStatus(1);
-          if (data.done || ["completed", "failed", "cancelled"].includes(data.status)) {
-            setPolling(false);
-          }
-        } catch {}
-      };
-      es.onerror = () => {
-        es?.close();
-        es = null;
-        startPolling();
-      };
-    } catch {
-      startPolling();
+    if (token) {
+      const { API_BASE_URL } = require("@/lib/api");
+      const sseUrl = `${API_BASE_URL}/v1/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
+      try {
+        es = new EventSource(sseUrl);
+        es.onmessage = (event) => {
+          if (cancelled) return;
+          try {
+            const data = JSON.parse(event.data);
+            fetchStatus(1);
+            if (data.done || ["completed", "failed", "cancelled"].includes(data.status)) {
+              setPolling(false);
+            }
+          } catch {}
+        };
+        es.onerror = () => { es?.close(); es = null; };
+      } catch {}
     }
 
     return () => {
       cancelled = true;
       es?.close();
-      if (interval) clearInterval(interval);
+      clearInterval(interval);
     };
   }, [polling, status?.status]);
 
