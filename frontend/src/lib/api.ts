@@ -655,6 +655,48 @@ class ApiClient {
       body: JSON.stringify(params),
     });
   }
+
+  async googleShopping(params: {
+    query: string;
+    num_results?: number;
+    page?: number;
+    language?: string;
+    country?: string;
+    sort_by?: string;
+    min_price?: number;
+    max_price?: number;
+    condition?: string;
+    min_rating?: number;
+    free_shipping?: boolean;
+  }) {
+    return this.request<{
+      success: boolean;
+      query: string;
+      total_results?: string;
+      time_taken: number;
+      filters_applied?: Record<string, string | number | boolean>;
+      products: Array<{
+        position: number;
+        title: string;
+        url: string;
+        image_url?: string;
+        price?: string;
+        price_value?: number;
+        currency?: string;
+        original_price?: string;
+        merchant?: string;
+        rating?: number;
+        review_count?: number;
+        shipping?: string;
+        condition?: string;
+        badge?: string;
+      }>;
+      related_searches?: Array<{ query: string }>;
+    }>("/v1/data/google/shopping", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
 }
 
 export const API_BASE_URL = API_URL;

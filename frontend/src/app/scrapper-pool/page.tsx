@@ -46,10 +46,10 @@ const SCRAPER_APIS: Array<{
     id: "google-shopping",
     name: "Google Shopping",
     endpoint: "/v1/data/google/shopping",
-    description: "Product listings with prices, merchants, and ratings",
+    description: "Product listings with prices, merchants, ratings, and filters",
     icon: ShoppingCart,
     accent: "amber",
-    status: "coming-soon",
+    status: "active",
   },
   {
     id: "google-maps",
@@ -121,18 +121,32 @@ export default function ScrapperPoolPage() {
   const [mobileNav, setMobileNav] = useState(false);
   const [activePanel, setActivePanel] = useState<string | null>(null);
 
-  // Google Search tryout state
+  // Shared tryout state
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Google Search state
   const [query, setQuery] = useState("");
   const [numResults, setNumResults] = useState(10);
   const [language, setLanguage] = useState("en");
   const [country, setCountry] = useState("");
   const [timeRange, setTimeRange] = useState("");
   const [safeSearch, setSafeSearch] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Google Shopping state
+  const [shopQuery, setShopQuery] = useState("");
+  const [shopNumResults, setShopNumResults] = useState(10);
+  const [shopLanguage, setShopLanguage] = useState("en");
+  const [shopCountry, setShopCountry] = useState("");
+  const [shopSortBy, setShopSortBy] = useState("");
+  const [shopMinPrice, setShopMinPrice] = useState("");
+  const [shopMaxPrice, setShopMaxPrice] = useState("");
+  const [shopCondition, setShopCondition] = useState("");
+  const [shopMinRating, setShopMinRating] = useState(0);
+  const [shopFreeShipping, setShopFreeShipping] = useState(false);
 
   const handleCardClick = (apiId: string, status: ApiStatus) => {
     if (status !== "active") return;
@@ -157,6 +171,32 @@ export default function ScrapperPoolPage() {
         ...(country && { country }),
         ...(timeRange && { time_range: timeRange }),
         safe_search: safeSearch,
+      });
+      setResult(res);
+    } catch (err: any) {
+      setError(err.message || "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleShopping = async () => {
+    if (!shopQuery.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api.googleShopping({
+        query: shopQuery.trim(),
+        num_results: shopNumResults,
+        language: shopLanguage,
+        ...(shopCountry && { country: shopCountry }),
+        ...(shopSortBy && { sort_by: shopSortBy }),
+        ...(shopMinPrice && { min_price: parseFloat(shopMinPrice) }),
+        ...(shopMaxPrice && { max_price: parseFloat(shopMaxPrice) }),
+        ...(shopCondition && { condition: shopCondition }),
+        ...(shopMinRating > 0 && { min_rating: shopMinRating }),
+        free_shipping: shopFreeShipping,
       });
       setResult(res);
     } catch (err: any) {
@@ -599,6 +639,357 @@ export default function ScrapperPoolPage() {
                                   key={i}
                                   onClick={() => { setQuery(rs.query); }}
                                   className="text-[11px] text-white/40 font-mono border border-white/[0.08] px-3 py-1.5 hover:text-cyan-400 hover:border-cyan-500/20 transition-colors"
+                                >
+                                  {rs.query}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Raw JSON toggle */}
+                        <details className="border border-white/[0.06]">
+                          <summary className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono cursor-pointer hover:text-white/50 transition-colors">
+                            Raw JSON Response
+                          </summary>
+                          <pre className="px-4 pb-4 text-[11px] text-white/50 font-mono overflow-x-auto max-h-[400px] overflow-y-auto leading-relaxed">
+                            {JSON.stringify(result, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── TRYOUT PANEL: Google Shopping ── */}
+            {activePanel === "google-shopping" && (
+              <div ref={panelRef} className="mt-[1px] border border-white/[0.08] bg-[#0a0a0a]">
+                {/* Panel header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 border border-amber-500/20 grid place-items-center">
+                      <ShoppingCart className="h-4 w-4 text-amber-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-[14px] font-bold uppercase tracking-[0.05em] font-mono">Google Shopping API</h3>
+                      <code className="text-[11px] text-amber-400/60 font-mono">POST /v1/data/google/shopping</code>
+                    </div>
+                  </div>
+                  <button onClick={() => setActivePanel(null)} className="h-8 w-8 grid place-items-center text-white/30 hover:text-white transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+                  {/* Left: Input form */}
+                  <div className="p-6 space-y-5">
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono mb-4">Request Parameters</div>
+
+                    {/* Query input */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Product Search *</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={shopQuery}
+                          onChange={(e) => setShopQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleGoogleShopping()}
+                          placeholder="e.g. wireless headphones noise cancelling"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-amber-500/40 transition-colors"
+                        />
+                        <ShoppingCart className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                      </div>
+                    </div>
+
+                    {/* Sort + Results */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Sort By</label>
+                        <div className="relative">
+                          <select
+                            value={shopSortBy}
+                            onChange={(e) => setShopSortBy(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-amber-500/40 transition-colors"
+                          >
+                            <option value="">Relevance</option>
+                            <option value="price_low">Price: Low → High</option>
+                            <option value="price_high">Price: High → Low</option>
+                            <option value="rating">Rating</option>
+                            <option value="reviews">Reviews</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Results</label>
+                        <div className="relative">
+                          <select
+                            value={shopNumResults}
+                            onChange={(e) => setShopNumResults(Number(e.target.value))}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-amber-500/40 transition-colors"
+                          >
+                            {[5, 10, 20, 30, 50, 75, 100].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Price range */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Price Range</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          type="number"
+                          value={shopMinPrice}
+                          onChange={(e) => setShopMinPrice(e.target.value)}
+                          placeholder="Min $"
+                          min="0"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-amber-500/40 transition-colors"
+                        />
+                        <input
+                          type="number"
+                          value={shopMaxPrice}
+                          onChange={(e) => setShopMaxPrice(e.target.value)}
+                          placeholder="Max $"
+                          min="0"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-amber-500/40 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Minimum Rating */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Minimum Rating</label>
+                      <div className="flex gap-2">
+                        {[0, 1, 2, 3, 4].map((r) => (
+                          <button
+                            key={r}
+                            onClick={() => setShopMinRating(r)}
+                            className={`px-3 py-2 text-[12px] font-mono border transition-colors ${
+                              shopMinRating === r
+                                ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                                : "border-white/10 text-white/30 hover:text-white/60"
+                            }`}
+                          >
+                            {r === 0 ? "Any" : `${r}★+`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Condition + Country */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Condition</label>
+                        <div className="relative">
+                          <select
+                            value={shopCondition}
+                            onChange={(e) => setShopCondition(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-amber-500/40 transition-colors"
+                          >
+                            <option value="">Any</option>
+                            <option value="new">New</option>
+                            <option value="used">Used</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Country</label>
+                        <div className="relative">
+                          <select
+                            value={shopCountry}
+                            onChange={(e) => setShopCountry(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-amber-500/40 transition-colors"
+                          >
+                            <option value="">Any</option>
+                            <option value="us">United States</option>
+                            <option value="gb">United Kingdom</option>
+                            <option value="ca">Canada</option>
+                            <option value="au">Australia</option>
+                            <option value="de">Germany</option>
+                            <option value="fr">France</option>
+                            <option value="in">India</option>
+                            <option value="jp">Japan</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Free shipping toggle */}
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setShopFreeShipping(!shopFreeShipping)}
+                        className={`h-5 w-9 rounded-full transition-colors relative ${shopFreeShipping ? "bg-amber-500" : "bg-white/10"}`}
+                      >
+                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${shopFreeShipping ? "left-[18px]" : "left-0.5"}`} />
+                      </button>
+                      <span className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono">Free Shipping Only</span>
+                    </div>
+
+                    {/* Submit button */}
+                    <button
+                      onClick={handleGoogleShopping}
+                      disabled={loading || !shopQuery.trim()}
+                      className="w-full border border-amber-500/40 bg-amber-500/10 text-amber-400 py-3 text-[12px] uppercase tracking-[0.2em] font-mono hover:bg-amber-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Searching Products...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          Search Products
+                        </>
+                      )}
+                    </button>
+
+                    {error && (
+                      <div className="border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-400 font-mono">
+                        {error}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Response */}
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono">Products</div>
+                      {result && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-white/30 font-mono">
+                            {result.products?.length || 0} products &middot; {result.time_taken?.toFixed(2)}s
+                          </span>
+                          <button onClick={handleCopyResult} className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-white/30 hover:text-white/60 font-mono transition-colors">
+                            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                            {copied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {!result && !loading && !error && (
+                      <div className="h-[400px] border border-dashed border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <ShoppingCart className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                          <p className="text-[12px] text-white/20 font-mono">Search for products to see results</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {loading && (
+                      <div className="h-[400px] border border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Loader2 className="h-6 w-6 text-amber-400 animate-spin mx-auto mb-3" />
+                          <p className="text-[12px] text-white/30 font-mono">Fetching product listings...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {result && (
+                      <div className="space-y-4">
+                        {/* Filters applied badge */}
+                        {result.filters_applied && Object.keys(result.filters_applied).length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(result.filters_applied).map(([k, v]: [string, any]) => (
+                              <span key={k} className="text-[10px] font-mono border border-amber-500/20 bg-amber-500/5 text-amber-400 px-2 py-1">
+                                {k}: {String(v)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Product cards */}
+                        <div className="max-h-[600px] overflow-y-auto space-y-[1px] scrollbar-thin">
+                          {result.products?.map((product: any, i: number) => (
+                            <div key={i} className="bg-[#050505] border border-white/[0.04] p-4 hover:border-white/[0.08] transition-colors">
+                              <div className="flex gap-4">
+                                {/* Product image */}
+                                {product.image_url && (
+                                  <div className="flex-shrink-0 h-16 w-16 border border-white/[0.06] bg-white/[0.02] grid place-items-center overflow-hidden">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={product.image_url} alt={product.title} className="h-full w-full object-contain" />
+                                  </div>
+                                )}
+
+                                <div className="min-w-0 flex-1">
+                                  {/* Title + position */}
+                                  <div className="flex items-start justify-between gap-2 mb-1">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2 mb-0.5">
+                                        <span className="text-[10px] text-white/20 font-mono">#{product.position}</span>
+                                        {product.badge && (
+                                          <span className="text-[9px] uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 font-mono">
+                                            {product.badge}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <a href={product.url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-white/80 font-mono hover:text-amber-400 transition-colors line-clamp-2">
+                                        {product.title}
+                                      </a>
+                                    </div>
+                                    <a href={product.url} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/50 flex-shrink-0 mt-1">
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                    </a>
+                                  </div>
+
+                                  {/* Price row */}
+                                  <div className="flex items-center gap-3 mb-1">
+                                    {product.price && (
+                                      <span className="text-[15px] font-bold text-amber-400 font-mono">{product.price}</span>
+                                    )}
+                                    {product.original_price && (
+                                      <span className="text-[12px] text-white/25 font-mono line-through">{product.original_price}</span>
+                                    )}
+                                    {product.condition && product.condition !== "New" && (
+                                      <span className="text-[10px] text-white/30 font-mono border border-white/10 px-1.5 py-0.5">{product.condition}</span>
+                                    )}
+                                  </div>
+
+                                  {/* Merchant + Rating + Shipping */}
+                                  <div className="flex items-center gap-3 flex-wrap">
+                                    {product.merchant && (
+                                      <span className="text-[11px] text-white/40 font-mono">{product.merchant}</span>
+                                    )}
+                                    {product.rating != null && (
+                                      <span className="text-[11px] text-amber-400/70 font-mono flex items-center gap-1">
+                                        {"★".repeat(Math.round(product.rating))}{"☆".repeat(5 - Math.round(product.rating))}
+                                        <span className="text-white/30">{product.rating}</span>
+                                        {product.review_count != null && (
+                                          <span className="text-white/20">({product.review_count.toLocaleString()})</span>
+                                        )}
+                                      </span>
+                                    )}
+                                    {product.shipping && (
+                                      <span className={`text-[10px] font-mono ${product.shipping.toLowerCase().includes("free") ? "text-emerald-400/60" : "text-white/25"}`}>
+                                        {product.shipping}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Related searches */}
+                        {result.related_searches && result.related_searches.length > 0 && (
+                          <div className="border border-white/[0.06] p-4">
+                            <div className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono mb-3">Related Searches</div>
+                            <div className="flex flex-wrap gap-2">
+                              {result.related_searches.map((rs: any, i: number) => (
+                                <button
+                                  key={i}
+                                  onClick={() => setShopQuery(rs.query)}
+                                  className="text-[11px] text-white/40 font-mono border border-white/[0.08] px-3 py-1.5 hover:text-amber-400 hover:border-amber-500/20 transition-colors"
                                 >
                                   {rs.query}
                                 </button>

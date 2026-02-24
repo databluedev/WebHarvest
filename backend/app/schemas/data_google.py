@@ -79,3 +79,67 @@ class GoogleSearchResponse(BaseModel):
     people_also_ask: list[PeopleAlsoAsk] = []
     related_searches: list[RelatedSearch] = []
     knowledge_panel: KnowledgePanel | None = None
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Google Shopping
+# ═══════════════════════════════════════════════════════════════════
+
+
+class GoogleShoppingRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2048, description="Product search query")
+    num_results: int = Field(10, ge=1, le=100, description="Number of products (max 100)")
+    page: int = Field(1, ge=1, le=10, description="Starting page (1-10)")
+    language: str = Field("en", description="Language code (hl parameter)")
+    country: str | None = Field(None, description="Country code for geo-targeting (gl parameter)")
+
+    # Filters
+    sort_by: str | None = Field(
+        None,
+        pattern=r"^(relevance|price_low|price_high|rating|reviews)$",
+        description="Sort order: relevance, price_low, price_high, rating, reviews",
+    )
+    min_price: float | None = Field(None, ge=0, description="Minimum price filter")
+    max_price: float | None = Field(None, ge=0, description="Maximum price filter")
+    condition: str | None = Field(
+        None,
+        pattern=r"^(new|used|any)$",
+        description="Product condition: new, used, any",
+    )
+    min_rating: int | None = Field(
+        None, ge=1, le=4, description="Minimum star rating (1-4)"
+    )
+    free_shipping: bool = Field(False, description="Only show free shipping products")
+
+
+class GoogleShoppingProduct(BaseModel):
+    model_config = {"exclude_none": True}
+
+    position: int = Field(..., description="1-indexed rank")
+    title: str
+    url: str
+    image_url: str | None = None
+    price: str | None = Field(None, description="Displayed price string (e.g. '$29.99')")
+    price_value: float | None = Field(None, description="Parsed numeric price")
+    currency: str | None = Field(None, description="Currency code (USD, EUR, etc.)")
+    original_price: str | None = Field(None, description="Original price if on sale")
+    merchant: str | None = Field(None, description="Store/seller name")
+    rating: float | None = Field(None, description="Star rating (0-5)")
+    review_count: int | None = Field(None, description="Number of reviews")
+    shipping: str | None = Field(None, description="Shipping info (e.g. 'Free shipping')")
+    condition: str | None = Field(None, description="New, Used, Refurbished")
+    badge: str | None = Field(None, description="Special badge (Best seller, Great price, etc.)")
+
+
+class GoogleShoppingResponse(BaseModel):
+    model_config = {"exclude_none": True}
+
+    success: bool = True
+    query: str
+    total_results: str | None = None
+    time_taken: float = Field(..., description="API response time in seconds")
+    filters_applied: dict[str, str | float | bool] | None = Field(
+        None, description="Echo of active filters"
+    )
+    products: list[GoogleShoppingProduct] = []
+    related_searches: list[RelatedSearch] = []
