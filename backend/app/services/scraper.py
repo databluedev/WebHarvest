@@ -308,6 +308,11 @@ _BLOCK_PATTERNS = [
     "your connection needs to be verified",
     "connection is being verified",
     "please verify your identity",
+    # PerimeterX / HUMAN Security
+    "robot or human",
+    "activate and hold",
+    "confirm that you're human",
+    "confirm you are human",
 ]
 
 # Exact domain matches
@@ -862,6 +867,14 @@ def _looks_blocked(html: str) -> bool:
     # Collapse whitespace for accurate length measurement
     body_text = re.sub(r"\s+", " ", body_text)
 
+    # Bot detection service structural fingerprints — check raw HTML regardless
+    # of body_text length. These are unique to challenge pages and never appear
+    # on normal pages (even those protected by the same service).
+    html_lower = html.lower()
+    if "px-captcha" in html_lower or "human-challenge" in html_lower:
+        logger.warning(f"_looks_blocked: PerimeterX/HUMAN challenge element ({len(body_text)} chars)")
+        return True
+
     # Pages with substantial visible text content are never block pages
     if len(body_text) > 3000:
         return False
@@ -874,6 +887,8 @@ def _looks_blocked(html: str) -> bool:
             "checking your browser", "just a moment", "attention required",
             "please wait while we verify", "performance & security by cloudflare",
             "sucuri website firewall", "your connection needs to be verified",
+            "robot or human", "activate and hold",
+            "confirm that you're human", "confirm you are human",
         ]
         for pattern in _strong_block_patterns:
             if pattern in body_text:
@@ -1384,9 +1399,13 @@ async def scrape_url(
                     winning_tier = 0
                     logger.info(f"Strategy cache hit for {url}: {last_strategy}")
 
+            elapsed_ms = (time.time() - tier_start) * 1000
             if fetched:
-                elapsed_ms = (time.time() - tier_start) * 1000
                 await record_strategy_result(url, winning_strategy, 0, True, elapsed_ms)
+            else:
+                # Cached strategy returned blocked/empty content — invalidate cache
+                await record_strategy_result(url, last_strategy, 0, False, elapsed_ms)
+                logger.info(f"Strategy cache miss for {url}: {last_strategy} produced blocked content")
         except Exception as e:
             logger.debug(f"Strategy cache hit attempt failed for {url}: {e}")
 
@@ -3463,9 +3482,12 @@ async def scrape_url_fetch_only(
                         fetched = True
                         winning_strategy = last_strategy
                         winning_tier = 0
+            elapsed_ms = (time.time() - tier_start) * 1000
             if fetched:
-                elapsed_ms = (time.time() - tier_start) * 1000
                 await record_strategy_result(url, winning_strategy, 0, True, elapsed_ms)
+            else:
+                # Cached strategy returned blocked/empty content — invalidate cache
+                await record_strategy_result(url, last_strategy, 0, False, elapsed_ms)
         except Exception:
             pass
 

@@ -127,6 +127,17 @@ async def record_strategy_result(
             data["fail_count_tier1"] = 0
             data["fail_count_tier2"] = 0
         else:
+            if tier == 0:
+                # Tier 0 = cached strategy failed (blocked/empty content).
+                # Invalidate the cached strategy so next request starts fresh
+                # from tier 1 instead of retrying the same failing strategy.
+                data.pop("last_success_strategy", None)
+                data.pop("last_success_tier", None)
+                data.pop("last_success_time", None)
+                logger.info(
+                    f"Strategy cache invalidated for {domain}: "
+                    f"{strategy} returned blocked content"
+                )
             # Increment fail count for the specific tier that failed
             if tier <= 1:
                 data["fail_count_tier1"] = data.get("fail_count_tier1", 0) + 1
