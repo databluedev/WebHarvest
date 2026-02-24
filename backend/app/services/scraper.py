@@ -1729,14 +1729,60 @@ async def scrape_url(
     if not fetched and not proxy_url and _has_builtin:
         from app.services.proxy import get_builtin_proxy_manager
         _builtin_pm = await get_builtin_proxy_manager()
-        _builtin_obj = _builtin_pm.get_random() if _builtin_pm else None
-        if _builtin_obj:
+
+        # Try up to 3 different proxies — free proxies are unreliable
+        _proxy_attempts = min(3, len(_builtin_pm._proxies)) if _builtin_pm and _builtin_pm.has_proxies else 0
+        _tried_proxies: set[str] = set()
+
+        for _proxy_attempt in range(_proxy_attempts):
+            if fetched:
+                break
+
+            # Pick a random proxy we haven't tried yet
+            _builtin_obj = None
+            for _ in range(10):  # Avoid infinite loop
+                _candidate = _builtin_pm.get_random()
+                if _candidate:
+                    _key = f"{_candidate.host}:{_candidate.port}"
+                    if _key not in _tried_proxies:
+                        _tried_proxies.add(_key)
+                        _builtin_obj = _candidate
+                        break
+
+            if not _builtin_obj:
+                break
+
             _bp_url = _builtin_pm.to_httpx(_builtin_obj)
             _bp_pw = _builtin_pm.to_playwright(_builtin_obj)
-            logger.info(f"All tiers failed for {url}, retrying with builtin proxy ({_builtin_obj.host}:{_builtin_obj.port})")
+            logger.info(
+                f"Proxy retry {_proxy_attempt + 1}/{_proxy_attempts} for {url} "
+                f"via {_builtin_obj.protocol}://{_builtin_obj.host}:{_builtin_obj.port}"
+            )
 
-            # Retry browser strategies with proxy (most likely to succeed)
+            # Try HTTP with proxy first (fast + cheap)
             tier_start = time.time()
+            try:
+                _proxy_http = await asyncio.wait_for(
+                    _fetch_with_curl_cffi_multi(url, request.timeout, proxy_url=_bp_url),
+                    timeout=20,
+                )
+                if _proxy_http and _proxy_http[0] and len(_proxy_http[0]) > 500:
+                    _proxy_html = _proxy_http[0]
+                    if not _looks_blocked(_proxy_html):
+                        raw_html = _proxy_html
+                        status_code = _proxy_http[1]
+                        response_headers = _proxy_http[2]
+                        fetched = True
+                        winning_strategy = f"proxy_http_{_builtin_obj.protocol}"
+                        winning_tier = 5
+                        elapsed_ms = (time.time() - tier_start) * 1000
+                        await record_strategy_result(url, winning_strategy, 3, True, elapsed_ms)
+                        logger.info(f"Proxy HTTP succeeded for {url}: {_builtin_obj.host}:{_builtin_obj.port}")
+                        continue
+            except Exception as _phe:
+                logger.debug(f"Proxy HTTP failed for {url} via {_builtin_obj.host}: {_phe}")
+
+            # Fall back to browser with proxy (slower but handles JS)
             browser_coros = [
                 ("proxy_chromium_stealth", _fetch_with_browser_stealth(url, request, proxy=_bp_pw)),
             ]
@@ -1744,16 +1790,21 @@ async def scrape_url(
                 browser_coros.append(
                     ("proxy_stealth_chromium", _fetch_via_stealth_engine(url, request, proxy=_bp_pw)),
                 )
-            race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=30)
+            race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=45)
             _update_best(race)
             if race.success:
                 raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(race.winner_result)
                 fetched = True
                 winning_strategy = race.winner_name
-                winning_tier = 5  # Proxy tier
+                winning_tier = 5
                 elapsed_ms = (time.time() - tier_start) * 1000
                 await record_strategy_result(url, winning_strategy, 3, True, elapsed_ms)
-                logger.info(f"Builtin proxy succeeded for {url}: {winning_strategy}")
+                logger.info(f"Proxy browser succeeded for {url}: {winning_strategy}")
+            else:
+                # Mark this proxy as failed so weighted selection avoids it
+                if _builtin_pm:
+                    await _builtin_pm.mark_failed(_builtin_obj)
+                logger.info(f"Proxy attempt {_proxy_attempt + 1} failed for {url} via {_builtin_obj.host}:{_builtin_obj.port}")
 
     # --- Final fallback: use best available content even if blocked ---
     if not fetched:
@@ -3793,39 +3844,72 @@ async def scrape_url_fetch_only(
     if not fetched and not proxy_url and _has_builtin:
         from app.services.proxy import get_builtin_proxy_manager
         _builtin_pm = await get_builtin_proxy_manager()
-        _builtin_obj = _builtin_pm.get_random() if _builtin_pm else None
-        if _builtin_obj:
+
+        _proxy_attempts = min(3, len(_builtin_pm._proxies)) if _builtin_pm and _builtin_pm.has_proxies else 0
+        _tried_proxies: set[str] = set()
+
+        for _proxy_attempt in range(_proxy_attempts):
+            if fetched:
+                break
+
+            _builtin_obj = None
+            for _ in range(10):
+                _candidate = _builtin_pm.get_random()
+                if _candidate:
+                    _key = f"{_candidate.host}:{_candidate.port}"
+                    if _key not in _tried_proxies:
+                        _tried_proxies.add(_key)
+                        _builtin_obj = _candidate
+                        break
+
+            if not _builtin_obj:
+                break
+
             _bp_url = _builtin_pm.to_httpx(_builtin_obj)
             _bp_pw = _builtin_pm.to_playwright(_builtin_obj)
-            logger.info(f"Fetch-only: all tiers failed for {url}, retrying with builtin proxy ({_builtin_obj.host}:{_builtin_obj.port})")
+            logger.info(
+                f"Fetch-only proxy retry {_proxy_attempt + 1}/{_proxy_attempts} for {url} "
+                f"via {_builtin_obj.protocol}://{_builtin_obj.host}:{_builtin_obj.port}"
+            )
 
             tier_start = time.time()
             # Try HTTP with proxy first (cheapest)
             try:
-                result = await _fetch_with_curl_cffi_multi(url, request.timeout, proxy_url=_bp_url)
+                result = await asyncio.wait_for(
+                    _fetch_with_curl_cffi_multi(url, request.timeout, proxy_url=_bp_url),
+                    timeout=20,
+                )
                 html, sc, hdrs = result[0], result[1], result[2] if len(result) > 2 else {}
                 if html and sc < 400 and not _looks_blocked(html):
                     raw_html, status_code, response_headers = html, sc, hdrs
                     fetched = True
-                    winning_strategy = "proxy_curl_cffi"
+                    winning_strategy = f"proxy_curl_cffi_{_builtin_obj.protocol}"
                     winning_tier = 5
-                    logger.info(f"Builtin proxy HTTP succeeded for {url}")
-            except Exception:
-                pass
+                    logger.info(f"Fetch-only proxy HTTP succeeded for {url} via {_builtin_obj.host}")
+                    continue
+            except Exception as _phe:
+                logger.debug(f"Fetch-only proxy HTTP failed for {url} via {_builtin_obj.host}: {_phe}")
 
             # Try browser with proxy if HTTP failed
-            if not fetched:
-                try:
-                    result = await _fetch_with_browser_stealth(url, request, proxy=_bp_pw)
-                    html = result[0]
-                    if html and not _looks_blocked(html):
-                        raw_html, status_code, screenshot_b64, action_screenshots, response_headers = result
-                        fetched = True
-                        winning_strategy = "proxy_chromium_stealth"
-                        winning_tier = 5
-                        logger.info(f"Builtin proxy browser succeeded for {url}")
-                except Exception:
-                    pass
+            try:
+                result = await asyncio.wait_for(
+                    _fetch_with_browser_stealth(url, request, proxy=_bp_pw),
+                    timeout=30,
+                )
+                html = result[0]
+                if html and not _looks_blocked(html):
+                    raw_html, status_code, screenshot_b64, action_screenshots, response_headers = result
+                    fetched = True
+                    winning_strategy = "proxy_chromium_stealth"
+                    winning_tier = 5
+                    logger.info(f"Fetch-only proxy browser succeeded for {url} via {_builtin_obj.host}")
+                    continue
+            except Exception as _pbe:
+                logger.debug(f"Fetch-only proxy browser failed for {url} via {_builtin_obj.host}: {_pbe}")
+
+            if _builtin_pm:
+                await _builtin_pm.mark_failed(_builtin_obj)
+            logger.info(f"Fetch-only proxy attempt {_proxy_attempt + 1} failed for {url} via {_builtin_obj.host}")
 
     # Use best available — but NOT if it's blocked content (e.g. Amazon bot page).
     # Returning None lets the crawl worker fall back to full scrape_url which has
