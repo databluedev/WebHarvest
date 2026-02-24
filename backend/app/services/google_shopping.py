@@ -1,8 +1,13 @@
 """Google Shopping scraper — fetches and parses Google Shopping results.
 
 Strategy chain (per page):
-1. SearXNG (google shopping + duckduckgo shopping engines) — fast, no browser
-2. browser_pool (stealth Playwright + proxy) — fallback, renders JS
+1. SearXNG (google shopping + ebay engines) — fast, no browser
+2. nodriver (undetected Chrome + Xvfb) — real headed browser, bypasses bot detection
+
+nodriver is the async successor to undetected-chromedriver. It connects to
+Chrome via CDP directly — no WebDriver protocol, no chromedriver binary.
+Combined with Xvfb (virtual display), it runs a real headed browser that
+passes Google's headless detection.
 
 Results are cached in Redis for 5 minutes.
 """
@@ -12,6 +17,7 @@ import hashlib
 import json
 import logging
 import re
+import shutil
 import time
 from urllib.parse import quote_plus
 
@@ -166,100 +172,108 @@ def _parse_price_string(text: str) -> tuple[float | None, str | None]:
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Browser fetch via browser_pool (stealth Playwright + proxy)
+# Browser fetch via nodriver (undetected Chrome + Xvfb)
 # ═══════════════════════════════════════════════════════════════════
 
 
-async def _get_proxy_for_shopping() -> dict | None:
-    """Get a proxy for Shopping requests (datacenter IPs get CAPTCHA'd)."""
-    try:
-        from app.services.proxy import ProxyManager, get_builtin_proxy_manager
-
-        # Try builtin proxies first (env var configured)
-        pm = await get_builtin_proxy_manager()
-        if pm:
-            proxy_obj = pm.get_random()
-            if proxy_obj:
-                pw_proxy = ProxyManager.to_playwright(proxy_obj)
-                logger.info("Shopping using proxy: %s", pw_proxy["server"])
-                return pw_proxy
-
-        # No proxies available
-        logger.debug("No proxies configured for Shopping requests")
-        return None
-    except Exception as e:
-        logger.debug("Failed to load proxy for Shopping: %s", e)
-        return None
+def _find_chrome_binary() -> str | None:
+    """Find a usable Chrome/Chromium binary on the system."""
+    candidates = [
+        "chromium",
+        "chromium-browser",
+        "google-chrome",
+        "google-chrome-stable",
+    ]
+    for name in candidates:
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
 
 
 async def _fetch_shopping_rendered(url: str) -> str | None:
-    """Fetch Google Shopping page using browser_pool + proxy.
+    """Fetch Google Shopping page using nodriver with Xvfb virtual display.
 
-    Google CAPTCHA is triggered by datacenter IPs, not browser fingerprints.
-    We use browser_pool for stealth and route through a proxy if available.
+    Uses a real headed browser (not headless) behind a virtual framebuffer.
+    This bypasses Google's headless detection while running on a server.
+    nodriver connects via CDP (no WebDriver) which avoids automation detection.
     """
+    display = None
     try:
-        from app.services.browser import browser_pool
+        import nodriver as uc
+        from pyvirtualdisplay import Display
 
-        proxy = await _get_proxy_for_shopping()
+        chrome_path = _find_chrome_binary()
+        if not chrome_path:
+            logger.warning("No Chrome/Chromium binary found for nodriver")
+            return None
 
-        async with browser_pool.get_page(
-            stealth=True, proxy=proxy
-        ) as page:
-            response = await page.goto(
-                url, wait_until="domcontentloaded", timeout=20000
-            )
-            if not response or response.status >= 400:
-                logger.warning(
-                    "Shopping fetch status %s",
-                    response.status if response else "None",
-                )
-                return None
+        logger.info("nodriver using browser: %s", chrome_path)
 
-            # Wait for product cards to render
+        # Start virtual display (Xvfb) for headed mode
+        display = Display(visible=False, size=(1920, 1080))
+        display.start()
+        logger.info("Xvfb started on display :%s", display.display)
+
+        browser = await uc.start(
+            headless=False,
+            browser_executable_path=chrome_path,
+            sandbox=False,
+            lang="en-US",
+            browser_args=[
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--window-size=1920,1080",
+                "--disable-gpu",
+            ],
+        )
+
+        try:
+            tab = await browser.get(url)
+
+            # Wait for product cards to render (new Google Shopping layout)
             try:
-                await page.wait_for_selector(
-                    "div.sh-dgr__content", timeout=10000
-                )
+                await tab.select("div.UC8ZCe", timeout=12)
             except Exception:
+                # Try older selectors
                 try:
-                    await page.wait_for_selector(
-                        "div.sh-pr__product-results", timeout=5000
-                    )
+                    await tab.select("div.sh-dgr__content", timeout=5)
                 except Exception:
                     logger.warning("Shopping product cards did not render")
 
             # Let remaining JS settle
-            await asyncio.sleep(1.5)
+            await tab.sleep(2)
 
-            # Accept cookies if prompt appears
-            try:
-                accept_btn = page.locator(
-                    "button:has-text('Accept all'), "
-                    "button:has-text('Accept'), "
-                    "button:has-text('I agree')"
-                ).first
-                if await accept_btn.is_visible(timeout=1000):
-                    await accept_btn.click()
-                    await asyncio.sleep(0.5)
-            except Exception:
-                pass
+            # Get the full page HTML
+            html = await tab.get_content()
+            if not html:
+                html = await tab.evaluate(
+                    "document.documentElement.outerHTML"
+                )
 
-            html = await page.content()
             logger.info(
-                "Shopping browser fetch: %d chars, %d divs",
-                len(html),
-                html.count("<div"),
+                "Shopping nodriver fetch: %d chars, %d divs",
+                len(html) if html else 0,
+                html.count("<div") if html else 0,
             )
             return html
 
+        finally:
+            browser.stop()
+
     except Exception as e:
-        logger.warning("Shopping browser fetch failed: %s", e)
+        logger.warning("Shopping nodriver fetch failed: %s", e)
         return None
+    finally:
+        if display:
+            try:
+                display.stop()
+            except Exception:
+                pass
 
 
 # ═══════════════════════════════════════════════════════════════════
-# HTML parser — selectors from confirmed working Selenium script
+# HTML parser — supports both new and old Google Shopping layouts
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -289,43 +303,244 @@ def _parse_product_cards(
     products: list[GoogleShoppingProduct] = []
     offset = (page - 1) * _RESULTS_PER_PAGE
 
-    # Primary container: sh-dgr__content (confirmed by Selenium script)
-    containers = soup.select("div.sh-dgr__content")
+    # New layout (2024+): div.UC8ZCe.QS8Cxb
+    containers = soup.select("div.UC8ZCe.QS8Cxb")
 
-    # Fallbacks
-    if not containers:
-        containers = soup.select("div.sh-dgr__gr-auto")
-    if not containers:
-        containers = soup.select("div.sh-dlr__list-result")
-    if not containers:
-        containers = soup.select("div.KZmu8e")
+    if containers:
+        logger.info("Using new Google Shopping layout (%d cards)", len(containers))
+        for i, card in enumerate(containers):
+            try:
+                product = _parse_new_product(card, offset + i + 1)
+                if product:
+                    products.append(product)
+            except Exception as e:
+                logger.debug("Failed to parse new product card %d: %s", i, e)
+                continue
+        return products
 
-    logger.info("Found %d product containers", len(containers))
+    # Old layout fallback: sh-dgr__content
+    for sel in [
+        "div.sh-dgr__content",
+        "div.sh-dgr__gr-auto",
+        "div.sh-dlr__list-result",
+        "div.KZmu8e",
+    ]:
+        containers = soup.select(sel)
+        if containers:
+            break
+
+    logger.info("Using old Google Shopping layout (%d cards)", len(containers))
 
     for i, card in enumerate(containers):
         try:
-            product = _parse_single_product(card, offset + i + 1)
+            product = _parse_old_product(card, offset + i + 1)
             if product:
                 products.append(product)
         except Exception as e:
-            logger.debug("Failed to parse shopping product %d: %s", i, e)
+            logger.debug("Failed to parse old product card %d: %s", i, e)
             continue
 
     return products
 
 
-def _parse_single_product(
+def _parse_new_product(
     card, position: int
 ) -> GoogleShoppingProduct | None:
-    """Extract data from a single product card.
+    """Parse a product card from the new Google Shopping layout (2024+).
 
-    Selectors based on confirmed working Selenium script:
-    - Title: .C7Lkve .EI11Pd .tAxDx
-    - Price: .XrAfOe .kHxwFf .QIrs8 span
-    - Merchant: .aULzUe.IuHnof
-    - Shipping: .bONr3b .vEjMR
-    - Image: .ArOc1c img
-    - URL: .eaGTj.mQaFGe.shntl a
+    New selectors discovered from live HTML:
+    - Title: div.gkQHve
+    - Price: div.FG68Ac
+    - Merchant: span.Z9qvte
+    - Rating: span.yi40Hd
+    - Rating+Reviews: [aria-label*='Rated']
+    - Shipping: span.ybnj7e
+    - Badge: div.OWYldd
+    - Image: img.VeBrne
+    """
+
+    # === Title ===
+    title = None
+    title_el = card.select_one("div.gkQHve")
+    if title_el:
+        title = title_el.get_text(strip=True)
+
+    if not title:
+        # Fallback: extract from div.V5fewe or div.PhALMc
+        for sel in ["div.V5fewe", "div.PhALMc"]:
+            el = card.select_one(sel)
+            if el:
+                texts = list(el.stripped_strings)
+                # Title is usually the longest string that's not a price/badge
+                for t in texts:
+                    if (
+                        len(t) > 5
+                        and not re.match(r"^[\$€£¥₹₩]", t)
+                        and t not in ("LOW PRICE", "SALE", "GREAT PRICE")
+                        and "% OFF" not in t
+                        and "% off" not in t
+                    ):
+                        title = t
+                        break
+                if title:
+                    break
+
+    if not title:
+        return None
+
+    # === Price ===
+    price_text = None
+    original_price = None
+
+    price_el = card.select_one("div.FG68Ac")
+    if price_el:
+        # Best: use aria-label for precise price
+        aria = price_el.get("aria-label", "")
+        if aria:
+            # "Current price: ₹799.  68% off maximum retail price: ₹2,499."
+            curr_match = re.search(
+                r"Current price:\s*([₹$€£¥][\d,]+\.?\d*)", aria
+            )
+            if curr_match:
+                price_text = curr_match.group(1).rstrip(".")
+            orig_match = re.search(
+                r"(?:retail|original|was)\s*(?:price)?:?\s*([₹$€£¥][\d,]+\.?\d*)",
+                aria, re.I,
+            )
+            if orig_match:
+                original_price = orig_match.group(1).rstrip(".")
+
+        # Fallback: use dedicated span selectors
+        if not price_text:
+            curr_span = price_el.select_one("span.lmQWe")
+            if curr_span:
+                price_text = curr_span.get_text(strip=True)
+            orig_span = price_el.select_one("span.Y1xxFf")
+            if orig_span:
+                original_price = orig_span.get_text(strip=True)
+
+        # Last fallback: parse the combined text
+        if not price_text:
+            full = price_el.get_text(strip=True)
+            match = re.match(r"^([₹$€£¥][,\d]+\.?\d*)", full)
+            if match:
+                price_text = match.group(1)
+                remainder = full[len(price_text):]
+                orig = re.search(r"([₹$€£¥][,\d]+\.?\d*)", remainder)
+                if orig:
+                    original_price = orig.group(1)
+
+    price_value, currency = _parse_price_string(price_text or "")
+
+    # === Merchant ===
+    merchant = None
+    merchant_el = card.select_one("span.Z9qvte")
+    if merchant_el:
+        merchant = merchant_el.get_text(strip=True)
+
+    # === Rating & Reviews ===
+    rating = None
+    review_count = None
+
+    rating_el = card.select_one("span.yi40Hd")
+    if rating_el:
+        try:
+            rating = float(rating_el.get_text(strip=True))
+        except ValueError:
+            pass
+
+    # Get review count from aria-label
+    rated_el = card.select_one("[aria-label*='Rated']")
+    if not rated_el:
+        rated_el = card.select_one("[aria-label*='rated']")
+    if rated_el:
+        label = rated_el.get("aria-label", "")
+        # "Rated 3.9 out of 5. 10 reviews." or "Rated 4.8 out of 5, 30K reviews"
+        if rating is None:
+            r_match = re.search(r"Rated\s+([\d.]+)", label, re.I)
+            if r_match:
+                try:
+                    rating = float(r_match.group(1))
+                except ValueError:
+                    pass
+
+        rv_match = re.search(r"([\d,.]+K?)\s*(?:user\s+)?reviews?", label, re.I)
+        if rv_match:
+            rv_str = rv_match.group(1).replace(",", "")
+            if rv_str.endswith("K"):
+                try:
+                    review_count = int(float(rv_str[:-1]) * 1000)
+                except ValueError:
+                    pass
+            else:
+                try:
+                    review_count = int(rv_str)
+                except ValueError:
+                    pass
+
+    # === Shipping ===
+    shipping = None
+    ship_el = card.select_one("span.ybnj7e")
+    if ship_el:
+        shipping = ship_el.get_text(strip=True)
+
+    if not shipping:
+        card_text = card.get_text(separator=" ", strip=True).lower()
+        if "free shipping" in card_text or "free delivery" in card_text:
+            shipping = "Free shipping"
+
+    # === Badge ===
+    badge = None
+    badge_el = card.select_one("div.OWYldd")
+    if badge_el:
+        badge = badge_el.get_text(strip=True)
+
+    # === Image ===
+    image_url = None
+    img_el = card.select_one("img.VeBrne")
+    if img_el:
+        src = img_el.get("src", "")
+        if src and not src.startswith("data:"):
+            image_url = src
+        # For base64 images, we still include them (they're valid data URIs)
+        elif src and src.startswith("data:image/"):
+            image_url = src
+
+    if not image_url:
+        img_el = card.select_one("img.XNo5Ab")
+        if img_el:
+            src = img_el.get("src", "")
+            if src:
+                image_url = src
+
+    # === URL (no <a> tags in new layout — construct from title) ===
+    url = (
+        f"https://www.google.com/search?tbm=shop&q={quote_plus(title)}"
+    )
+
+    return GoogleShoppingProduct(
+        position=position,
+        title=title,
+        url=url,
+        image_url=image_url,
+        price=price_text,
+        price_value=price_value,
+        currency=currency,
+        original_price=original_price,
+        merchant=merchant,
+        rating=rating,
+        review_count=review_count,
+        shipping=shipping,
+        badge=badge,
+    )
+
+
+def _parse_old_product(
+    card, position: int
+) -> GoogleShoppingProduct | None:
+    """Parse product from old Google Shopping layout (pre-2024).
+
+    Kept for backwards compatibility in case Google serves old layout.
     """
 
     # === Title ===
@@ -365,7 +580,7 @@ def _parse_single_product(
                     url = href
                 break
     if not url:
-        return None
+        url = f"https://www.google.com/search?tbm=shop&q={quote_plus(title)}"
 
     # === Price ===
     price_text = None
@@ -391,7 +606,7 @@ def _parse_single_product(
 
     price_value, currency = _parse_price_string(price_text or "")
 
-    # === Original price (strikethrough) ===
+    # === Original price ===
     original_price = None
     for sel in ["span.T14wmb", "span.Hlkkvb", "s"]:
         el = card.select_one(sel)
@@ -615,10 +830,10 @@ async def _fetch_single_shopping_page(
     sort_by: str | None,
     min_rating: int | None,
 ) -> GoogleShoppingResponse | None:
-    """Fetch one page: SearXNG first (fast) → browser_pool fallback."""
+    """Fetch one page: SearXNG first (fast) → nodriver fallback."""
     logger.info("Google Shopping page %d for '%s'", page, query)
 
-    # Strategy 1: SearXNG (fast, no browser, no CAPTCHA)
+    # Strategy 1: SearXNG (fast, no browser cost)
     result = await _search_via_searxng_shopping(
         query, _RESULTS_PER_PAGE, page, lang
     )
@@ -628,11 +843,11 @@ async def _fetch_single_shopping_page(
         )
         return result
 
-    # Strategy 2: browser_pool with stealth (slower, may get CAPTCHA'd)
+    # Strategy 2: nodriver (undetected Chrome + Xvfb)
     url = _build_shopping_url(
         query, _RESULTS_PER_PAGE, page, lang, country, sort_by, min_rating,
     )
-    logger.info("SearXNG had no results, trying browser: %s", url)
+    logger.info("SearXNG had no results, trying nodriver: %s", url)
 
     html = await _fetch_shopping_rendered(url)
     if html:
@@ -671,7 +886,7 @@ async def google_shopping(
 ) -> GoogleShoppingResponse:
     """Search Google Shopping and return structured product data.
 
-    SearXNG primary (fast, no CAPTCHA), browser_pool fallback.
+    SearXNG primary (fast), nodriver fallback (undetected Chrome + Xvfb).
     Filters: sort_by (price/rating/reviews), min_rating (1-4 stars).
     Results cached in Redis for 5 minutes.
     """
@@ -717,12 +932,12 @@ async def google_shopping(
             )
             break
 
-        # Collect products (deduplicate by URL)
+        # Collect products (deduplicate by title since URLs are constructed)
         for p in page_result.products:
-            normalized = p.url.rstrip("/")
-            if normalized in seen_urls:
+            dedup_key = p.title.lower().strip()
+            if dedup_key in seen_urls:
                 continue
-            seen_urls.add(normalized)
+            seen_urls.add(dedup_key)
             p.position = len(all_products) + 1
             all_products.append(p)
 

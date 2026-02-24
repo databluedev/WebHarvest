@@ -16,6 +16,8 @@ celery[redis]>=5.4.0
 
 # Browser Automation
 playwright>=1.49.0
+nodriver>=0.38
+PyVirtualDisplay>=3.0
 
 # HTTP Client
 httpx[socks]>=0.28.0
