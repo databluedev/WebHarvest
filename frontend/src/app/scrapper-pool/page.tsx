@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -12,7 +12,15 @@ import {
   Linkedin,
   Menu,
   Lock,
+  Play,
+  Loader2,
+  ChevronDown,
+  X,
+  ExternalLink,
+  Copy,
+  Check,
 } from "lucide-react";
+import { api } from "@/lib/api";
 
 type ApiStatus = "active" | "coming-soon";
 
@@ -111,6 +119,66 @@ const TICKER_ITEMS = [
 
 export default function ScrapperPoolPage() {
   const [mobileNav, setMobileNav] = useState(false);
+  const [activePanel, setActivePanel] = useState<string | null>(null);
+
+  // Google Search tryout state
+  const [query, setQuery] = useState("");
+  const [numResults, setNumResults] = useState(10);
+  const [language, setLanguage] = useState("en");
+  const [country, setCountry] = useState("");
+  const [timeRange, setTimeRange] = useState("");
+  const [safeSearch, setSafeSearch] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const handleCardClick = (apiId: string, status: ApiStatus) => {
+    if (status !== "active") return;
+    if (activePanel === apiId) {
+      setActivePanel(null);
+    } else {
+      setActivePanel(apiId);
+      setTimeout(() => panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+    }
+  };
+
+  const handleGoogleSearch = async () => {
+    if (!query.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api.googleSearch({
+        query: query.trim(),
+        num_results: numResults,
+        language,
+        ...(country && { country }),
+        ...(timeRange && { time_range: timeRange }),
+        safe_search: safeSearch,
+      });
+      setResult(res);
+    } catch (err: any) {
+      setError(err.message || "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopyResult = async () => {
+    if (!result) return;
+    await navigator.clipboard.writeText(JSON.stringify(result, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  useEffect(() => {
+    if (!activePanel) {
+      setResult(null);
+      setError(null);
+    }
+  }, [activePanel]);
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
@@ -220,11 +288,15 @@ export default function ScrapperPoolPage() {
                 const Icon = scraperApi.icon;
                 const colors = ACCENT_MAP[scraperApi.accent];
                 const isActive = scraperApi.status === "active";
+                const isOpen = activePanel === scraperApi.id;
 
                 return (
                   <div
                     key={scraperApi.id}
-                    className="bg-[#050505] p-8 group hover:bg-white/[0.02] transition-colors relative"
+                    onClick={() => handleCardClick(scraperApi.id, scraperApi.status)}
+                    className={`bg-[#050505] p-8 group transition-colors relative ${
+                      isActive ? "cursor-pointer hover:bg-white/[0.02]" : ""
+                    } ${isOpen ? "bg-white/[0.03] border-l-2 border-l-cyan-500" : ""}`}
                   >
                     {/* Status badge */}
                     <div className="absolute top-6 right-6">
@@ -252,16 +324,304 @@ export default function ScrapperPoolPage() {
                     {/* Description */}
                     <p className="text-[13px] text-white/40 leading-[1.7] mb-6 font-mono">{scraperApi.description}</p>
 
-                    {/* Endpoint */}
-                    <div className="border-t border-white/[0.06] pt-4">
+                    {/* Endpoint + Try It */}
+                    <div className="border-t border-white/[0.06] pt-4 flex items-center justify-between">
                       <code className={`text-[11px] ${colors.text} font-mono tracking-wider`}>
                         {scraperApi.endpoint}
                       </code>
+                      {isActive && (
+                        <span className={`text-[10px] uppercase tracking-[0.2em] font-mono flex items-center gap-1.5 ${isOpen ? "text-cyan-400" : "text-white/30 group-hover:text-white/60"} transition-colors`}>
+                          <Play className="h-3 w-3" />
+                          {isOpen ? "Close" : "Try it"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
               })}
             </div>
+
+            {/* ── TRYOUT PANEL: Google Search ── */}
+            {activePanel === "google-search" && (
+              <div ref={panelRef} className="mt-[1px] border border-white/[0.08] bg-[#0a0a0a]">
+                {/* Panel header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 border border-cyan-500/20 grid place-items-center">
+                      <Search className="h-4 w-4 text-cyan-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-[14px] font-bold uppercase tracking-[0.05em] font-mono">Google Search API</h3>
+                      <code className="text-[11px] text-cyan-400/60 font-mono">POST /v1/data/google/search</code>
+                    </div>
+                  </div>
+                  <button onClick={() => setActivePanel(null)} className="h-8 w-8 grid place-items-center text-white/30 hover:text-white transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+                  {/* Left: Input form */}
+                  <div className="p-6 space-y-5">
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono mb-4">Request Parameters</div>
+
+                    {/* Query input */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Query *</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={query}
+                          onChange={(e) => setQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleGoogleSearch()}
+                          placeholder="e.g. best web scraping tools 2026"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-cyan-500/40 transition-colors"
+                        />
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                      </div>
+                    </div>
+
+                    {/* Parameters row */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Results</label>
+                        <div className="relative">
+                          <select
+                            value={numResults}
+                            onChange={(e) => setNumResults(Number(e.target.value))}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-cyan-500/40 transition-colors"
+                          >
+                            {[5, 10, 20, 30, 50].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Language</label>
+                        <div className="relative">
+                          <select
+                            value={language}
+                            onChange={(e) => setLanguage(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-cyan-500/40 transition-colors"
+                          >
+                            <option value="en">English</option>
+                            <option value="es">Spanish</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="pt">Portuguese</option>
+                            <option value="ja">Japanese</option>
+                            <option value="ko">Korean</option>
+                            <option value="zh">Chinese</option>
+                            <option value="ar">Arabic</option>
+                            <option value="hi">Hindi</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Country</label>
+                        <div className="relative">
+                          <select
+                            value={country}
+                            onChange={(e) => setCountry(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-cyan-500/40 transition-colors"
+                          >
+                            <option value="">Any</option>
+                            <option value="us">United States</option>
+                            <option value="gb">United Kingdom</option>
+                            <option value="ca">Canada</option>
+                            <option value="au">Australia</option>
+                            <option value="de">Germany</option>
+                            <option value="fr">France</option>
+                            <option value="in">India</option>
+                            <option value="jp">Japan</option>
+                            <option value="br">Brazil</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Time Range</label>
+                        <div className="relative">
+                          <select
+                            value={timeRange}
+                            onChange={(e) => setTimeRange(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-cyan-500/40 transition-colors"
+                          >
+                            <option value="">Any time</option>
+                            <option value="hour">Past hour</option>
+                            <option value="day">Past 24 hours</option>
+                            <option value="week">Past week</option>
+                            <option value="month">Past month</option>
+                            <option value="year">Past year</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Safe search toggle */}
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setSafeSearch(!safeSearch)}
+                        className={`h-5 w-9 rounded-full transition-colors relative ${safeSearch ? "bg-cyan-500" : "bg-white/10"}`}
+                      >
+                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${safeSearch ? "left-[18px]" : "left-0.5"}`} />
+                      </button>
+                      <span className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono">Safe Search</span>
+                    </div>
+
+                    {/* Submit button */}
+                    <button
+                      onClick={handleGoogleSearch}
+                      disabled={loading || !query.trim()}
+                      className="w-full border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 py-3 text-[12px] uppercase tracking-[0.2em] font-mono hover:bg-cyan-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Searching...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          Execute Search
+                        </>
+                      )}
+                    </button>
+
+                    {error && (
+                      <div className="border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-400 font-mono">
+                        {error}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Response */}
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono">Response</div>
+                      {result && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-white/30 font-mono">
+                            {result.organic_results?.length || 0} results &middot; {result.time_taken?.toFixed(2)}s
+                          </span>
+                          <button onClick={handleCopyResult} className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-white/30 hover:text-white/60 font-mono transition-colors">
+                            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                            {copied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {!result && !loading && !error && (
+                      <div className="h-[400px] border border-dashed border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Search className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                          <p className="text-[12px] text-white/20 font-mono">Enter a query and hit Execute</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {loading && (
+                      <div className="h-[400px] border border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Loader2 className="h-6 w-6 text-cyan-400 animate-spin mx-auto mb-3" />
+                          <p className="text-[12px] text-white/30 font-mono">Fetching search results...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {result && (
+                      <div className="space-y-4">
+                        {/* Quick result cards */}
+                        {result.featured_snippet && (
+                          <div className="border border-violet-500/20 bg-violet-500/5 p-4">
+                            <div className="text-[10px] uppercase tracking-[0.2em] text-violet-400 font-mono mb-2">Featured Snippet</div>
+                            <p className="text-[13px] text-white/70 font-mono leading-relaxed">{result.featured_snippet.content}</p>
+                            <a href={result.featured_snippet.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-violet-400 font-mono mt-2 inline-flex items-center gap-1 hover:underline">
+                              {result.featured_snippet.title} <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        )}
+
+                        {/* Organic results */}
+                        <div className="max-h-[500px] overflow-y-auto space-y-[1px] scrollbar-thin">
+                          {result.organic_results?.map((item: any, i: number) => (
+                            <div key={i} className="bg-[#050505] border border-white/[0.04] p-4 hover:border-white/[0.08] transition-colors">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-[10px] text-white/20 font-mono">#{item.position}</span>
+                                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-cyan-400 font-mono hover:underline truncate block">
+                                      {item.title}
+                                    </a>
+                                  </div>
+                                  <p className="text-[11px] text-emerald-400/60 font-mono truncate mb-1">{item.displayed_url || item.url}</p>
+                                  {item.snippet && (
+                                    <p className="text-[12px] text-white/40 font-mono leading-relaxed">{item.snippet}</p>
+                                  )}
+                                </div>
+                                <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/50 flex-shrink-0">
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* People also ask */}
+                        {result.people_also_ask && result.people_also_ask.length > 0 && (
+                          <div className="border border-white/[0.06] p-4">
+                            <div className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono mb-3">People Also Ask</div>
+                            <div className="space-y-2">
+                              {result.people_also_ask.map((paa: any, i: number) => (
+                                <div key={i} className="text-[12px] text-white/50 font-mono pl-3 border-l border-white/[0.06]">
+                                  {paa.question}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Related searches */}
+                        {result.related_searches && result.related_searches.length > 0 && (
+                          <div className="border border-white/[0.06] p-4">
+                            <div className="text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono mb-3">Related Searches</div>
+                            <div className="flex flex-wrap gap-2">
+                              {result.related_searches.map((rs: any, i: number) => (
+                                <button
+                                  key={i}
+                                  onClick={() => { setQuery(rs.query); }}
+                                  className="text-[11px] text-white/40 font-mono border border-white/[0.08] px-3 py-1.5 hover:text-cyan-400 hover:border-cyan-500/20 transition-colors"
+                                >
+                                  {rs.query}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Raw JSON toggle */}
+                        <details className="border border-white/[0.06]">
+                          <summary className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono cursor-pointer hover:text-white/50 transition-colors">
+                            Raw JSON Response
+                          </summary>
+                          <pre className="px-4 pb-4 text-[11px] text-white/50 font-mono overflow-x-auto max-h-[400px] overflow-y-auto leading-relaxed">
+                            {JSON.stringify(result, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       </main>
