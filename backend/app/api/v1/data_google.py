@@ -74,8 +74,8 @@ async def search_google(
     response_model_exclude_none=True,
     summary="Google Shopping API",
     description=(
-        "Search Google Shopping with advanced filters — sort by price/rating, "
-        "price range, condition (new/used), minimum rating, and free shipping. "
+        "Search Google Shopping with filters — sort by price/rating/reviews, "
+        "minimum rating, and country targeting. "
         "Returns structured product data with prices, merchants, ratings, and images. "
         "Results are cached for 5 minutes."
     ),
@@ -104,11 +104,7 @@ async def search_google_shopping(
         language=request.language,
         country=request.country,
         sort_by=request.sort_by,
-        min_price=request.min_price,
-        max_price=request.max_price,
-        condition=request.condition,
         min_rating=request.min_rating,
-        free_shipping=request.free_shipping,
     )
 
     return result

@@ -99,17 +99,9 @@ class GoogleShoppingRequest(BaseModel):
         pattern=r"^(relevance|price_low|price_high|rating|reviews)$",
         description="Sort order: relevance, price_low, price_high, rating, reviews",
     )
-    min_price: float | None = Field(None, ge=0, description="Minimum price filter")
-    max_price: float | None = Field(None, ge=0, description="Maximum price filter")
-    condition: str | None = Field(
-        None,
-        pattern=r"^(new|used|any)$",
-        description="Product condition: new, used, any",
-    )
     min_rating: int | None = Field(
         None, ge=1, le=4, description="Minimum star rating (1-4)"
     )
-    free_shipping: bool = Field(False, description="Only show free shipping products")
 
 
 class GoogleShoppingProduct(BaseModel):
@@ -127,7 +119,6 @@ class GoogleShoppingProduct(BaseModel):
     rating: float | None = Field(None, description="Star rating (0-5)")
     review_count: int | None = Field(None, description="Number of reviews")
     shipping: str | None = Field(None, description="Shipping info (e.g. 'Free shipping')")
-    condition: str | None = Field(None, description="New, Used, Refurbished")
     badge: str | None = Field(None, description="Special badge (Best seller, Great price, etc.)")
 
 

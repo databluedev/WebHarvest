@@ -142,11 +142,7 @@ export default function ScrapperPoolPage() {
   const [shopLanguage, setShopLanguage] = useState("en");
   const [shopCountry, setShopCountry] = useState("");
   const [shopSortBy, setShopSortBy] = useState("");
-  const [shopMinPrice, setShopMinPrice] = useState("");
-  const [shopMaxPrice, setShopMaxPrice] = useState("");
-  const [shopCondition, setShopCondition] = useState("");
   const [shopMinRating, setShopMinRating] = useState(0);
-  const [shopFreeShipping, setShopFreeShipping] = useState(false);
 
   const handleCardClick = (apiId: string, status: ApiStatus) => {
     if (status !== "active") return;
@@ -192,11 +188,7 @@ export default function ScrapperPoolPage() {
         language: shopLanguage,
         ...(shopCountry && { country: shopCountry }),
         ...(shopSortBy && { sort_by: shopSortBy }),
-        ...(shopMinPrice && { min_price: parseFloat(shopMinPrice) }),
-        ...(shopMaxPrice && { max_price: parseFloat(shopMaxPrice) }),
-        ...(shopCondition && { condition: shopCondition }),
         ...(shopMinRating > 0 && { min_rating: shopMinRating }),
-        free_shipping: shopFreeShipping,
       });
       setResult(res);
     } catch (err: any) {
@@ -739,29 +731,6 @@ export default function ScrapperPoolPage() {
                       </div>
                     </div>
 
-                    {/* Price range */}
-                    <div>
-                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Price Range</label>
-                      <div className="grid grid-cols-2 gap-4">
-                        <input
-                          type="number"
-                          value={shopMinPrice}
-                          onChange={(e) => setShopMinPrice(e.target.value)}
-                          placeholder="Min $"
-                          min="0"
-                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-amber-500/40 transition-colors"
-                        />
-                        <input
-                          type="number"
-                          value={shopMaxPrice}
-                          onChange={(e) => setShopMaxPrice(e.target.value)}
-                          placeholder="Max $"
-                          min="0"
-                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-amber-500/40 transition-colors"
-                        />
-                      </div>
-                    </div>
-
                     {/* Minimum Rating */}
                     <div>
                       <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Minimum Rating</label>
@@ -782,55 +751,27 @@ export default function ScrapperPoolPage() {
                       </div>
                     </div>
 
-                    {/* Condition + Country */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Condition</label>
-                        <div className="relative">
-                          <select
-                            value={shopCondition}
-                            onChange={(e) => setShopCondition(e.target.value)}
-                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-amber-500/40 transition-colors"
-                          >
-                            <option value="">Any</option>
-                            <option value="new">New</option>
-                            <option value="used">Used</option>
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
-                        </div>
+                    {/* Country */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Country</label>
+                      <div className="relative">
+                        <select
+                          value={shopCountry}
+                          onChange={(e) => setShopCountry(e.target.value)}
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-amber-500/40 transition-colors"
+                        >
+                          <option value="">Any</option>
+                          <option value="us">United States</option>
+                          <option value="gb">United Kingdom</option>
+                          <option value="ca">Canada</option>
+                          <option value="au">Australia</option>
+                          <option value="de">Germany</option>
+                          <option value="fr">France</option>
+                          <option value="in">India</option>
+                          <option value="jp">Japan</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
                       </div>
-                      <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Country</label>
-                        <div className="relative">
-                          <select
-                            value={shopCountry}
-                            onChange={(e) => setShopCountry(e.target.value)}
-                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-amber-500/40 transition-colors"
-                          >
-                            <option value="">Any</option>
-                            <option value="us">United States</option>
-                            <option value="gb">United Kingdom</option>
-                            <option value="ca">Canada</option>
-                            <option value="au">Australia</option>
-                            <option value="de">Germany</option>
-                            <option value="fr">France</option>
-                            <option value="in">India</option>
-                            <option value="jp">Japan</option>
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Free shipping toggle */}
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setShopFreeShipping(!shopFreeShipping)}
-                        className={`h-5 w-9 rounded-full transition-colors relative ${shopFreeShipping ? "bg-amber-500" : "bg-white/10"}`}
-                      >
-                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${shopFreeShipping ? "left-[18px]" : "left-0.5"}`} />
-                      </button>
-                      <span className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono">Free Shipping Only</span>
                     </div>
 
                     {/* Submit button */}
@@ -948,9 +889,6 @@ export default function ScrapperPoolPage() {
                                     )}
                                     {product.original_price && (
                                       <span className="text-[12px] text-white/25 font-mono line-through">{product.original_price}</span>
-                                    )}
-                                    {product.condition && product.condition !== "New" && (
-                                      <span className="text-[10px] text-white/30 font-mono border border-white/10 px-1.5 py-0.5">{product.condition}</span>
                                     )}
                                   </div>
 

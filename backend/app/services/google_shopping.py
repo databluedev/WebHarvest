@@ -1,8 +1,11 @@
 """Google Shopping scraper — fetches and parses Google Shopping results.
 
-Strategy chain:
-1. Direct Google Shopping scrape (curl_cffi + BS4 parser) — supports ALL filters
-2. SearXNG shopping category (fallback for unfiltered queries)
+Google Shopping is fully JavaScript-rendered. curl_cffi gets blocked by
+Google's bot detection (returns a challenge page, not product data).
+
+Strategy chain (per page):
+1. Lightweight standalone Playwright — launch Chromium, render, extract, close
+2. SearXNG shopping category (fallback, no filters)
 
 Results are cached in Redis for 5 minutes.
 """
@@ -24,14 +27,13 @@ from app.schemas.data_google import (
     GoogleShoppingResponse,
     RelatedSearch,
 )
-from app.services.google_serp import _fetch_google_html  # Reuse TLS fetch
 
 logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 300  # 5 minutes
-_RESULTS_PER_PAGE = 10
-_MAX_PAGES = 10
-_PAGE_DELAY = 1.0
+_RESULTS_PER_PAGE = 20
+_MAX_PAGES = 5
+_PAGE_DELAY = 2.0
 
 # Currency symbol → code mapping
 _CURRENCY_MAP = {
@@ -63,40 +65,31 @@ def _cache_key(
     lang: str,
     country: str | None,
     sort_by: str | None,
-    min_price: float | None,
-    max_price: float | None,
-    condition: str | None,
     min_rating: int | None,
-    free_shipping: bool,
 ) -> str:
     raw = (
         f"shop|{query}|{num}|{page}|{lang}|{country or ''}"
-        f"|{sort_by or ''}|{min_price}|{max_price}"
-        f"|{condition or ''}|{min_rating or ''}|{free_shipping}"
+        f"|{sort_by or ''}|{min_rating or ''}"
     )
     h = hashlib.md5(raw.encode()).hexdigest()[:16]
     return f"serp:shopping:{h}"
 
 
 # ═══════════════════════════════════════════════════════════════════
-# URL builder with filters
+# URL builder
 # ═══════════════════════════════════════════════════════════════════
 
 
 def _build_shopping_url(
     query: str,
-    num: int = 10,
+    num: int = 20,
     page: int = 1,
     lang: str = "en",
     country: str | None = None,
     sort_by: str | None = None,
-    min_price: float | None = None,
-    max_price: float | None = None,
-    condition: str | None = None,
     min_rating: int | None = None,
-    free_shipping: bool = False,
 ) -> str:
-    """Build a Google Shopping URL with all filter parameters."""
+    """Build a Google Shopping URL with filter parameters."""
     params = [
         f"q={quote_plus(query)}",
         "tbm=shop",
@@ -111,7 +104,6 @@ def _build_shopping_url(
     # Build tbs filter string
     tbs_parts: list[str] = []
 
-    # Sort order
     sort_map = {
         "price_low": "p_ord:p",
         "price_high": "p_ord:pd",
@@ -121,35 +113,11 @@ def _build_shopping_url(
     if sort_by and sort_by in sort_map:
         tbs_parts.append(sort_map[sort_by])
 
-    # Price range
-    if min_price is not None or max_price is not None:
-        tbs_parts.append("mr:1")
-        tbs_parts.append("price:1")
-        if min_price is not None:
-            tbs_parts.append(f"ppr_min:{int(min_price)}")
-        if max_price is not None:
-            tbs_parts.append(f"ppr_max:{int(max_price)}")
-
-    # Condition
-    if condition == "new":
-        tbs_parts.append("mr:1")
-        tbs_parts.append("new:1")
-    elif condition == "used":
-        tbs_parts.append("mr:1")
-        tbs_parts.append("used:1")
-
-    # Minimum rating
     if min_rating and 1 <= min_rating <= 4:
         tbs_parts.append("mr:1")
         tbs_parts.append(f"avg_rating:{min_rating}00")
 
-    # Free shipping
-    if free_shipping:
-        tbs_parts.append("mr:1")
-        tbs_parts.append("ship:1")
-
     if tbs_parts:
-        # Deduplicate (mr:1 can appear multiple times)
         seen: set[str] = set()
         deduped: list[str] = []
         for p in tbs_parts:
@@ -167,26 +135,19 @@ def _build_shopping_url(
 
 
 def _parse_price_string(text: str) -> tuple[float | None, str | None]:
-    """Extract numeric price and currency code from a price string.
-
-    Returns (price_value, currency_code).
-    Examples: "$29.99" → (29.99, "USD"), "€1,299.00" → (1299.0, "EUR")
-    """
+    """Extract numeric price and currency code from a price string."""
     if not text:
         return None, None
 
     text = text.strip()
 
-    # Detect currency
     currency = None
     for symbol, code in _CURRENCY_MAP.items():
         if symbol in text:
             currency = code
             break
 
-    # Extract numeric value
-    # Handle formats: 1,299.99 or 1.299,99 (European)
-    # First try standard format (comma as thousands, dot as decimal)
+    # Standard format: 1,299.99
     match = re.search(r"[\d,]+\.?\d*", text.replace(" ", ""))
     if match:
         num_str = match.group().replace(",", "")
@@ -195,7 +156,7 @@ def _parse_price_string(text: str) -> tuple[float | None, str | None]:
         except ValueError:
             pass
 
-    # Try European format (dot as thousands, comma as decimal)
+    # European format: 1.299,99
     match = re.search(r"[\d.]+,\d{2}", text.replace(" ", ""))
     if match:
         num_str = match.group().replace(".", "").replace(",", ".")
@@ -208,14 +169,127 @@ def _parse_price_string(text: str) -> tuple[float | None, str | None]:
 
 
 # ═══════════════════════════════════════════════════════════════════
-# HTML parser for Google Shopping
+# Lightweight standalone Playwright fetch
+# ═══════════════════════════════════════════════════════════════════
+
+_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
+
+
+async def _fetch_shopping_rendered(url: str) -> str | None:
+    """Fetch Google Shopping page with a lightweight standalone Playwright.
+
+    Launches a fresh Chromium instance, navigates, extracts HTML, closes.
+    No browser pool, no stealth plugins, no fingerprinting — just a minimal
+    headless browser to render Google Shopping's JS.
+    """
+    pw = None
+    browser = None
+    try:
+        from playwright.async_api import async_playwright
+
+        pw = await async_playwright().start()
+        browser = await pw.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-extensions",
+                "--disable-background-networking",
+                "--disable-default-apps",
+                "--disable-sync",
+                "--no-first-run",
+            ],
+        )
+        context = await browser.new_context(
+            user_agent=_USER_AGENT,
+            viewport={"width": 1366, "height": 768},
+            locale="en-US",
+        )
+        page = await context.new_page()
+
+        # Block images/fonts/media for speed
+        await page.route(
+            "**/*.{png,jpg,jpeg,gif,webp,svg,ico,woff,woff2,ttf,mp4,mp3}",
+            lambda route: route.abort(),
+        )
+
+        response = await page.goto(
+            url, wait_until="domcontentloaded", timeout=20000
+        )
+        if not response or response.status >= 400:
+            logger.warning(
+                "Shopping fetch status %s",
+                response.status if response else "None",
+            )
+            return None
+
+        # Wait for product cards to render
+        try:
+            await page.wait_for_selector(
+                "div.sh-dgr__content", timeout=8000
+            )
+        except Exception:
+            try:
+                await page.wait_for_selector(
+                    "div.sh-pr__product-results", timeout=5000
+                )
+            except Exception:
+                logger.warning("Shopping product cards did not render")
+
+        # Let remaining JS settle
+        await asyncio.sleep(1)
+
+        # Accept cookies if prompt appears
+        try:
+            accept_btn = page.locator(
+                "button:has-text('Accept all'), "
+                "button:has-text('Accept'), "
+                "button:has-text('I agree')"
+            ).first
+            if await accept_btn.is_visible(timeout=1000):
+                await accept_btn.click()
+                await asyncio.sleep(0.5)
+        except Exception:
+            pass
+
+        html = await page.content()
+        logger.info(
+            "Shopping lightweight fetch: %d chars, %d divs",
+            len(html),
+            html.count("<div"),
+        )
+        return html
+
+    except Exception as e:
+        logger.warning("Shopping lightweight fetch failed: %s", e)
+        return None
+    finally:
+        if browser:
+            try:
+                await browser.close()
+            except Exception:
+                pass
+        if pw:
+            try:
+                await pw.stop()
+            except Exception:
+                pass
+
+
+# ═══════════════════════════════════════════════════════════════════
+# HTML parser — selectors from confirmed working Selenium script
 # ═══════════════════════════════════════════════════════════════════
 
 
 def _parse_shopping_html(
     html: str, query: str, page: int
 ) -> GoogleShoppingResponse:
-    """Parse Google Shopping SERP HTML into structured product data."""
+    """Parse rendered Google Shopping HTML into structured product data."""
     soup = BeautifulSoup(html, "lxml")
 
     products = _parse_product_cards(soup, page)
@@ -225,7 +299,7 @@ def _parse_shopping_html(
     return GoogleShoppingResponse(
         query=query,
         total_results=total_results,
-        time_taken=0,  # Set by caller
+        time_taken=0,
         products=products,
         related_searches=related,
     )
@@ -234,27 +308,22 @@ def _parse_shopping_html(
 def _parse_product_cards(
     soup: BeautifulSoup, page: int
 ) -> list[GoogleShoppingProduct]:
-    """Extract product cards from Google Shopping HTML."""
+    """Extract product cards from rendered Google Shopping HTML."""
     products: list[GoogleShoppingProduct] = []
     offset = (page - 1) * _RESULTS_PER_PAGE
 
-    # Try multiple container selectors (Google changes these)
-    containers = []
-    for sel in [
-        "div.sh-dgr__gr-auto",  # Grid product cards
-        "div.sh-dgr__content",  # Shopping grid items
-        "div.KZmu8e",  # Newer product wrapper
-        "div.i0X6df",  # Alternative wrapper
-        "div.sh-dlr__list-result",  # List view items
-        "div.xcR77",  # Compact product cards
-    ]:
-        containers = soup.select(sel)
-        if containers:
-            break
+    # Primary container: sh-dgr__content (confirmed by Selenium script)
+    containers = soup.select("div.sh-dgr__content")
 
-    # Broader fallback: find any div with product-like data attributes
+    # Fallbacks
     if not containers:
-        containers = soup.select("div[data-docid], div[data-hveid]")
+        containers = soup.select("div.sh-dgr__gr-auto")
+    if not containers:
+        containers = soup.select("div.sh-dlr__list-result")
+    if not containers:
+        containers = soup.select("div.KZmu8e")
+
+    logger.info("Found %d product containers", len(containers))
 
     for i, card in enumerate(containers):
         try:
@@ -262,7 +331,7 @@ def _parse_product_cards(
             if product:
                 products.append(product)
         except Exception as e:
-            logger.debug(f"Failed to parse shopping product {i}: {e}")
+            logger.debug("Failed to parse shopping product %d: %s", i, e)
             continue
 
     return products
@@ -271,16 +340,23 @@ def _parse_product_cards(
 def _parse_single_product(
     card, position: int
 ) -> GoogleShoppingProduct | None:
-    """Extract data from a single product card."""
+    """Extract data from a single product card.
+
+    Selectors based on confirmed working Selenium script:
+    - Title: .C7Lkve .EI11Pd .tAxDx
+    - Price: .XrAfOe .kHxwFf .QIrs8 span
+    - Merchant: .aULzUe.IuHnof
+    - Shipping: .bONr3b .vEjMR
+    - Image: .ArOc1c img
+    - URL: .eaGTj.mQaFGe.shntl a
+    """
 
     # === Title ===
     title = None
     for sel in [
         "h3.tAxDx",
+        ".C7Lkve .EI11Pd .tAxDx",
         "h3.sh-np__product-title",
-        "a.Lq5OHe h3",
-        "div.rgHvZc a",
-        "h4",
         "h3",
     ]:
         el = card.select_one(sel)
@@ -294,8 +370,8 @@ def _parse_single_product(
     # === URL ===
     url = ""
     for sel in [
-        "a.Lq5OHe",
         "a.shntl",
+        "a.Lq5OHe",
         "a[href*='/shopping/product']",
         "a[href*='/url?']",
         "a[href]",
@@ -304,7 +380,6 @@ def _parse_single_product(
         if el:
             href = el.get("href", "")
             if href and not href.startswith("#") and not href.startswith("/search"):
-                # Handle Google redirect URLs
                 if "/url?q=" in href:
                     url = href.split("/url?q=")[1].split("&")[0]
                 elif href.startswith("/"):
@@ -318,11 +393,10 @@ def _parse_single_product(
     # === Price ===
     price_text = None
     for sel in [
+        ".kHxwFf .QIrs8 span",
         "span.a8Pemb",
         "span.kHxwFf",
         "span.HRLxBb",
-        "span.sh-dgr__content-price",
-        "b",
     ]:
         el = card.select_one(sel)
         if el:
@@ -331,19 +405,18 @@ def _parse_single_product(
                 price_text = text
                 break
 
-    # Fallback: find any element with a currency symbol + number
     if not price_text:
-        for el in card.select("span, div"):
+        for el in card.select("span, b"):
             text = el.get_text(strip=True)
-            if text and re.match(r"^[\$€£¥₹₩][\d,]+\.?\d*$", text.strip()):
+            if text and re.match(r"^[\$€£¥₹][\d,]+\.?\d*$", text.strip()):
                 price_text = text
                 break
 
     price_value, currency = _parse_price_string(price_text or "")
 
-    # === Original price (sale/strikethrough) ===
+    # === Original price (strikethrough) ===
     original_price = None
-    for sel in ["span.T14wmb", "span.Hlkkvb", "span.sh-dgr__content-old-price", "s"]:
+    for sel in ["span.T14wmb", "span.Hlkkvb", "s"]:
         el = card.select_one(sel)
         if el:
             text = el.get_text(strip=True)
@@ -354,11 +427,10 @@ def _parse_single_product(
     # === Merchant ===
     merchant = None
     for sel in [
+        ".aULzUe.IuHnof",
         "div.aULzUe",
         "div.E5ocAb",
         "span.IuHnof",
-        "div.sh-dgr__content-seller",
-        "span.zPEcBd",
     ]:
         el = card.select_one(sel)
         if el:
@@ -369,17 +441,15 @@ def _parse_single_product(
 
     # === Rating ===
     rating = None
-    for sel in ["span.Rsc7Yb", "span.yi40Hd", "div.NzUzee span"]:
+    for sel in ["span.Rsc7Yb", "span.yi40Hd"]:
         el = card.select_one(sel)
         if el:
-            text = el.get_text(strip=True)
             try:
-                rating = float(text)
+                rating = float(el.get_text(strip=True))
                 break
             except ValueError:
                 continue
 
-    # Also check aria-label for rating
     if rating is None:
         for el in card.select("[aria-label]"):
             label = el.get("aria-label", "")
@@ -397,7 +467,6 @@ def _parse_single_product(
         el = card.select_one(sel)
         if el:
             text = el.get_text(strip=True)
-            # Extract number from "(1,234)" or "1,234 reviews"
             match = re.search(r"[\d,]+", text.replace("(", "").replace(")", ""))
             if match:
                 try:
@@ -408,42 +477,42 @@ def _parse_single_product(
 
     # === Image ===
     image_url = None
-    for sel in ["img.TL92Hc", "img.sh-img__image", "img[data-src]", "img[src]"]:
+    for sel in [
+        ".ArOc1c img",
+        "img.TL92Hc",
+        "img.sh-img__image",
+        "img[data-src]",
+        "img[src]",
+    ]:
         el = card.select_one(sel)
         if el:
             src = el.get("data-src") or el.get("src") or ""
-            if src and not src.startswith("data:") and "google" not in src:
+            if src and not src.startswith("data:"):
                 image_url = src
                 break
 
     # === Shipping ===
     shipping = None
-    for sel in ["span.vEjMR", "div.dD8iuc", "span.sh-dgr__content-shipping"]:
+    for sel in [
+        ".bONr3b .vEjMR",
+        "span.vEjMR",
+        "div.dD8iuc",
+    ]:
         el = card.select_one(sel)
         if el:
             text = el.get_text(strip=True)
             if text:
                 shipping = text
                 break
-    # Check for "Free shipping" in any text
+
     if not shipping:
         card_text = card.get_text(separator=" ", strip=True).lower()
         if "free shipping" in card_text or "free delivery" in card_text:
             shipping = "Free shipping"
 
-    # === Condition ===
-    condition = None
-    card_text_lower = card.get_text(separator=" ", strip=True).lower()
-    if "refurbished" in card_text_lower:
-        condition = "Refurbished"
-    elif "used" in card_text_lower:
-        condition = "Used"
-    elif "pre-owned" in card_text_lower:
-        condition = "Pre-owned"
-
     # === Badge ===
     badge = None
-    for sel in ["span.Ib8pOd", "span.KkSFGe", "div.jBTlje"]:
+    for sel in ["span.Ib8pOd", "span.KkSFGe"]:
         el = card.select_one(sel)
         if el:
             text = el.get_text(strip=True)
@@ -464,17 +533,14 @@ def _parse_single_product(
         rating=rating,
         review_count=review_count,
         shipping=shipping,
-        condition=condition,
         badge=badge,
     )
 
 
 def _parse_shopping_related(soup: BeautifulSoup) -> list[RelatedSearch]:
-    """Extract related searches from Shopping results."""
     related: list[RelatedSearch] = []
     seen: set[str] = set()
-
-    for sel in ["div#botstuff a", "a.k8XOCe", "div.s75CSd a", "a.EIaa9b"]:
+    for sel in ["div#botstuff a", "a.k8XOCe", "div.s75CSd a"]:
         for el in soup.select(sel):
             text = el.get_text(strip=True)
             href = el.get("href", "")
@@ -486,75 +552,16 @@ def _parse_shopping_related(soup: BeautifulSoup) -> list[RelatedSearch]:
             ):
                 seen.add(text.lower())
                 related.append(RelatedSearch(query=text))
-
     return related
 
 
 def _parse_shopping_total(soup: BeautifulSoup) -> str | None:
-    """Extract total results text."""
     el = soup.select_one("div#result-stats")
-    if el:
-        return el.get_text(strip=True)
-    return None
+    return el.get_text(strip=True) if el else None
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Strategy 1: Direct Google Shopping scrape
-# ═══════════════════════════════════════════════════════════════════
-
-
-async def _scrape_shopping_page(
-    query: str,
-    page: int,
-    lang: str,
-    country: str | None,
-    sort_by: str | None,
-    min_price: float | None,
-    max_price: float | None,
-    condition: str | None,
-    min_rating: int | None,
-    free_shipping: bool,
-) -> GoogleShoppingResponse | None:
-    """Fetch one page of Google Shopping results via direct scrape."""
-    url = _build_shopping_url(
-        query,
-        _RESULTS_PER_PAGE,
-        page,
-        lang,
-        country,
-        sort_by,
-        min_price,
-        max_price,
-        condition,
-        min_rating,
-        free_shipping,
-    )
-    logger.info(f"Google Shopping scrape page {page}: {url}")
-
-    html = await _fetch_google_html(url)
-    if not html:
-        return None
-
-    html_lower = html.lower()
-    if "captcha" in html_lower or "unusual traffic" in html_lower:
-        logger.warning("Google CAPTCHA detected during Shopping scrape")
-        return None
-
-    try:
-        result = _parse_shopping_html(html, query, page)
-        if result.products:
-            return result
-        logger.warning(
-            f"Shopping scrape parsed 0 products from {len(html)} chars HTML"
-        )
-    except Exception as e:
-        logger.warning(f"Google Shopping HTML parsing failed: {e}")
-
-    return None
-
-
-# ═══════════════════════════════════════════════════════════════════
-# Strategy 2: SearXNG shopping (unfiltered fallback)
+# SearXNG fallback
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -585,7 +592,6 @@ async def _search_via_searxng_shopping(
         for i, item in enumerate(data.get("results", [])[:num]):
             price_text = item.get("price", "")
             price_value, currency = _parse_price_string(str(price_text))
-
             products.append(
                 GoogleShoppingProduct(
                     position=offset + i + 1,
@@ -599,19 +605,15 @@ async def _search_via_searxng_shopping(
                 )
             )
 
-        related = [
-            RelatedSearch(query=s) for s in data.get("suggestions", [])
-        ]
+        related = [RelatedSearch(query=s) for s in data.get("suggestions", [])]
 
         if products:
             return GoogleShoppingResponse(
-                query=query,
-                time_taken=0,
-                products=products,
+                query=query, time_taken=0, products=products,
                 related_searches=related,
             )
     except Exception as e:
-        logger.warning(f"SearXNG shopping search failed: {e}")
+        logger.warning("SearXNG shopping search failed: %s", e)
 
     return None
 
@@ -621,55 +623,50 @@ async def _search_via_searxng_shopping(
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _has_filters(
-    sort_by: str | None,
-    min_price: float | None,
-    max_price: float | None,
-    condition: str | None,
-    min_rating: int | None,
-    free_shipping: bool,
-) -> bool:
-    """Check if any filters are applied."""
-    return bool(
-        sort_by or min_price is not None or max_price is not None
-        or condition or min_rating or free_shipping
-    )
-
-
 async def _fetch_single_shopping_page(
     query: str,
     page: int,
     lang: str,
     country: str | None,
     sort_by: str | None,
-    min_price: float | None,
-    max_price: float | None,
-    condition: str | None,
     min_rating: int | None,
-    free_shipping: bool,
 ) -> GoogleShoppingResponse | None:
-    """Fetch one page using the strategy chain.
-
-    If filters are applied → direct scrape only (SearXNG can't pass filters).
-    If no filters → SearXNG first, then direct scrape.
-    """
-    has_f = _has_filters(
-        sort_by, min_price, max_price, condition, min_rating, free_shipping
+    """Fetch one page: lightweight Playwright → SearXNG fallback."""
+    url = _build_shopping_url(
+        query, _RESULTS_PER_PAGE, page, lang, country, sort_by, min_rating,
     )
+    logger.info("Google Shopping page %d: %s", page, url)
 
-    if not has_f:
-        # Try SearXNG first (faster, no filter needed)
-        result = await _search_via_searxng_shopping(
-            query, _RESULTS_PER_PAGE, page, lang
+    # Strategy 1: Lightweight standalone Playwright
+    html = await _fetch_shopping_rendered(url)
+    if html:
+        html_lower = html.lower()
+        if "captcha" in html_lower or "unusual traffic" in html_lower:
+            logger.warning("Google CAPTCHA detected during Shopping scrape")
+        else:
+            try:
+                result = _parse_shopping_html(html, query, page)
+                if result.products:
+                    return result
+                logger.warning(
+                    "Shopping parsed 0 products from %d chars (%d divs)",
+                    len(html),
+                    html.count("<div"),
+                )
+            except Exception as e:
+                logger.warning("Shopping HTML parsing failed: %s", e)
+
+    # Strategy 2: SearXNG fallback (no filters but works without browser)
+    result = await _search_via_searxng_shopping(
+        query, _RESULTS_PER_PAGE, page, lang
+    )
+    if result and result.products:
+        logger.info(
+            "Shopping via SearXNG: %d products", len(result.products)
         )
-        if result and result.products:
-            return result
+        return result
 
-    # Direct scrape (supports all filters)
-    return await _scrape_shopping_page(
-        query, page, lang, country, sort_by,
-        min_price, max_price, condition, min_rating, free_shipping,
-    )
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -684,23 +681,20 @@ async def google_shopping(
     language: str = "en",
     country: str | None = None,
     sort_by: str | None = None,
-    min_price: float | None = None,
-    max_price: float | None = None,
-    condition: str | None = None,
     min_rating: int | None = None,
-    free_shipping: bool = False,
 ) -> GoogleShoppingResponse:
-    """Search Google Shopping with filters and return structured product data.
+    """Search Google Shopping and return structured product data.
 
-    Fetches multiple pages when num_results > 10.
-    Results are cached in Redis for 5 minutes.
+    Uses a lightweight standalone Playwright (no browser pool) since
+    Google Shopping is JS-rendered. Falls back to SearXNG.
+    Filters: sort_by (price/rating/reviews), min_rating (1-4 stars).
+    Results cached in Redis for 5 minutes.
     """
     start = time.time()
 
     # Check Redis cache
     key = _cache_key(
-        query, num_results, page, language, country,
-        sort_by, min_price, max_price, condition, min_rating, free_shipping,
+        query, num_results, page, language, country, sort_by, min_rating,
     )
     try:
         from app.core.redis import redis_client
@@ -709,7 +703,7 @@ async def google_shopping(
         if cached:
             data = json.loads(cached)
             data["time_taken"] = round(time.time() - start, 3)
-            logger.info(f"Shopping cache hit for '{query}'")
+            logger.info("Shopping cache hit for '%s'", query)
             return GoogleShoppingResponse(**data)
     except Exception:
         pass
@@ -728,13 +722,13 @@ async def google_shopping(
         current_page = page + pg_offset
 
         page_result = await _fetch_single_shopping_page(
-            query, current_page, language, country,
-            sort_by, min_price, max_price, condition, min_rating, free_shipping,
+            query, current_page, language, country, sort_by, min_rating,
         )
 
         if not page_result or not page_result.products:
             logger.info(
-                f"Shopping page {current_page} returned no products, stopping"
+                "Shopping page %d returned no products, stopping",
+                current_page,
             )
             break
 
@@ -748,22 +742,21 @@ async def google_shopping(
             all_products.append(p)
 
         logger.info(
-            f"Shopping page {current_page}: +{len(page_result.products)} "
-            f"products (total: {len(all_products)})"
+            "Shopping page %d: +%d products (total: %d)",
+            current_page,
+            len(page_result.products),
+            len(all_products),
         )
 
-        # Save extras from first page
         if pg_offset == 0:
             first_page_extras = {
                 "total_results": page_result.total_results,
                 "related_searches": page_result.related_searches,
             }
 
-        # Have enough?
         if len(all_products) >= num_results:
             break
 
-        # Delay between pages
         if pg_offset < pages_needed - 1:
             await asyncio.sleep(_PAGE_DELAY)
 
@@ -771,28 +764,17 @@ async def google_shopping(
 
     if not all_products:
         return GoogleShoppingResponse(
-            success=False,
-            query=query,
-            time_taken=elapsed,
+            success=False, query=query, time_taken=elapsed,
         )
 
-    # Trim to requested count
     all_products = all_products[:num_results]
 
-    # Build filters_applied echo
+    # Filters echo
     filters_applied: dict[str, str | float | bool] = {}
     if sort_by:
         filters_applied["sort_by"] = sort_by
-    if min_price is not None:
-        filters_applied["min_price"] = min_price
-    if max_price is not None:
-        filters_applied["max_price"] = max_price
-    if condition:
-        filters_applied["condition"] = condition
     if min_rating:
         filters_applied["min_rating"] = float(min_rating)
-    if free_shipping:
-        filters_applied["free_shipping"] = True
 
     extras = first_page_extras or {}
     result = GoogleShoppingResponse(
@@ -804,7 +786,7 @@ async def google_shopping(
         related_searches=extras.get("related_searches", []),
     )
 
-    # Cache the result
+    # Cache
     try:
         from app.core.redis import redis_client
 

@@ -663,11 +663,7 @@ class ApiClient {
     language?: string;
     country?: string;
     sort_by?: string;
-    min_price?: number;
-    max_price?: number;
-    condition?: string;
     min_rating?: number;
-    free_shipping?: boolean;
   }) {
     return this.request<{
       success: boolean;
@@ -688,7 +684,6 @@ class ApiClient {
         rating?: number;
         review_count?: number;
         shipping?: string;
-        condition?: string;
         badge?: string;
       }>;
       related_searches?: Array<{ query: string }>;
