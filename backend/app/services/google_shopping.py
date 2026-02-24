@@ -169,21 +169,46 @@ def _parse_price_string(text: str) -> tuple[float | None, str | None]:
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Browser fetch via browser_pool (stealth Playwright)
+# Browser fetch via browser_pool (stealth Playwright + proxy)
 # ═══════════════════════════════════════════════════════════════════
 
 
-async def _fetch_shopping_rendered(url: str) -> str | None:
-    """Fetch Google Shopping page using browser_pool.
+async def _get_proxy_for_shopping() -> dict | None:
+    """Get a proxy for Shopping requests (datacenter IPs get CAPTCHA'd)."""
+    try:
+        from app.services.proxy import ProxyManager, get_builtin_proxy_manager
 
-    Google Shopping requires full stealth to bypass CAPTCHA — standalone
-    headless Chrome with basic patches gets blocked. browser_pool provides
-    the stealth, fingerprinting, and anti-detection needed.
+        # Try builtin proxies first (env var configured)
+        pm = await get_builtin_proxy_manager()
+        if pm:
+            proxy_obj = pm.get_random()
+            if proxy_obj:
+                pw_proxy = ProxyManager.to_playwright(proxy_obj)
+                logger.info("Shopping using proxy: %s", pw_proxy["server"])
+                return pw_proxy
+
+        # No proxies available
+        logger.debug("No proxies configured for Shopping requests")
+        return None
+    except Exception as e:
+        logger.debug("Failed to load proxy for Shopping: %s", e)
+        return None
+
+
+async def _fetch_shopping_rendered(url: str) -> str | None:
+    """Fetch Google Shopping page using browser_pool + proxy.
+
+    Google CAPTCHA is triggered by datacenter IPs, not browser fingerprints.
+    We use browser_pool for stealth and route through a proxy if available.
     """
     try:
         from app.services.browser import browser_pool
 
-        async with browser_pool.get_page(stealth=True) as page:
+        proxy = await _get_proxy_for_shopping()
+
+        async with browser_pool.get_page(
+            stealth=True, proxy=proxy
+        ) as page:
             response = await page.goto(
                 url, wait_until="domcontentloaded", timeout=20000
             )
