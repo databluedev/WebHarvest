@@ -3,7 +3,8 @@
 Strategy chain:
 1. SearXNG (fast JSON API, no browser needed)
 2. Direct Google scrape (curl_cffi with stealth headers + BS4 parser)
-3. googlesearch library (basic fallback)
+3. nodriver (undetected Chrome + Xvfb) — real headed browser, bypasses bot detection
+4. googlesearch library (basic fallback)
 
 Results are cached in Redis for 5 minutes.
 """
@@ -243,13 +244,17 @@ def _parse_organic_results(
     # Primary: div.g containers (standard Google results)
     containers = soup.select("div.g")
 
+    # Fallback: tF2Cxc class (Google result wrapper, 2024+ layout)
+    if not containers:
+        containers = soup.select("div.tF2Cxc")
+
     # Fallback: data-sokoban-container divs
     if not containers:
         containers = soup.select("div[data-sokoban-container]")
 
-    # Fallback: tF2Cxc class (another Google result wrapper)
+    # Fallback: MjjYud containers (broad result wrappers)
     if not containers:
-        containers = soup.select("div.tF2Cxc")
+        containers = soup.select("div.MjjYud")
 
     for i, container in enumerate(containers):
         try:
@@ -567,7 +572,71 @@ async def _search_via_direct_scrape(
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Strategy 3: googlesearch library fallback
+# Strategy 3: nodriver (undetected Chrome + Xvfb)
+# ═══════════════════════════════════════════════════════════════════
+
+
+async def _search_via_nodriver(
+    query: str,
+    num: int,
+    page: int,
+    lang: str,
+    country: str | None,
+    safe: bool,
+    time_range: str | None,
+) -> GoogleSearchResponse | None:
+    """Fetch Google SERP using nodriver + Xvfb (undetected headed Chrome).
+
+    Falls back to this when curl_cffi/httpx gets CAPTCHA'd by Google.
+    Same pattern as Google Shopping's nodriver integration.
+    """
+    from app.services.nodriver_helper import fetch_page_nodriver
+
+    url = _build_google_url(query, num, page, lang, country, safe, time_range)
+    logger.info("nodriver Google SERP: %s", url)
+
+    html, _ = await fetch_page_nodriver(
+        url,
+        wait_selector="div.tF2Cxc",
+        wait_selector_fallback="a h3",
+        wait_time=2,
+    )
+
+    if not html:
+        return None
+
+    # Check for CAPTCHA/block — use <title> for reliable detection
+    # Avoid false positives from font names like "Roboto" matching "robot"
+    html_lower = html.lower()
+    if "unusual traffic" in html_lower:
+        logger.warning("Google CAPTCHA detected during nodriver SERP fetch")
+        return None
+    # Check title for CAPTCHA page (Google's CAPTCHA page title != search query)
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.DOTALL)
+    if title_match:
+        title_text = title_match.group(1).lower()
+        if "sorry" in title_text or "captcha" in title_text:
+            logger.warning("Google CAPTCHA page detected via title: %s", title_text)
+            return None
+
+    try:
+        result = _parse_google_html(html, query, page, num)
+        if result.organic_results:
+            logger.info(
+                "nodriver SERP: %d organic results from %d chars",
+                len(result.organic_results),
+                len(html),
+            )
+            return result
+        logger.warning("nodriver SERP parsed 0 results from %d chars", len(html))
+    except Exception as e:
+        logger.warning("nodriver SERP HTML parsing failed: %s", e)
+
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Strategy 4: googlesearch library fallback
 # ═══════════════════════════════════════════════════════════════════
 
 
@@ -630,7 +699,7 @@ async def _fetch_single_page(
 ) -> GoogleSearchResponse | None:
     """Fetch one page of results using the strategy chain.
 
-    SearXNG → direct scrape. Returns None if all strategies fail.
+    SearXNG → direct scrape → nodriver → library. Returns None if all fail.
     """
     # Strategy 1: SearXNG
     result = await _search_via_searxng(
@@ -641,6 +710,13 @@ async def _fetch_single_page(
 
     # Strategy 2: Direct Google scrape
     result = await _search_via_direct_scrape(
+        query, _RESULTS_PER_PAGE, page, language, country, safe_search, time_range
+    )
+    if result and result.organic_results:
+        return result
+
+    # Strategy 3: nodriver (undetected Chrome + Xvfb)
+    result = await _search_via_nodriver(
         query, _RESULTS_PER_PAGE, page, language, country, safe_search, time_range
     )
     if result and result.organic_results:
@@ -669,7 +745,7 @@ async def google_search(
     """Search Google and return structured SERP data.
 
     Fetches multiple pages when num_results > 10 (Google returns ~10 per page).
-    Strategy chain per page: SearXNG → direct scrape.
+    Strategy chain per page: SearXNG → direct scrape → nodriver.
     Final fallback: googlesearch library (handles its own pagination).
     Results are cached in Redis for 5 minutes.
     """

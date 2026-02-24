@@ -1179,7 +1179,7 @@ async def scrape_url(
 
     Tier 0: Strategy cache hit → try last known working strategy
     Tier 1: HTTP parallel → race(curl_cffi_multi, httpx)
-    Tier 2: Browser race → race(chromium_stealth, firefox_stealth)
+    Tier 2: Browser race → race(chromium_stealth, firefox_stealth, nodriver_stealth, stealth_engine)
     Tier 3: Heavy race (hard sites) → race(google_search, advanced_prewarm)
     Tier 4: Fallback → google_cache
     """
@@ -1284,6 +1284,8 @@ async def scrape_url(
             "advanced_prewarm",
             "stealth_chromium",
             "stealth_firefox",
+            "nodriver_stealth",
+            "nodriver_light",
         )
 
     if (
@@ -1385,6 +1387,24 @@ async def scrape_url(
                 use_ff = last_strategy == "stealth_firefox"
                 result = await _fetch_via_stealth_engine(
                     url, request, use_firefox=use_ff, proxy=proxy_playwright
+                )
+                html = result[0]
+                if html and not _looks_blocked(html):
+                    (
+                        raw_html,
+                        status_code,
+                        screenshot_b64,
+                        action_screenshots,
+                        response_headers,
+                    ) = result
+                    fetched = True
+                    winning_strategy = last_strategy
+                    winning_tier = 0
+                    logger.info(f"Strategy cache hit for {url}: {last_strategy}")
+            elif last_strategy in ("nodriver_stealth", "nodriver_light"):
+                _try_cf = last_strategy == "nodriver_stealth"
+                result = await _fetch_with_nodriver(
+                    url, request, try_cf_bypass=_try_cf
                 )
                 html = result[0]
                 if html and not _looks_blocked(html):
@@ -1547,6 +1567,11 @@ async def scrape_url(
                         "stealth_firefox",
                         _fetch_via_stealth_engine(url, request, use_firefox=True, proxy=proxy_playwright),
                     ))
+                # nodriver (undetected Chrome + Xvfb) — fresh fingerprint with CF bypass
+                browser_coros.append((
+                    "nodriver_stealth",
+                    _fetch_with_nodriver(url, request, try_cf_bypass=True),
+                ))
                 t2_timeout = 35
             else:
                 # Non-hard crawl: add stealth-engine Chromium as extra racer
@@ -1581,6 +1606,11 @@ async def scrape_url(
                         "stealth_firefox",
                         _fetch_via_stealth_engine(url, request, use_firefox=True, proxy=proxy_playwright),
                     ))
+                # nodriver (undetected Chrome + Xvfb) — bypasses bot detection + CF
+                browser_coros.append((
+                    "nodriver_stealth",
+                    _fetch_with_nodriver(url, request, try_cf_bypass=True),
+                ))
                 # Race Tier 2 AND Tier 3 concurrently for massive speed win
                 if starting_tier <= 3:
                     heavy_coros = [
@@ -1626,6 +1656,11 @@ async def scrape_url(
                         ),
                     ),
                 )
+                # nodriver (undetected Chrome + Xvfb) — extra contestant
+                browser_coros.append((
+                    "nodriver_light",
+                    _fetch_with_nodriver(url, request, try_cf_bypass=False),
+                ))
                 t2_timeout = 20
 
         race = await _race_strategies(
@@ -2882,6 +2917,41 @@ async def _fetch_with_browser_session(
                 pass
 
     return raw_html, status_code, screenshot_b64, action_screenshots, response_headers
+
+
+# ---------------------------------------------------------------------------
+# Strategy: nodriver (undetected Chrome + Xvfb)
+# ---------------------------------------------------------------------------
+
+
+async def _fetch_with_nodriver(
+    url: str,
+    request: "ScrapeRequest",
+    try_cf_bypass: bool = False,
+) -> tuple[str, int, str | None, list[str], dict[str, str]]:
+    """Fetch a URL using nodriver (undetected Chrome + Xvfb).
+
+    nodriver connects via CDP directly (no WebDriver protocol) which avoids
+    automation detection. Combined with Xvfb, it runs a real headed browser.
+    Optionally attempts Cloudflare challenge bypass via verify_cf().
+
+    Returns same 5-tuple as _fetch_with_browser_stealth.
+    """
+    from app.services.nodriver_helper import fetch_page_nodriver
+
+    want_screenshot = "screenshot" in getattr(request, "formats", [])
+
+    html, screenshot_b64 = await fetch_page_nodriver(
+        url,
+        wait_time=max(3, (request.wait_for / 1000) if request.wait_for > 0 else 3),
+        screenshot=want_screenshot,
+        try_cf_bypass=try_cf_bypass,
+    )
+
+    if not html:
+        raise RuntimeError("nodriver returned no HTML")
+
+    return (html, 200, screenshot_b64, [], {})
 
 
 # ---------------------------------------------------------------------------
