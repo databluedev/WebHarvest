@@ -58,7 +58,7 @@ const SCRAPER_APIS: Array<{
     description: "Business listings with addresses, ratings, reviews, and coordinates",
     icon: MapPin,
     accent: "emerald",
-    status: "coming-soon",
+    status: "active",
   },
   {
     id: "google-news",
@@ -144,6 +144,20 @@ export default function ScrapperPoolPage() {
   const [shopSortBy, setShopSortBy] = useState("");
   const [shopMinRating, setShopMinRating] = useState(0);
 
+  // Google Maps state
+  const [mapsQuery, setMapsQuery] = useState("");
+  const [mapsCoordinates, setMapsCoordinates] = useState("");
+  const [mapsPlaceId, setMapsPlaceId] = useState("");
+  const [mapsCid, setMapsCid] = useState("");
+  const [mapsType, setMapsType] = useState("");
+  const [mapsNumResults, setMapsNumResults] = useState(20);
+  const [mapsLanguage, setMapsLanguage] = useState("en");
+  const [mapsCountry, setMapsCountry] = useState("");
+  const [mapsSortBy, setMapsSortBy] = useState("");
+  const [mapsMinRating, setMapsMinRating] = useState(0);
+  const [mapsPriceLevel, setMapsPriceLevel] = useState(0);
+  const [mapsIncludeReviews, setMapsIncludeReviews] = useState(false);
+
   const handleCardClick = (apiId: string, status: ApiStatus) => {
     if (status !== "active") return;
     if (activePanel === apiId) {
@@ -189,6 +203,34 @@ export default function ScrapperPoolPage() {
         ...(shopCountry && { country: shopCountry }),
         ...(shopSortBy && { sort_by: shopSortBy }),
         ...(shopMinRating > 0 && { min_rating: shopMinRating }),
+      });
+      setResult(res);
+    } catch (err: any) {
+      setError(err.message || "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleMaps = async () => {
+    if (!mapsQuery.trim() && !mapsCoordinates.trim() && !mapsPlaceId.trim() && !mapsCid.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api.googleMaps({
+        ...(mapsQuery && { query: mapsQuery.trim() }),
+        ...(mapsCoordinates && { coordinates: mapsCoordinates.trim() }),
+        ...(mapsPlaceId && { place_id: mapsPlaceId.trim() }),
+        ...(mapsCid && { cid: mapsCid.trim() }),
+        ...(mapsType && { type: mapsType }),
+        num_results: mapsNumResults,
+        language: mapsLanguage,
+        ...(mapsCountry && { country: mapsCountry }),
+        ...(mapsSortBy && { sort_by: mapsSortBy }),
+        ...(mapsMinRating > 0 && { min_rating: mapsMinRating }),
+        ...(mapsPriceLevel > 0 && { price_level: mapsPriceLevel }),
+        include_reviews: mapsIncludeReviews,
       });
       setResult(res);
     } catch (err: any) {
@@ -935,6 +977,405 @@ export default function ScrapperPoolPage() {
                             </div>
                           </div>
                         )}
+
+                        {/* Raw JSON toggle */}
+                        <details className="border border-white/[0.06]">
+                          <summary className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono cursor-pointer hover:text-white/50 transition-colors">
+                            Raw JSON Response
+                          </summary>
+                          <pre className="px-4 pb-4 text-[11px] text-white/50 font-mono overflow-x-auto max-h-[400px] overflow-y-auto leading-relaxed">
+                            {JSON.stringify(result, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── TRYOUT PANEL: Google Maps ── */}
+            {activePanel === "google-maps" && (
+              <div ref={panelRef} className="mt-[1px] border border-white/[0.08] bg-[#0a0a0a]">
+                {/* Panel header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 border border-emerald-500/20 grid place-items-center">
+                      <MapPin className="h-4 w-4 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-[14px] font-bold uppercase tracking-[0.05em] font-mono">Google Maps API</h3>
+                      <code className="text-[11px] text-emerald-400/60 font-mono">POST /v1/data/google/maps</code>
+                    </div>
+                  </div>
+                  <button onClick={() => setActivePanel(null)} className="h-8 w-8 grid place-items-center text-white/30 hover:text-white transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+                  {/* Left: Input form */}
+                  <div className="p-6 space-y-5">
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono mb-4">Request Parameters</div>
+
+                    {/* Search Query */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Search Query</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={mapsQuery}
+                          onChange={(e) => setMapsQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleGoogleMaps()}
+                          placeholder="e.g. restaurants near Times Square"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-emerald-500/40 transition-colors"
+                        />
+                        <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                      </div>
+                    </div>
+
+                    {/* Coordinates + Type */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">GPS Coordinates</label>
+                        <input
+                          type="text"
+                          value={mapsCoordinates}
+                          onChange={(e) => setMapsCoordinates(e.target.value)}
+                          placeholder="40.7580,-73.9855"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-emerald-500/40 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Place Type</label>
+                        <div className="relative">
+                          <select
+                            value={mapsType}
+                            onChange={(e) => setMapsType(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
+                          >
+                            <option value="">Any</option>
+                            <option value="restaurant">Restaurant</option>
+                            <option value="hotel">Hotel</option>
+                            <option value="cafe">Cafe</option>
+                            <option value="bar">Bar</option>
+                            <option value="hospital">Hospital</option>
+                            <option value="pharmacy">Pharmacy</option>
+                            <option value="gas_station">Gas Station</option>
+                            <option value="gym">Gym</option>
+                            <option value="bank">Bank</option>
+                            <option value="supermarket">Supermarket</option>
+                            <option value="park">Park</option>
+                            <option value="museum">Museum</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Place ID + CID (for detail lookups) */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Place ID</label>
+                        <input
+                          type="text"
+                          value={mapsPlaceId}
+                          onChange={(e) => setMapsPlaceId(e.target.value)}
+                          placeholder="ChIJN1t_tDeuEmsR..."
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-emerald-500/40 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">CID / Ludocid</label>
+                        <input
+                          type="text"
+                          value={mapsCid}
+                          onChange={(e) => setMapsCid(e.target.value)}
+                          placeholder="0x89c25090:0x40c6a577..."
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-emerald-500/40 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Sort + Results */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Sort By</label>
+                        <div className="relative">
+                          <select
+                            value={mapsSortBy}
+                            onChange={(e) => setMapsSortBy(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
+                          >
+                            <option value="">Relevance</option>
+                            <option value="rating">Rating</option>
+                            <option value="reviews">Reviews</option>
+                            <option value="distance">Distance</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Results</label>
+                        <div className="relative">
+                          <select
+                            value={mapsNumResults}
+                            onChange={(e) => setMapsNumResults(Number(e.target.value))}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
+                          >
+                            {[5, 10, 20, 30, 50, 100].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Min Rating + Price Level */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Min Rating</label>
+                        <div className="flex gap-2">
+                          {[0, 3, 3.5, 4, 4.5].map((r) => (
+                            <button
+                              key={r}
+                              onClick={() => setMapsMinRating(r)}
+                              className={`px-3 py-2 text-[12px] font-mono border transition-colors ${
+                                mapsMinRating === r
+                                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                                  : "border-white/10 text-white/30 hover:text-white/60"
+                              }`}
+                            >
+                              {r === 0 ? "Any" : `${r}+`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Price Level</label>
+                        <div className="flex gap-2">
+                          {[0, 1, 2, 3, 4].map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => setMapsPriceLevel(p)}
+                              className={`px-3 py-2 text-[12px] font-mono border transition-colors ${
+                                mapsPriceLevel === p
+                                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                                  : "border-white/10 text-white/30 hover:text-white/60"
+                              }`}
+                            >
+                              {p === 0 ? "Any" : "$".repeat(p)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Country + Reviews toggle */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Country</label>
+                        <div className="relative">
+                          <select
+                            value={mapsCountry}
+                            onChange={(e) => setMapsCountry(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
+                          >
+                            <option value="">Any</option>
+                            <option value="us">United States</option>
+                            <option value="gb">United Kingdom</option>
+                            <option value="ca">Canada</option>
+                            <option value="au">Australia</option>
+                            <option value="de">Germany</option>
+                            <option value="fr">France</option>
+                            <option value="in">India</option>
+                            <option value="jp">Japan</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <button
+                          onClick={() => setMapsIncludeReviews(!mapsIncludeReviews)}
+                          className={`w-full border py-3 text-[12px] uppercase tracking-[0.15em] font-mono transition-colors ${
+                            mapsIncludeReviews
+                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                              : "border-white/10 text-white/30 hover:text-white/60"
+                          }`}
+                        >
+                          {mapsIncludeReviews ? "Reviews: ON" : "Include Reviews"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Submit button */}
+                    <button
+                      onClick={handleGoogleMaps}
+                      disabled={loading || (!mapsQuery.trim() && !mapsCoordinates.trim() && !mapsPlaceId.trim() && !mapsCid.trim())}
+                      className="w-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 py-3 text-[12px] uppercase tracking-[0.2em] font-mono hover:bg-emerald-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Searching Places...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          Search Places
+                        </>
+                      )}
+                    </button>
+
+                    {error && (
+                      <div className="border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-400 font-mono">
+                        {error}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Response */}
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono">Places</div>
+                      {result && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-white/30 font-mono">
+                            {result.places?.length || 0} places &middot; {result.time_taken?.toFixed(2)}s
+                          </span>
+                          <button onClick={handleCopyResult} className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-white/30 hover:text-white/60 font-mono transition-colors">
+                            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                            {copied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {!result && !loading && !error && (
+                      <div className="h-[400px] border border-dashed border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <MapPin className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                          <p className="text-[12px] text-white/20 font-mono">Search for places to see results</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {loading && (
+                      <div className="h-[400px] border border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Loader2 className="h-6 w-6 text-emerald-400 animate-spin mx-auto mb-3" />
+                          <p className="text-[12px] text-white/30 font-mono">Fetching places from Google Maps...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {result && (
+                      <div className="space-y-4">
+                        {/* Filters applied badge */}
+                        {result.filters_applied && Object.keys(result.filters_applied).length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {Object.entries(result.filters_applied).map(([k, v]: [string, any]) => (
+                              <span key={k} className="text-[10px] font-mono border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 px-2 py-1">
+                                {k}: {String(v)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Place cards */}
+                        <div className="max-h-[600px] overflow-y-auto space-y-[1px] scrollbar-thin">
+                          {result.places?.map((place: any, i: number) => (
+                            <div key={i} className="bg-[#050505] border border-white/[0.04] p-4 hover:border-white/[0.08] transition-colors">
+                              <div className="flex gap-4">
+                                {/* Thumbnail */}
+                                {place.thumbnail && (
+                                  <div className="flex-shrink-0 h-16 w-16 border border-white/[0.06] bg-white/[0.02] grid place-items-center overflow-hidden">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={place.thumbnail} alt={place.title} className="h-full w-full object-cover" />
+                                  </div>
+                                )}
+
+                                <div className="min-w-0 flex-1">
+                                  {/* Title + position */}
+                                  <div className="flex items-start justify-between gap-2 mb-1">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2 mb-0.5">
+                                        <span className="text-[10px] text-white/20 font-mono">#{place.position}</span>
+                                        {place.type && (
+                                          <span className="text-[9px] uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 font-mono">
+                                            {place.type}
+                                          </span>
+                                        )}
+                                        {place.price_level_text && (
+                                          <span className="text-[10px] text-white/30 font-mono">{place.price_level_text}</span>
+                                        )}
+                                      </div>
+                                      <a href={place.url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-white/80 font-mono hover:text-emerald-400 transition-colors line-clamp-2">
+                                        {place.title}
+                                      </a>
+                                    </div>
+                                    <a href={place.url} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/50 flex-shrink-0 mt-1">
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                    </a>
+                                  </div>
+
+                                  {/* Rating + Address */}
+                                  <div className="flex items-center gap-3 flex-wrap mb-1">
+                                    {place.rating != null && (
+                                      <span className="text-[11px] text-emerald-400/70 font-mono flex items-center gap-1">
+                                        {"★".repeat(Math.round(place.rating))}{"☆".repeat(5 - Math.round(place.rating))}
+                                        <span className="text-white/30">{place.rating}</span>
+                                        {place.review_count != null && (
+                                          <span className="text-white/20">({place.review_count.toLocaleString()})</span>
+                                        )}
+                                      </span>
+                                    )}
+                                    {place.open_now != null && (
+                                      <span className={`text-[10px] font-mono ${place.open_now ? "text-emerald-400/60" : "text-red-400/60"}`}>
+                                        {place.open_now ? "Open" : "Closed"}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Address + Phone + Website */}
+                                  <div className="flex items-center gap-3 flex-wrap">
+                                    {place.address && (
+                                      <span className="text-[11px] text-white/30 font-mono">{place.address}</span>
+                                    )}
+                                    {place.phone && (
+                                      <span className="text-[11px] text-white/25 font-mono">{place.phone}</span>
+                                    )}
+                                  </div>
+
+                                  {/* Attributes */}
+                                  {place.attributes && place.attributes.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {place.attributes.map((attr: string, j: number) => (
+                                        <span key={j} className="text-[9px] text-white/20 font-mono border border-white/[0.06] px-1.5 py-0.5">
+                                          {attr}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Reviews */}
+                                  {place.reviews && place.reviews.length > 0 && (
+                                    <div className="mt-2 space-y-1">
+                                      {place.reviews.slice(0, 2).map((review: any, j: number) => (
+                                        <div key={j} className="text-[11px] text-white/20 font-mono border-l border-white/[0.06] pl-2">
+                                          <span className="text-white/30">{review.author_name}</span>
+                                          {review.rating && <span className="text-emerald-400/50 ml-1">{"★".repeat(review.rating)}</span>}
+                                          {review.text && <span className="ml-1">{review.text.slice(0, 80)}...</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
 
                         {/* Raw JSON toggle */}
                         <details className="border border-white/[0.06]">

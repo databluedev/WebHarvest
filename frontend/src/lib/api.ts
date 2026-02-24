@@ -692,6 +692,70 @@ class ApiClient {
       body: JSON.stringify(params),
     });
   }
+
+  async googleMaps(params: {
+    query?: string;
+    coordinates?: string;
+    radius?: number;
+    zoom?: number;
+    type?: string;
+    keyword?: string;
+    min_rating?: number;
+    open_now?: boolean;
+    price_level?: number;
+    sort_by?: string;
+    num_results?: number;
+    place_id?: string;
+    cid?: string;
+    data?: string;
+    language?: string;
+    country?: string;
+    include_reviews?: boolean;
+    reviews_limit?: number;
+    reviews_sort?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      query?: string;
+      coordinates_used?: string;
+      search_type: string;
+      total_results?: string;
+      time_taken: number;
+      filters_applied?: Record<string, string | number | boolean>;
+      places: Array<{
+        position: number;
+        title: string;
+        place_id?: string;
+        cid?: string;
+        url: string;
+        address?: string;
+        latitude?: number;
+        longitude?: number;
+        website?: string;
+        phone?: string;
+        rating?: number;
+        review_count?: number;
+        price_level?: number;
+        price_level_text?: string;
+        type?: string;
+        subtypes?: string[];
+        open_now?: boolean;
+        thumbnail?: string;
+        attributes?: string[];
+        description?: string;
+        reviews?: Array<{
+          author_name: string;
+          rating?: number;
+          text?: string;
+          relative_time?: string;
+        }>;
+      }>;
+      related_searches?: Array<{ query: string }>;
+    }>("/v1/data/google/maps", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
 }
 
 export const API_BASE_URL = API_URL;
