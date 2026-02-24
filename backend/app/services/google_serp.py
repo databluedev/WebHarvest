@@ -8,6 +8,7 @@ Strategy chain:
 Results are cached in Redis for 5 minutes.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -613,8 +614,47 @@ async def _search_via_library(
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Single-page fetcher (strategy chain for ONE page)
+# ═══════════════════════════════════════════════════════════════════
+
+_RESULTS_PER_PAGE = 10  # Google standard page size
+
+
+async def _fetch_single_page(
+    query: str,
+    page: int,
+    language: str,
+    country: str | None,
+    safe_search: bool,
+    time_range: str | None,
+) -> GoogleSearchResponse | None:
+    """Fetch one page of results using the strategy chain.
+
+    SearXNG → direct scrape. Returns None if all strategies fail.
+    """
+    # Strategy 1: SearXNG
+    result = await _search_via_searxng(
+        query, _RESULTS_PER_PAGE, page, language, time_range
+    )
+    if result and result.organic_results:
+        return result
+
+    # Strategy 2: Direct Google scrape
+    result = await _search_via_direct_scrape(
+        query, _RESULTS_PER_PAGE, page, language, country, safe_search, time_range
+    )
+    if result and result.organic_results:
+        return result
+
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════
 # Main entry point
 # ═══════════════════════════════════════════════════════════════════
+
+_MAX_PAGES = 10  # Safety cap: never fetch more than 10 pages
+_PAGE_DELAY = 1.0  # Seconds between page fetches
 
 
 async def google_search(
@@ -628,7 +668,9 @@ async def google_search(
 ) -> GoogleSearchResponse:
     """Search Google and return structured SERP data.
 
-    Strategy chain: SearXNG → direct scrape → library fallback.
+    Fetches multiple pages when num_results > 10 (Google returns ~10 per page).
+    Strategy chain per page: SearXNG → direct scrape.
+    Final fallback: googlesearch library (handles its own pagination).
     Results are cached in Redis for 5 minutes.
     """
     start = time.time()
@@ -647,39 +689,103 @@ async def google_search(
     except Exception:
         pass
 
-    # Strategy 1: SearXNG
-    result = await _search_via_searxng(query, num_results, page, language, time_range)
-    if result and result.organic_results:
-        logger.info(f"Google SERP via SearXNG: {len(result.organic_results)} results")
-    else:
-        # Strategy 2: Direct Google scrape
-        result = await _search_via_direct_scrape(
-            query, num_results, page, language, country, safe_search, time_range
+    # Calculate how many pages we need
+    pages_needed = min(
+        _MAX_PAGES,
+        (num_results + _RESULTS_PER_PAGE - 1) // _RESULTS_PER_PAGE,
+    )
+
+    all_organic: list[GoogleOrganicResult] = []
+    seen_urls: set[str] = set()  # Deduplicate by URL
+    first_page_extras: dict | None = None
+
+    for pg_offset in range(pages_needed):
+        current_page = page + pg_offset
+
+        page_result = await _fetch_single_page(
+            query, current_page, language, country, safe_search, time_range
         )
-        if result and result.organic_results:
+
+        if not page_result or not page_result.organic_results:
             logger.info(
-                f"Google SERP via direct scrape: {len(result.organic_results)} results"
+                f"Page {current_page} returned no results, stopping pagination"
             )
-        else:
-            # Strategy 3: googlesearch library
-            result = await _search_via_library(query, num_results, language, country)
-            if result and result.organic_results:
-                logger.info(
-                    f"Google SERP via library: {len(result.organic_results)} results"
-                )
+            break
+
+        # Collect organic results (deduplicate by URL)
+        for r in page_result.organic_results:
+            normalized_url = r.url.rstrip("/")
+            if normalized_url in seen_urls:
+                continue
+            seen_urls.add(normalized_url)
+            r.position = len(all_organic) + 1
+            all_organic.append(r)
+
+        logger.info(
+            f"Page {current_page}: +{len(page_result.organic_results)} results "
+            f"(total: {len(all_organic)})"
+        )
+
+        # Save extras from first page only
+        if pg_offset == 0:
+            first_page_extras = {
+                "featured_snippet": page_result.featured_snippet,
+                "people_also_ask": page_result.people_also_ask,
+                "related_searches": page_result.related_searches,
+                "knowledge_panel": page_result.knowledge_panel,
+                "total_results": page_result.total_results,
+            }
+
+        # Have enough?
+        if len(all_organic) >= num_results:
+            break
+
+        # Delay between pages to avoid rate-limiting
+        if pg_offset < pages_needed - 1:
+            await asyncio.sleep(_PAGE_DELAY)
+
+    # If direct methods got nothing, try googlesearch library as final fallback
+    if not all_organic:
+        logger.info("All page fetches failed, trying googlesearch library fallback")
+        lib_result = await _search_via_library(query, num_results, language, country)
+        if lib_result and lib_result.organic_results:
+            logger.info(
+                f"Google SERP via library: {len(lib_result.organic_results)} results"
+            )
+            all_organic = lib_result.organic_results
+            first_page_extras = {
+                "featured_snippet": None,
+                "people_also_ask": [],
+                "related_searches": [],
+                "knowledge_panel": None,
+                "total_results": None,
+            }
 
     elapsed = round(time.time() - start, 3)
 
-    if not result:
+    if not all_organic:
         return GoogleSearchResponse(
             success=False,
             query=query,
             time_taken=elapsed,
         )
 
-    result.time_taken = elapsed
+    # Trim to requested count
+    all_organic = all_organic[:num_results]
 
-    # Cache the result
+    extras = first_page_extras or {}
+    result = GoogleSearchResponse(
+        query=query,
+        total_results=extras.get("total_results"),
+        time_taken=elapsed,
+        organic_results=all_organic,
+        featured_snippet=extras.get("featured_snippet"),
+        people_also_ask=extras.get("people_also_ask", []),
+        related_searches=extras.get("related_searches", []),
+        knowledge_panel=extras.get("knowledge_panel"),
+    )
+
+    # Cache the aggregated result
     try:
         from app.core.redis import redis_client
 
