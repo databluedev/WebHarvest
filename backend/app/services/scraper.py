@@ -1729,7 +1729,9 @@ async def scrape_url(
     if not fetched and not proxy_url and _has_builtin:
         from app.services.proxy import get_builtin_proxy_manager
         _builtin_pm = await get_builtin_proxy_manager()
-        _builtin_obj = _builtin_pm.get_random() if _builtin_pm else None
+        # Domain-sticky + weighted selection (avoids banned proxies)
+        _domain = urlparse(url).netloc.lower()
+        _builtin_obj = await _builtin_pm.get_for_domain(_domain) if _builtin_pm else None
         if _builtin_obj:
             _bp_url = _builtin_pm.to_httpx(_builtin_obj)
             _bp_pw = _builtin_pm.to_playwright(_builtin_obj)
@@ -1779,6 +1781,8 @@ async def scrape_url(
                     elapsed_ms = (time.time() - tier_start) * 1000
                     await record_strategy_result(url, winning_strategy, 3, True, elapsed_ms)
                     logger.info(f"Proxy browser succeeded for {url}: {winning_strategy}")
+                else:
+                    await _builtin_pm.mark_failed(_builtin_obj)
 
     # --- Final fallback: use best available content even if blocked ---
     if not fetched:
@@ -3818,7 +3822,9 @@ async def scrape_url_fetch_only(
     if not fetched and not proxy_url and _has_builtin:
         from app.services.proxy import get_builtin_proxy_manager
         _builtin_pm = await get_builtin_proxy_manager()
-        _builtin_obj = _builtin_pm.get_random() if _builtin_pm else None
+        # Domain-sticky + weighted selection (avoids banned proxies)
+        _domain = urlparse(url).netloc.lower()
+        _builtin_obj = await _builtin_pm.get_for_domain(_domain) if _builtin_pm else None
         if _builtin_obj:
             _bp_url = _builtin_pm.to_httpx(_builtin_obj)
             _bp_pw = _builtin_pm.to_playwright(_builtin_obj)
@@ -3860,6 +3866,10 @@ async def scrape_url_fetch_only(
                         logger.info(f"Fetch-only proxy browser succeeded for {url}")
                 except Exception as _pbe:
                     logger.debug(f"Fetch-only proxy browser failed for {url}: {_pbe}")
+
+            # Mark failed if both HTTP and browser failed
+            if not fetched and _builtin_pm:
+                await _builtin_pm.mark_failed(_builtin_obj)
 
     # Use best available — but NOT if it's blocked content (e.g. Amazon bot page).
     # Returning None lets the crawl worker fall back to full scrape_url which has

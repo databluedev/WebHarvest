@@ -17,6 +17,9 @@ _builtin_proxy_cache: list[str] = []
 _builtin_proxy_cache_time: float = 0
 _BUILTIN_CACHE_TTL = 600  # 10 minutes
 
+# Auto-ban threshold: proxies with this many failures in 10 min are skipped
+_PROXY_BAN_THRESHOLD = 5
+
 
 @dataclass
 class Proxy:
@@ -40,7 +43,7 @@ class Proxy:
 
 
 class ProxyManager:
-    """Manages a pool of proxies for rotating use."""
+    """Manages a pool of proxies with smart rotation."""
 
     def __init__(self, proxies: list[Proxy] | None = None):
         self._proxies = proxies or []
@@ -80,34 +83,86 @@ class ProxyManager:
     async def mark_failed(self, proxy: Proxy) -> None:
         """Increment failure count for a proxy (10-min TTL)."""
         key = f"proxy:fail:{proxy.host}:{proxy.port}"
-        await _redis.incr(key)
+        count = await _redis.incr(key)
         await _redis.expire(key, 600)
+        if count >= _PROXY_BAN_THRESHOLD:
+            logger.info(
+                f"Proxy auto-banned: {proxy.host}:{proxy.port} "
+                f"({count} failures in 10 min)"
+            )
+
+    async def _is_banned(self, proxy: Proxy) -> bool:
+        """Check if a proxy has too many recent failures."""
+        key = f"proxy:fail:{proxy.host}:{proxy.port}"
+        fails = await _redis.get(key)
+        return int(fails) >= _PROXY_BAN_THRESHOLD if fails else False
 
     async def get_random_weighted(self) -> Proxy | None:
-        """Get a random proxy weighted by fewer failures."""
+        """Get a random proxy weighted by fewer failures, skipping banned ones."""
         if not self._proxies:
             return None
 
+        candidates = []
         weights = []
         for p in self._proxies:
             key = f"proxy:fail:{p.host}:{p.port}"
             fails = await _redis.get(key)
             fail_count = int(fails) if fails else 0
+            # Skip banned proxies
+            if fail_count >= _PROXY_BAN_THRESHOLD:
+                continue
+            candidates.append(p)
             # Weight = 1 / (1 + fail_count) — fewer failures = higher weight
             weights.append(1.0 / (1.0 + fail_count))
 
+        if not candidates:
+            # All banned — fall back to any random proxy
+            return random.choice(self._proxies)
+
         total = sum(weights)
         if total == 0:
-            return random.choice(self._proxies)
+            return random.choice(candidates)
 
         r = random.uniform(0, total)
         cumulative = 0.0
-        for proxy, weight in zip(self._proxies, weights):
+        for proxy, weight in zip(candidates, weights):
             cumulative += weight
             if r <= cumulative:
                 return proxy
 
-        return self._proxies[-1]
+        return candidates[-1]
+
+    async def get_for_domain(self, domain: str) -> Proxy | None:
+        """Get a sticky proxy for a domain.
+
+        Same domain always gets the same proxy (1h TTL) to avoid
+        triggering anti-bot systems that flag IP switches mid-session.
+        Falls back to weighted random if sticky proxy is banned.
+        """
+        if not self._proxies:
+            return None
+
+        sticky_key = f"proxy:sticky:{domain}"
+
+        # Check for existing sticky assignment
+        cached_url = await _redis.get(sticky_key)
+        if cached_url:
+            proxy = Proxy.from_url(cached_url)
+            # Verify it's not banned
+            if not await self._is_banned(proxy):
+                return proxy
+            # Banned — clear sticky and pick a new one
+            await _redis.delete(sticky_key)
+            logger.info(f"Sticky proxy for {domain} was banned, rotating")
+
+        # Pick a new proxy via weighted selection
+        proxy = await self.get_random_weighted()
+        if proxy:
+            # Save sticky assignment (1 hour)
+            await _redis.set(sticky_key, self.to_httpx(proxy), ex=3600)
+            logger.debug(f"Sticky proxy assigned for {domain}: {proxy.host}:{proxy.port}")
+
+        return proxy
 
     @staticmethod
     def to_playwright(proxy: Proxy) -> dict:
