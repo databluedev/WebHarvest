@@ -727,23 +727,37 @@ class ApiClient {
         title: string;
         place_id?: string;
         cid?: string;
+        data_id?: string;
+        data_cid?: string;
+        provider_id?: string;
         url: string;
+        google_maps_url?: string;
         address?: string;
+        gps_coordinates?: { latitude: number; longitude: number };
         latitude?: number;
         longitude?: number;
         website?: string;
         phone?: string;
         rating?: number;
+        reviews?: number;
         review_count?: number;
+        price?: string;
         price_level?: number;
         price_level_text?: string;
         type?: string;
+        type_id?: string;
         subtypes?: string[];
+        type_ids?: string[];
+        open_state?: string;
         open_now?: boolean;
         thumbnail?: string;
+        image?: string;
         attributes?: string[];
+        extensions?: Array<Record<string, string[]>>;
         description?: string;
-        reviews?: Array<{
+        hours?: string;
+        working_hours?: Array<{ day: string; hours: string }>;
+        user_reviews?: Array<{
           author_name: string;
           rating?: number;
           text?: string;

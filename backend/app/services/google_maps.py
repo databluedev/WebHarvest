@@ -36,6 +36,132 @@ _MAX_SCROLL_ROUNDS = 5  # Max scroll iterations for loading more results
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Utility helpers (ScrapingDog / SerpAPI compat)
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _hex_cid_to_decimal(hex_cid: str) -> str | None:
+    """Convert hex CID pair to decimal string.
+
+    '0x3bb6e59021aaaaab:0xfbacafc56bc15ed7' → '18132222127050743511'
+    The decimal is the unsigned 64-bit interpretation of the second hex part.
+    """
+    if not hex_cid or ":" not in hex_cid:
+        return None
+    parts = hex_cid.split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        return str(int(parts[1], 16))
+    except (ValueError, IndexError):
+        return None
+
+
+def _type_to_id(type_name: str) -> str:
+    """Convert human-readable type to machine-readable ID.
+
+    'Indian restaurant' → 'indian_restaurant'
+    """
+    return re.sub(r"[^a-z0-9]+", "_", type_name.lower()).strip("_")
+
+
+def _extract_provider_id(url: str) -> str | None:
+    """Extract /g/... provider ID from a Google Maps URL."""
+    # Pattern: !19s/g/... or !19s%2Fg%2F...
+    m = re.search(r"!19s(/g/[^!?&]+)", url)
+    if m:
+        return unquote(m.group(1))
+    m = re.search(r"!19s(%2Fg%2F[^!?&]+)", url, re.I)
+    if m:
+        return unquote(m.group(1))
+    # Also check for /m/... (older format)
+    m = re.search(r"!19s(/m/[^!?&]+)", url)
+    if m:
+        return unquote(m.group(1))
+    return None
+
+
+def _build_google_maps_url(cid: str | None, place_id: str | None) -> str | None:
+    """Build a canonical Google Maps URL from CID or Place ID."""
+    if cid:
+        return f"https://www.google.com/maps?cid={_hex_cid_to_decimal(cid) or cid}"
+    if place_id:
+        return f"https://www.google.com/maps/place/?q=place_id:{place_id}"
+    return None
+
+
+def _make_full_image_url(thumbnail: str | None) -> str | None:
+    """Convert a Google thumbnail URL to a larger image URL.
+
+    Thumbnails use params like =w163-h92-k-no or =w80-h106-k-no.
+    Replace with larger dimensions.
+    """
+    if not thumbnail:
+        return None
+    # Replace size params with larger dimensions
+    return re.sub(r"=w\d+-h\d+-", "=w600-h400-", thumbnail)
+
+
+def _group_attributes_to_extensions(
+    attributes: list[str],
+) -> list[dict[str, list[str]]] | None:
+    """Group flat attributes into SerpAPI-style extensions categories."""
+    if not attributes:
+        return None
+
+    # Categorize by keyword patterns
+    categories: dict[str, list[str]] = {}
+    _cat_patterns = {
+        "service_options": [
+            "dine-in", "dine in", "takeout", "take-out", "takeaway",
+            "delivery", "drive-through", "curbside", "outdoor seating",
+            "no-contact delivery", "onsite",
+        ],
+        "accessibility": [
+            "wheelchair", "accessible", "braille",
+        ],
+        "parking": [
+            "parking", "valet", "garage",
+        ],
+        "amenities": [
+            "restroom", "wi-fi", "wifi", "bar", "rooftop", "fireplace",
+            "live music", "tv", "pool",
+        ],
+        "dining_options": [
+            "breakfast", "brunch", "lunch", "dinner", "dessert",
+            "seating", "catering", "counter",
+        ],
+        "offerings": [
+            "coffee", "alcohol", "beer", "wine", "cocktail",
+            "vegetarian", "vegan", "halal", "kosher", "organic",
+            "comfort food", "healthy", "quick bite",
+        ],
+        "atmosphere": [
+            "casual", "cozy", "trendy", "upscale", "romantic", "family",
+        ],
+        "payments": [
+            "credit card", "debit", "nfc", "cash",
+        ],
+    }
+
+    for attr in attributes:
+        attr_lower = attr.lower()
+        placed = False
+        for cat_name, keywords in _cat_patterns.items():
+            if any(kw in attr_lower for kw in keywords):
+                categories.setdefault(cat_name, []).append(attr)
+                placed = True
+                break
+        if not placed:
+            categories.setdefault("other", []).append(attr)
+
+    if not categories:
+        return None
+
+    return [{k: v} for k, v in categories.items()]
+
+
+# ═══════════════════════════════════════════════════════════════════
 # Cache key
 # ═══════════════════════════════════════════════════════════════════
 
@@ -388,10 +514,11 @@ def _parse_place_card(card, position: int) -> GoogleMapsPlace | None:
     if card.select_one("span.jHLihd"):
         return None
 
-    # === URL + Place ID + CID + Coordinates (from link href) ===
+    # === URL + Place ID + CID + Provider ID + Coordinates (from link href) ===
     url = ""
     place_id = None
     cid = None
+    provider_id = None
     latitude = None
     longitude = None
 
@@ -404,10 +531,17 @@ def _parse_place_card(card, position: int) -> GoogleMapsPlace | None:
         if cid_match:
             cid = cid_match.group(1)
 
-        # Extract Place ID: !16s{encoded_place_id}
-        pid_match = re.search(r"!16s(%2F[^!]+|/[^!]+)", url)
+        # Extract Place ID: !1sChIJ... or !19sChIJ... (Google Place ID format)
+        pid_match = re.search(r"!(?:1|19)s(ChIJ[A-Za-z0-9_-]+)", url)
         if pid_match:
-            place_id = unquote(pid_match.group(1))
+            place_id = pid_match.group(1)
+
+        # Extract Provider ID: !16s/g/... or !19s/g/...
+        provider_id_match = re.search(
+            r"!(?:16|19)s(%2Fg%2F[^!?&]+|/g/[^!?&]+|%2Fm%2F[^!?&]+|/m/[^!?&]+)", url
+        )
+        if provider_id_match:
+            provider_id = unquote(provider_id_match.group(1))
 
         # Extract coordinates: !3d{lat}!4d{lng}
         lat_match = re.search(r"!3d([\d.-]+)", url)
@@ -508,14 +642,29 @@ def _parse_place_card(card, position: int) -> GoogleMapsPlace | None:
         span_texts = [s.get_text(strip=True) for s in spans if s.get_text(strip=True)]
 
         for st in span_texts:
+            st_lower = st.lower()
+
+            # Open/closed detection — check BEFORE address to avoid confusion
+            if "open" in st_lower or "close" in st_lower:
+                if re.search(r"\b(?:open|close|am|pm)\b", st_lower, re.I):
+                    # Determine status: "Closed· Opens..." → closed
+                    # "Open· Closes..." → open, "Open 24 hours" → open
+                    if st_lower.startswith("close") or st_lower.startswith("closed"):
+                        open_now = False
+                    elif st_lower.startswith("open"):
+                        open_now = True
+                    else:
+                        # Ambiguous — check which comes first
+                        open_now = st_lower.index("open") < st_lower.index("close") if "close" in st_lower else True
+                    hours_text = st
+                    continue
+
             # Category detection (short text, no digits, not a status)
             if (
                 not place_type
                 and 2 < len(st) < 40
                 and not re.search(r"\d", st)
                 and st not in ("·", "⋅")
-                and "Open" not in st
-                and "Close" not in st
             ):
                 place_type = st
                 if place_type not in subtypes:
@@ -528,15 +677,12 @@ def _parse_place_card(card, position: int) -> GoogleMapsPlace | None:
                 and len(st) > 5
                 and not st.startswith("$")
                 and not re.match(r"^\d+\.?\d*$", st)
-                and "star" not in st.lower()
-                and "review" not in st.lower()
+                and "star" not in st_lower
+                and "review" not in st_lower
+                and "open" not in st_lower
+                and "close" not in st_lower
             ):
                 address = st
-
-            # Open/closed detection
-            if "Open" in st or "Closed" in st:
-                open_now = "Open" in st
-                hours_text = st
 
         # Description — longer text without digits/special patterns
         inner_text = row.get_text(strip=True)
@@ -555,6 +701,23 @@ def _parse_place_card(card, position: int) -> GoogleMapsPlace | None:
                 if len(s) < 10
             ):
                 description = inner_text
+
+    # If no address found, try extracting from the description text.
+    # Format: "Type · · Address text" or "Type · Address text"
+    if not address and description:
+        parts = re.split(r"\s*[·⋅]\s*", description)
+        # Skip the category part(s), take the rest as address
+        addr_parts = [
+            p.strip() for p in parts
+            if p.strip()
+            and p.strip() != place_type
+            and len(p.strip()) > 3
+        ]
+        if addr_parts:
+            address = ", ".join(addr_parts)
+            # Don't keep description if it was just type + address
+            if all(p.strip() in (address or "") or p.strip() == place_type for p in parts if p.strip()):
+                description = None
 
     # === Services (Dine-in, Takeaway, Delivery) ===
     attributes = []
@@ -584,25 +747,57 @@ def _parse_place_card(card, position: int) -> GoogleMapsPlace | None:
         elif "order" in btn_text:
             order_url = href
 
+    # === Derived fields (ScrapingDog / SerpAPI compat) ===
+    data_id = cid  # hex CID pair IS the data_id
+    data_cid = _hex_cid_to_decimal(cid) if cid else None
+    # provider_id was extracted from URL above; fallback to helper
+    if not provider_id and url:
+        provider_id = _extract_provider_id(url)
+    google_maps_url = _build_google_maps_url(cid, place_id)
+    type_id = _type_to_id(place_type) if place_type else None
+    type_ids = [_type_to_id(s) for s in subtypes] if subtypes else None
+    image = _make_full_image_url(thumbnail)
+    extensions = _group_attributes_to_extensions(attributes)
+
+    # GPS coordinates dict
+    gps_coordinates = None
+    if latitude is not None and longitude is not None:
+        gps_coordinates = {"latitude": latitude, "longitude": longitude}
+
+    # Open state text
+    open_state_text = hours_text if hours_text else None
+
     return GoogleMapsPlace(
         position=position,
         title=title,
         place_id=place_id,
         cid=cid,
+        data_id=data_id,
+        data_cid=data_cid,
+        provider_id=provider_id,
         url=url,
+        google_maps_url=google_maps_url,
         address=address,
+        gps_coordinates=gps_coordinates,
         latitude=latitude,
         longitude=longitude,
         rating=rating,
+        reviews=review_count,
         review_count=review_count,
+        price=price_level_text,
         price_level=price_level,
         price_level_text=price_level_text,
         type=place_type,
+        type_id=type_id,
         subtypes=subtypes if subtypes else None,
+        type_ids=type_ids,
         business_status="OPERATIONAL" if open_now else None,
+        open_state=open_state_text,
         open_now=open_now,
         thumbnail=thumbnail,
+        image=image,
         description=description,
+        extensions=extensions,
         attributes=attributes if attributes else None,
         reservation_url=reservation_url,
         order_url=order_url,
@@ -827,6 +1022,12 @@ def _parse_place_details(
             if cid_match:
                 cid = cid_match.group(1)
 
+    # Try ChIJ Place ID from page HTML (!1s or !19s patterns)
+    if not place_id:
+        pid_match = re.search(r"!(?:1|19)s(ChIJ[A-Za-z0-9_-]+)", html)
+        if pid_match:
+            place_id = pid_match.group(1)
+
     # Try CID from !1s pattern in page URLs
     if not cid:
         cid_match = re.search(r"!1s(0x[0-9a-f]+:0x[0-9a-f]+)", html)
@@ -907,10 +1108,17 @@ def _parse_place_details(
         elif "reserv" in tooltip or "book" in tooltip:
             reservation_url = href
 
+    # === Hours summary text ===
+    hours_summary = None
+    if hours_el:
+        aria = hours_el.get("aria-label", "")
+        if aria:
+            hours_summary = aria.strip()
+
     # === Reviews ===
-    reviews = None
+    user_reviews = None
     if include_reviews:
-        reviews = _parse_reviews_from_details(soup, reviews_limit)
+        user_reviews = _parse_reviews_from_details(soup, reviews_limit)
 
     # Build URL
     url = ""
@@ -924,35 +1132,70 @@ def _parse_place_details(
     if not url:
         url = f"https://www.google.com/maps/search/{quote_plus(title)}"
 
+    # === Derived fields (ScrapingDog / SerpAPI compat) ===
+    data_id = cid  # hex CID pair IS the data_id
+    data_cid = _hex_cid_to_decimal(cid) if cid else None
+    provider_id = _extract_provider_id(url) or _extract_provider_id(html)
+    google_maps_url = _build_google_maps_url(cid, place_id)
+    type_id = _type_to_id(place_type) if place_type else None
+    type_ids_list = [_type_to_id(s) for s in subtypes] if subtypes else None
+    image = _make_full_image_url(thumbnail)
+    extensions = _group_attributes_to_extensions(attributes)
+
+    # GPS coordinates dict
+    gps_coordinates = None
+    if latitude is not None and longitude is not None:
+        gps_coordinates = {"latitude": latitude, "longitude": longitude}
+
+    # Open state text
+    open_state_text = None
+    if open_now is True:
+        open_state_text = hours_summary or "Open"
+    elif open_now is False:
+        open_state_text = hours_summary or "Closed"
+
     return GoogleMapsPlace(
         position=1,
         title=title,
         place_id=place_id,
         cid=cid,
+        data_id=data_id,
+        data_cid=data_cid,
+        provider_id=provider_id,
         url=url,
+        google_maps_url=google_maps_url,
         address=address,
+        gps_coordinates=gps_coordinates,
         latitude=latitude,
         longitude=longitude,
         plus_code=plus_code,
         website=website,
         phone=phone,
         rating=rating,
+        reviews=review_count,
         review_count=review_count,
+        price=price_level_text,
         price_level=price_level,
         price_level_text=price_level_text,
         type=place_type,
+        type_id=type_id,
         subtypes=subtypes if subtypes else None,
+        type_ids=type_ids_list,
+        open_state=open_state_text,
         open_now=open_now,
         thumbnail=thumbnail,
+        image=image,
         photos=photos if photos else None,
         photo_count=len(photos) if photos else None,
-        hours=hours,
+        hours=hours_summary,
+        working_hours=hours,
         description=description,
+        extensions=extensions,
         attributes=attributes if attributes else None,
         menu_url=menu_url,
         order_url=order_url,
         reservation_url=reservation_url,
-        reviews=reviews,
+        user_reviews=user_reviews,
     )
 
 
@@ -1240,6 +1483,7 @@ async def google_maps(
         query=query,
         coordinates_used=coordinates,
         search_type=search_type,
+        total_results=str(len(places)),
         time_taken=elapsed,
         filters_applied=filters_applied if filters_applied else None,
         places=places,

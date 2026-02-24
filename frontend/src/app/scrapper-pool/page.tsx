@@ -1257,9 +1257,9 @@ export default function ScrapperPoolPage() {
                                   )}
 
                                   {/* Reviews */}
-                                  {place.reviews && place.reviews.length > 0 && (
+                                  {place.user_reviews && place.user_reviews.length > 0 && (
                                     <div className="mt-2 space-y-1">
-                                      {place.reviews.slice(0, 2).map((review: any, j: number) => (
+                                      {place.user_reviews.slice(0, 2).map((review: any, j: number) => (
                                         <div key={j} className="text-[11px] text-white/20 font-mono border-l border-white/[0.06] pl-2">
                                           <span className="text-white/30">{review.author_name}</span>
                                           {review.rating && <span className="text-emerald-400/50 ml-1">{"★".repeat(review.rating)}</span>}

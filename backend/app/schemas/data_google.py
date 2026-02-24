@@ -240,18 +240,32 @@ class GoogleMapsPlace(BaseModel):
     # Identity
     position: int = Field(..., description="1-indexed rank in results")
     title: str = Field(..., description="Business/place name")
-    place_id: str | None = Field(None, description="Google Place ID")
-    cid: str | None = Field(None, description="CID / Ludocid")
-    data_id: str | None = Field(None, description="Google data parameter")
+    place_id: str | None = Field(None, description="Google Place ID (ChIJ...)")
+    cid: str | None = Field(None, description="CID / Ludocid (hex, e.g. 0x...:0x...)")
+    data_id: str | None = Field(
+        None, description="Hex CID pair (e.g. '0x3bb6e59021aaaaab:0xfbacafc56bc15ed7')",
+    )
+    data_cid: str | None = Field(
+        None, description="Decimal CID (e.g. '18132222127050743511')",
+    )
+    provider_id: str | None = Field(
+        None, description="Google provider ID (e.g. '/g/11f57yyvm7')",
+    )
 
     # Location
     address: str | None = None
+    gps_coordinates: dict[str, float] | None = Field(
+        None, description="GPS coordinates {latitude, longitude}",
+    )
     latitude: float | None = None
     longitude: float | None = None
     plus_code: str | None = Field(None, description="Google Plus Code")
 
     # Links
     url: str = Field(..., description="Google Maps URL")
+    google_maps_url: str | None = Field(
+        None, description="Direct Google Maps link for this place",
+    )
     website: str | None = None
     menu_url: str | None = None
     order_url: str | None = Field(None, description="Online ordering link")
@@ -263,7 +277,9 @@ class GoogleMapsPlace(BaseModel):
 
     # Ratings
     rating: float | None = Field(None, description="Star rating (0-5)")
-    review_count: int | None = None
+    reviews: int | None = Field(None, description="Number of reviews")
+    review_count: int | None = Field(None, description="Number of reviews (alias)")
+    price: str | None = Field(None, description="Price display (e.g. '$', '$$', '$10-20')")
     price_level: int | None = Field(None, description="1-4 ($ to $$$$)")
     price_level_text: str | None = Field(None, description="'$' to '$$$$'")
 
@@ -271,33 +287,49 @@ class GoogleMapsPlace(BaseModel):
     business_status: str | None = Field(
         None, description="OPERATIONAL, CLOSED_TEMPORARILY, CLOSED_PERMANENTLY",
     )
+    open_state: str | None = Field(
+        None, description="Current status text (e.g. 'Open', 'Closed ⋅ Opens 7 AM')",
+    )
     open_now: bool | None = None
 
     # Categories
     type: str | None = Field(None, description="Primary type (e.g. 'Restaurant')")
+    type_id: str | None = Field(
+        None, description="Machine-readable primary type (e.g. 'restaurant')",
+    )
     subtypes: list[str] | None = Field(
         None, description="All categories (e.g. ['Italian restaurant', 'Pizza'])",
     )
+    type_ids: list[str] | None = Field(
+        None,
+        description="Machine-readable type IDs (e.g. ['italian_restaurant', 'pizza'])",
+    )
 
     # Media
-    thumbnail: str | None = Field(None, description="Main photo URL")
+    thumbnail: str | None = Field(None, description="Thumbnail photo URL")
+    image: str | None = Field(None, description="Full-size main image URL")
     photos: list[str] | None = Field(None, description="Photo URLs")
     photo_count: int | None = None
 
     # Hours
-    hours: list[dict[str, str]] | None = Field(
+    hours: str | None = Field(None, description="Hours summary (e.g. 'Opens at 9 AM')")
+    working_hours: list[dict[str, str]] | None = Field(
         None,
-        description="Business hours [{day: 'Monday', hours: '9 AM – 10 PM'}, ...]",
+        description="Full business hours [{day: 'Monday', hours: '9 AM – 10 PM'}, ...]",
     )
 
     # Reviews
-    reviews: list[GoogleMapsReview] | None = None
+    user_reviews: list[GoogleMapsReview] | None = None
 
     # Extras
     description: str | None = None
+    extensions: list[dict[str, list[str]]] | None = Field(
+        None,
+        description="Grouped attributes (e.g. [{service_options: ['Dine-in', 'Delivery']}, ...])",
+    )
     attributes: list[str] | None = Field(
         None,
-        description="Service attributes (e.g. ['Wheelchair accessible', 'Outdoor seating'])",
+        description="Flat service attributes (e.g. ['Wheelchair accessible', 'Outdoor seating'])",
     )
     popular_times: dict[str, list[dict[str, int]]] | None = Field(
         None,
