@@ -1246,19 +1246,6 @@ async def scrape_url(
 
     hard_site = _is_hard_site(url)
 
-    # Auto-inject builtin proxy when no user proxy is configured:
-    # - Hard sites: always (they need proxy to avoid blocks)
-    # - Any site: when user explicitly requests proxy via use_proxy=True
-    _use_proxy_requested = getattr(request, "use_proxy", False)
-    if not proxy_url and settings.BUILTIN_PROXY_URL and (hard_site or _use_proxy_requested):
-        from app.services.proxy import ProxyManager as _PM
-        _builtin_pm = _PM.from_urls([settings.BUILTIN_PROXY_URL])
-        _builtin_obj = _builtin_pm.get_random()
-        if _builtin_obj:
-            proxy_url = _builtin_pm.to_httpx(_builtin_obj)
-            proxy_playwright = _builtin_pm.to_playwright(_builtin_obj)
-            logger.info(f"Using builtin proxy for {domain} (hard_site={hard_site}, use_proxy={_use_proxy_requested})")
-
     needs_browser = bool(
         request.actions or "screenshot" in request.formats or request.wait_for > 0
     )
@@ -1736,6 +1723,36 @@ async def scrape_url(
             winning_tier = 4
             elapsed_ms = (time.time() - tier_start) * 1000
             await record_strategy_result(url, winning_strategy, 4, True, elapsed_ms)
+
+    # --- Proxy retry: if all tiers failed and builtin proxy is available, retry with proxy ---
+    if not fetched and not proxy_url and settings.BUILTIN_PROXY_URL:
+        from app.services.proxy import ProxyManager as _PM
+        _builtin_pm = _PM.from_urls([settings.BUILTIN_PROXY_URL])
+        _builtin_obj = _builtin_pm.get_random()
+        if _builtin_obj:
+            _bp_url = _builtin_pm.to_httpx(_builtin_obj)
+            _bp_pw = _builtin_pm.to_playwright(_builtin_obj)
+            logger.info(f"All tiers failed for {url}, retrying with builtin proxy")
+
+            # Retry browser strategies with proxy (most likely to succeed)
+            tier_start = time.time()
+            browser_coros = [
+                ("proxy_chromium_stealth", _fetch_with_browser_stealth(url, request, proxy=_bp_pw)),
+            ]
+            if settings.STEALTH_ENGINE_URL:
+                browser_coros.append(
+                    ("proxy_stealth_chromium", _fetch_via_stealth_engine(url, request, proxy=_bp_pw)),
+                )
+            race = await _race_strategies(browser_coros, url, validate_fn=_validate_browser, timeout=30)
+            _update_best(race)
+            if race.success:
+                raw_html, status_code, screenshot_b64, action_screenshots, response_headers = _unpack_browser_result(race.winner_result)
+                fetched = True
+                winning_strategy = race.winner_name
+                winning_tier = 5  # Proxy tier
+                elapsed_ms = (time.time() - tier_start) * 1000
+                await record_strategy_result(url, winning_strategy, 3, True, elapsed_ms)
+                logger.info(f"Builtin proxy succeeded for {url}: {winning_strategy}")
 
     # --- Final fallback: use best available content even if blocked ---
     if not fetched:
@@ -3350,17 +3367,6 @@ async def scrape_url_fetch_only(
 
     hard_site = _is_hard_site(url)
 
-    # Auto-inject builtin proxy when no user proxy is configured
-    _use_proxy_requested = getattr(request, "use_proxy", False)
-    if not proxy_url and settings.BUILTIN_PROXY_URL and (hard_site or _use_proxy_requested):
-        from app.services.proxy import ProxyManager as _PM
-        _builtin_pm = _PM.from_urls([settings.BUILTIN_PROXY_URL])
-        _builtin_obj = _builtin_pm.get_random()
-        if _builtin_obj:
-            proxy_url = _builtin_pm.to_httpx(_builtin_obj)
-            proxy_playwright = _builtin_pm.to_playwright(_builtin_obj)
-            logger.info(f"Using builtin proxy for {urlparse(url).netloc} (hard_site={hard_site}, use_proxy={_use_proxy_requested})")
-
     needs_browser = bool(
         request.actions or "screenshot" in request.formats or request.wait_for > 0
     )
@@ -3780,6 +3786,44 @@ async def scrape_url_fetch_only(
             fetched = True
             winning_strategy = race.winner_name
             winning_tier = 4
+
+    # --- Proxy retry: if all tiers failed and builtin proxy is available ---
+    if not fetched and not proxy_url and settings.BUILTIN_PROXY_URL:
+        from app.services.proxy import ProxyManager as _PM
+        _builtin_pm = _PM.from_urls([settings.BUILTIN_PROXY_URL])
+        _builtin_obj = _builtin_pm.get_random()
+        if _builtin_obj:
+            _bp_url = _builtin_pm.to_httpx(_builtin_obj)
+            _bp_pw = _builtin_pm.to_playwright(_builtin_obj)
+            logger.info(f"Fetch-only: all tiers failed for {url}, retrying with builtin proxy")
+
+            tier_start = time.time()
+            # Try HTTP with proxy first (cheapest)
+            try:
+                result = await _fetch_with_curl_cffi_multi(url, request.timeout, proxy_url=_bp_url)
+                html, sc, hdrs = result[0], result[1], result[2] if len(result) > 2 else {}
+                if html and sc < 400 and not _looks_blocked(html):
+                    raw_html, status_code, response_headers = html, sc, hdrs
+                    fetched = True
+                    winning_strategy = "proxy_curl_cffi"
+                    winning_tier = 5
+                    logger.info(f"Builtin proxy HTTP succeeded for {url}")
+            except Exception:
+                pass
+
+            # Try browser with proxy if HTTP failed
+            if not fetched:
+                try:
+                    result = await _fetch_with_browser_stealth(url, request, proxy=_bp_pw)
+                    html = result[0]
+                    if html and not _looks_blocked(html):
+                        raw_html, status_code, screenshot_b64, action_screenshots, response_headers = result
+                        fetched = True
+                        winning_strategy = "proxy_chromium_stealth"
+                        winning_tier = 5
+                        logger.info(f"Builtin proxy browser succeeded for {url}")
+                except Exception:
+                    pass
 
     # Use best available — but NOT if it's blocked content (e.g. Amazon bot page).
     # Returning None lets the crawl worker fall back to full scrape_url which has
