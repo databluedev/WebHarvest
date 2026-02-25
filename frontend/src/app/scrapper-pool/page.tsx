@@ -151,6 +151,7 @@ export default function ScrapperPoolPage() {
   const [mapsCid, setMapsCid] = useState("");
   const [mapsType, setMapsType] = useState("");
   const [mapsLanguage, setMapsLanguage] = useState("en");
+  const [mapsNumResults, setMapsNumResults] = useState(20);
   const [mapsSortBy, setMapsSortBy] = useState("");
 
   const handleCardClick = (apiId: string, status: ApiStatus) => {
@@ -220,6 +221,7 @@ export default function ScrapperPoolPage() {
         ...(mapsCid && { cid: mapsCid.trim() }),
         ...(mapsType && { type: mapsType }),
         language: mapsLanguage,
+        num_results: mapsNumResults,
         ...(mapsSortBy && { sort_by: mapsSortBy }),
         include_reviews: true,
       });
@@ -1088,21 +1090,38 @@ export default function ScrapperPoolPage() {
                       </div>
                     </div>
 
-                    {/* Sort By */}
-                    <div>
-                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Sort By</label>
-                      <div className="relative">
-                        <select
-                          value={mapsSortBy}
-                          onChange={(e) => setMapsSortBy(e.target.value)}
-                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
-                        >
-                          <option value="">Relevance</option>
-                          <option value="rating">Rating</option>
-                          <option value="reviews">Reviews</option>
-                          <option value="distance">Distance</option>
-                        </select>
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                    {/* Results + Sort By */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Results</label>
+                        <div className="relative">
+                          <select
+                            value={mapsNumResults}
+                            onChange={(e) => setMapsNumResults(Number(e.target.value))}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
+                          >
+                            {[10, 20, 40, 60, 80, 100, 150, 200].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Sort By</label>
+                        <div className="relative">
+                          <select
+                            value={mapsSortBy}
+                            onChange={(e) => setMapsSortBy(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-emerald-500/40 transition-colors"
+                          >
+                            <option value="">Relevance</option>
+                            <option value="rating">Rating</option>
+                            <option value="reviews">Reviews</option>
+                            <option value="distance">Distance</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
                       </div>
                     </div>
 
