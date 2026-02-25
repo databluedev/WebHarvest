@@ -561,6 +561,50 @@ def _parse_related_searches(soup: BeautifulSoup) -> list[RelatedSearch]:
     return related
 
 
+_SCRAPE_PAGE_SIZE = 10  # Google News tbm=nws returns ~10 per page
+_SCRAPE_MAX_PAGES = 50  # Safety cap for direct scrape pagination
+_SCRAPE_BATCH_SIZE = 3  # Parallel pages per batch
+_SCRAPE_BATCH_DELAY = 1.0  # Seconds between batches (be gentle with Google)
+
+
+async def _fetch_scrape_page(
+    query: str,
+    lang: str,
+    country: str | None,
+    time_range: str | None,
+    sort_by: str | None,
+    start: int,
+) -> tuple[list[GoogleNewsArticle], list[RelatedSearch]] | None:
+    """Fetch a single page of direct Google News scrape results."""
+    url = _build_google_news_url(
+        query,
+        num=_SCRAPE_PAGE_SIZE,
+        lang=lang,
+        country=country,
+        time_range=time_range,
+        sort_by=sort_by,
+        start=start,
+    )
+
+    html = await _fetch_google_html(url)
+    if not html:
+        return None
+
+    html_lower = html.lower()
+    if "captcha" in html_lower or "unusual traffic" in html_lower:
+        logger.warning("Google CAPTCHA detected during news direct scrape (start=%d)", start)
+        return None
+
+    try:
+        articles, related = _parse_google_news_html(html, query, offset=start)
+        if articles:
+            return articles, related
+    except Exception as e:
+        logger.warning(f"Google News HTML parsing failed (start={start}): {e}")
+
+    return None
+
+
 async def _search_via_direct_scrape(
     query: str,
     num_results: int,
@@ -568,45 +612,72 @@ async def _search_via_direct_scrape(
     country: str | None,
     time_range: str | None,
     sort_by: str | None,
+    seen_urls: set[str] | None = None,
 ) -> tuple[list[GoogleNewsArticle], list[RelatedSearch]] | None:
-    """Fetch Google News directly via tbm=nws and parse HTML."""
-    url = _build_google_news_url(
-        query,
-        num=min(num_results, 100),
-        lang=lang,
-        country=country,
-        time_range=time_range,
-        sort_by=sort_by,
-    )
-    logger.info(f"Direct Google News scrape: {url}")
+    """Fetch Google News via tbm=nws with paginated scraping.
 
-    html = await _fetch_google_html(url)
-    if not html:
-        return None
+    Paginates with start=0,10,20... in parallel batches of 3.
+    Deduplicates against seen_urls (from RSS or other sources).
+    """
+    if seen_urls is None:
+        seen_urls = set()
 
-    # Check for CAPTCHA/block
-    html_lower = html.lower()
-    if "captcha" in html_lower or "unusual traffic" in html_lower:
-        logger.warning("Google CAPTCHA detected during news direct scrape")
-        return None
+    pages_needed = min(_SCRAPE_MAX_PAGES, ceil(num_results / _SCRAPE_PAGE_SIZE))
 
-    try:
-        articles, related = _parse_google_news_html(html, query)
-        if articles:
-            # Trim to requested count
-            articles = articles[:num_results]
-            logger.info(
-                f"Direct scrape: {len(articles)} news articles "
-                f"from {len(html)} chars HTML"
-            )
-            return articles, related
-        logger.warning(
-            f"Direct news scrape parsed 0 results from {len(html)} chars HTML"
+    all_articles: list[GoogleNewsArticle] = []
+    all_related: list[RelatedSearch] = []
+
+    start_offsets = [i * _SCRAPE_PAGE_SIZE for i in range(pages_needed)]
+
+    for batch_start in range(0, len(start_offsets), _SCRAPE_BATCH_SIZE):
+        batch = start_offsets[batch_start : batch_start + _SCRAPE_BATCH_SIZE]
+
+        tasks = [
+            _fetch_scrape_page(query, lang, country, time_range, sort_by, offset)
+            for offset in batch
+        ]
+        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        new_in_batch = 0
+        for page_result in batch_results:
+            if isinstance(page_result, Exception) or page_result is None:
+                continue
+
+            articles, related = page_result
+            if not all_related and related:
+                all_related = related
+
+            for article in articles:
+                normalized = article.url.rstrip("/")
+                if normalized in seen_urls:
+                    continue
+                seen_urls.add(normalized)
+                all_articles.append(article)
+                new_in_batch += 1
+
+        logger.info(
+            "Direct scrape batch start=%d-%d: +%d articles (total: %d)",
+            batch[0], batch[-1], new_in_batch, len(all_articles),
         )
-    except Exception as e:
-        logger.warning(f"Google News HTML parsing failed: {e}")
 
-    return None
+        # Stop early if batch returned no new results (hit end of Google results)
+        if new_in_batch == 0:
+            logger.info("Direct scrape: no new results in batch, stopping")
+            break
+
+        # Have enough?
+        if len(all_articles) >= num_results:
+            break
+
+        # Delay between batches
+        if batch_start + _SCRAPE_BATCH_SIZE < len(start_offsets):
+            await asyncio.sleep(_SCRAPE_BATCH_DELAY)
+
+    if not all_articles:
+        return None
+
+    all_articles = all_articles[:num_results]
+    return all_articles, all_related
 
 
 # ===================================================================
@@ -622,13 +693,15 @@ async def google_news(
     time_range: str | None = None,  # hour, day, week, month, year
     sort_by: str | None = None,  # relevance, date
 ) -> GoogleNewsResponse:
-    """Fetch Google News results with strategy chain and Redis caching.
+    """Fetch Google News results — combines sources to maximize results.
 
-    Strategy chain:
-    1. SearXNG (categories=news, parallel pagination)
-    2. Google News RSS (news.google.com/rss/search)
-    3. Direct Google scrape (tbm=nws, curl_cffi/httpx + BS4)
+    Strategy:
+    1. SearXNG (engines=google news, parallel pagination) — if configured
+    2. Google News RSS (~100 articles, fast)
+    3. Direct Google scrape (tbm=nws, paginated) — fills remaining quota
 
+    RSS + direct scrape are COMBINED (not pure fallback) to exceed the
+    ~100 RSS cap. Deduplication by URL across all sources.
     Results are cached in Redis for 5 minutes.
     """
     start = time.time()
@@ -649,40 +722,65 @@ async def google_news(
 
     articles: list[GoogleNewsArticle] = []
     related: list[RelatedSearch] = []
-    source_strategy = ""
+    seen_urls: set[str] = set()
+    strategies_used: list[str] = []
 
-    # Strategy 1: SearXNG
+    # ── Strategy 1: SearXNG ──
     searxng_result = await _search_via_searxng(
         query, num_results, language, time_range, sort_by
     )
     if searxng_result is not None:
-        articles, related = searxng_result
-        source_strategy = "searxng"
-        logger.info(
-            f"Google News via SearXNG: {len(articles)} articles for '{query}'"
-        )
+        searxng_articles, searxng_related = searxng_result
+        for a in searxng_articles:
+            normalized = a.url.rstrip("/")
+            if normalized not in seen_urls:
+                seen_urls.add(normalized)
+                articles.append(a)
+        if searxng_related:
+            related = searxng_related
+        if searxng_articles:
+            strategies_used.append("searxng")
+            logger.info(
+                "Google News SearXNG: %d articles for '%s'",
+                len(searxng_articles), query,
+            )
 
-    # Strategy 2: Google News RSS
-    if not articles:
+    # ── Strategy 2: Google News RSS (~100 articles, fast) ──
+    if len(articles) < num_results:
         rss_articles = await _search_via_rss(query, num_results, language, country)
         if rss_articles:
-            articles = rss_articles
-            source_strategy = "rss"
-            logger.info(
-                f"Google News via RSS: {len(articles)} articles for '{query}'"
-            )
+            added = 0
+            for a in rss_articles:
+                normalized = a.url.rstrip("/")
+                if normalized not in seen_urls:
+                    seen_urls.add(normalized)
+                    articles.append(a)
+                    added += 1
+            if added:
+                strategies_used.append("rss")
+                logger.info(
+                    "Google News RSS: +%d new articles (total: %d) for '%s'",
+                    added, len(articles), query,
+                )
 
-    # Strategy 3: Direct Google scrape
-    if not articles:
+    # ── Strategy 3: Direct Google scrape (paginated, fills remaining) ──
+    if len(articles) < num_results:
+        remaining = num_results - len(articles)
         scrape_result = await _search_via_direct_scrape(
-            query, num_results, language, country, time_range, sort_by
+            query, remaining, language, country, time_range, sort_by,
+            seen_urls=seen_urls,
         )
         if scrape_result is not None:
-            articles, related = scrape_result
-            source_strategy = "direct_scrape"
-            logger.info(
-                f"Google News via direct scrape: {len(articles)} articles for '{query}'"
-            )
+            scrape_articles, scrape_related = scrape_result
+            articles.extend(scrape_articles)
+            if scrape_related and not related:
+                related = scrape_related
+            if scrape_articles:
+                strategies_used.append("direct_scrape")
+                logger.info(
+                    "Google News direct scrape: +%d articles (total: %d) for '%s'",
+                    len(scrape_articles), len(articles), query,
+                )
 
     elapsed = round(time.time() - start, 3)
 
@@ -698,6 +796,8 @@ async def google_news(
     articles = articles[:num_results]
     for i, article in enumerate(articles):
         article.position = i + 1
+
+    source_strategy = "+".join(strategies_used) if strategies_used else "none"
 
     result = GoogleNewsResponse(
         query=query,
