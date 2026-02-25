@@ -34,6 +34,22 @@ engines:
     engine: google_news
     shortcut: gn
     disabled: false
+  - name: bing news
+    engine: bing_news
+    shortcut: bn
+    disabled: false
+  - name: duckduckgo news
+    engine: duckduckgo_news
+    shortcut: ddn
+    disabled: false
+  - name: yahoo news
+    engine: yahoo_news
+    shortcut: yn
+    disabled: false
+  - name: wikinews
+    engine: wikinews
+    shortcut: wn
+    disabled: false
   # Shopping engines (module names use underscores)
   - name: google shopping
     engine: google_shopping

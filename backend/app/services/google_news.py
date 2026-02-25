@@ -1,11 +1,12 @@
 """Google News scraper — fetches and parses Google News results.
 
 Strategy chain (combined, not pure fallback):
-1. SearXNG (engines=google news, parallel pagination in batches of 5)
-2. Google News RSS (news.google.com/rss/search, ~100 articles fast)
-3. nodriver (real headed Chrome + Xvfb, paginated tbm=nws)
+1a. SearXNG engines=google news (Google News specifically)
+1b. SearXNG categories=news (all news engines: Bing, DDG, Yahoo, Wikinews)
+2.  Google News RSS (news.google.com/rss/search, ~100 articles fast)
+3.  nodriver (real headed Chrome + Xvfb, paginated tbm=nws)
 
-Results are cached in Redis for 5 minutes.
+All sources combined with URL deduplication. Cached in Redis for 5 minutes.
 """
 
 import asyncio
@@ -90,7 +91,7 @@ def _cache_key(
 
 
 # ===================================================================
-# Strategy 1: SearXNG (categories=news, parallel pagination)
+# Strategy 1: SearXNG (dual mode: google_news + all_news engines)
 # ===================================================================
 
 
@@ -101,15 +102,24 @@ async def _fetch_searxng_page(
     lang: str,
     time_range: str | None,
     sort_by: str | None,
+    engine_mode: str = "google_news",
 ) -> list[dict] | None:
-    """Fetch a single page of news results from SearXNG."""
+    """Fetch a single page of news results from SearXNG.
+
+    engine_mode:
+      "google_news" — engines=google news (Google-specific)
+      "all_news"    — categories=news (all news engines: Bing, DDG, Yahoo, etc.)
+    """
     params: dict[str, str | int] = {
         "q": query,
         "format": "json",
-        "engines": "google news",
         "pageno": page,
         "language": lang,
     }
+    if engine_mode == "google_news":
+        params["engines"] = "google news"
+    else:
+        params["categories"] = "news"
     if time_range and time_range in _SEARXNG_TIME_RANGE_MAP:
         params["time_range"] = _SEARXNG_TIME_RANGE_MAP[time_range]
 
@@ -142,8 +152,15 @@ async def _search_via_searxng(
     lang: str,
     time_range: str | None,
     sort_by: str | None,
+    engine_mode: str = "google_news",
+    seen_urls: set[str] | None = None,
 ) -> tuple[list[GoogleNewsArticle], list[RelatedSearch]] | None:
-    """Fetch news results from SearXNG with parallel pagination."""
+    """Fetch news results from SearXNG with parallel pagination.
+
+    engine_mode:
+      "google_news" — Google News only (engines=google news)
+      "all_news"    — all news engines (categories=news)
+    """
     if not settings.SEARXNG_URL:
         return None
 
@@ -152,7 +169,8 @@ async def _search_via_searxng(
     pages_needed = min(_MAX_PAGES, ceil(num_results / _RESULTS_PER_PAGE))
 
     all_articles: list[GoogleNewsArticle] = []
-    seen_urls: set[str] = set()
+    if seen_urls is None:
+        seen_urls = set()
     related: list[RelatedSearch] = []
 
     page_list = list(range(1, pages_needed + 1))
@@ -161,7 +179,7 @@ async def _search_via_searxng(
         batch = page_list[batch_start : batch_start + _BATCH_SIZE]
 
         tasks = [
-            _fetch_searxng_page(base_url, query, pg, lang, time_range, sort_by)
+            _fetch_searxng_page(base_url, query, pg, lang, time_range, sort_by, engine_mode)
             for pg in batch
         ]
         batch_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -202,13 +220,13 @@ async def _search_via_searxng(
                 new_in_batch += 1
 
         logger.info(
-            f"SearXNG news batch pages {batch[0]}-{batch[-1]}: "
-            f"+{new_in_batch} articles (total: {len(all_articles)})"
+            "SearXNG [%s] batch pages %d-%d: +%d articles (total: %d)",
+            engine_mode, batch[0], batch[-1], new_in_batch, len(all_articles),
         )
 
         # Stop early if batch returned no new results
         if new_in_batch == 0:
-            logger.info("SearXNG news: no new results in batch, stopping pagination")
+            logger.info("SearXNG [%s]: no new results in batch, stopping", engine_mode)
             break
 
         # Have enough?
@@ -687,15 +705,15 @@ async def google_news(
     time_range: str | None = None,  # hour, day, week, month, year
     sort_by: str | None = None,  # relevance, date
 ) -> GoogleNewsResponse:
-    """Fetch Google News results — combines sources to maximize results.
+    """Fetch Google News results — combines ALL sources to maximize results.
 
-    Strategy:
-    1. SearXNG (engines=google news, parallel pagination) — if configured
-    2. Google News RSS (~100 articles, fast)
-    3. Direct Google scrape (tbm=nws, paginated) — fills remaining quota
+    Strategy (combined, not pure fallback):
+    1a. SearXNG engines=google news — Google News specifically
+    1b. SearXNG categories=news — all news engines (Bing, DDG, Yahoo, Wikinews)
+    2.  Google News RSS (~100 articles, fast)
+    3.  nodriver (real headed Chrome + Xvfb, tbm=nws) — fills remaining quota
 
-    RSS + direct scrape are COMBINED (not pure fallback) to exceed the
-    ~100 RSS cap. Deduplication by URL across all sources.
+    All sources are COMBINED with URL deduplication.
     Results are cached in Redis for 5 minutes.
     """
     start = time.time()
@@ -719,25 +737,42 @@ async def google_news(
     seen_urls: set[str] = set()
     strategies_used: list[str] = []
 
-    # ── Strategy 1: SearXNG ──
-    searxng_result = await _search_via_searxng(
-        query, num_results, language, time_range, sort_by
+    # ── Strategy 1a: SearXNG — Google News engine only ──
+    gn_result = await _search_via_searxng(
+        query, num_results, language, time_range, sort_by,
+        engine_mode="google_news", seen_urls=seen_urls,
     )
-    if searxng_result is not None:
-        searxng_articles, searxng_related = searxng_result
-        for a in searxng_articles:
-            normalized = a.url.rstrip("/")
-            if normalized not in seen_urls:
-                seen_urls.add(normalized)
-                articles.append(a)
-        if searxng_related:
-            related = searxng_related
-        if searxng_articles:
-            strategies_used.append("searxng")
+    if gn_result is not None:
+        gn_articles, gn_related = gn_result
+        # seen_urls already updated inside _search_via_searxng (passed by ref)
+        articles.extend(gn_articles)
+        if gn_related:
+            related = gn_related
+        if gn_articles:
+            strategies_used.append("searxng_google_news")
             logger.info(
-                "Google News SearXNG: %d articles for '%s'",
-                len(searxng_articles), query,
+                "Google News SearXNG [google_news]: %d articles for '%s'",
+                len(gn_articles), query,
             )
+
+    # ── Strategy 1b: SearXNG — All news engines (Bing, DDG, Yahoo, etc.) ──
+    if len(articles) < num_results:
+        remaining = num_results - len(articles)
+        all_news_result = await _search_via_searxng(
+            query, remaining, language, time_range, sort_by,
+            engine_mode="all_news", seen_urls=seen_urls,
+        )
+        if all_news_result is not None:
+            an_articles, an_related = all_news_result
+            articles.extend(an_articles)
+            if an_related and not related:
+                related = an_related
+            if an_articles:
+                strategies_used.append("searxng_all_news")
+                logger.info(
+                    "Google News SearXNG [all_news]: +%d articles (total: %d) for '%s'",
+                    len(an_articles), len(articles), query,
+                )
 
     # ── Strategy 2: Google News RSS (~100 articles, fast) ──
     if len(articles) < num_results:

@@ -401,7 +401,7 @@ class GoogleNewsResponse(BaseModel):
     total_results: str | None = None
     time_taken: float = Field(..., description="API response time in seconds")
     source_strategy: str = Field(
-        ..., description="Strategy that produced results: searxng, rss, direct_scrape"
+        ..., description="Strategies that produced results (combined with '+'): searxng_google_news, searxng_all_news, rss, nodriver"
     )
     articles: list[GoogleNewsArticle] = []
     related_searches: list[RelatedSearch] = []
