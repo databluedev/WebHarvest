@@ -420,6 +420,11 @@ async def _fetch_google_html(url: str) -> str | None:
     Falls back to direct request if no proxy.
     """
     proxy_url = _get_proxy_url()
+    if not proxy_url:
+        logger.warning(
+            "Google News direct scrape: no BUILTIN_PROXY_URL configured — "
+            "Google will likely block server IP"
+        )
 
     # Try curl_cffi (best TLS fingerprint)
     try:
