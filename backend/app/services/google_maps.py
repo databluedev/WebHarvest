@@ -555,9 +555,9 @@ def _strip_location_from_query(query: str) -> str:
     'restaurants in Bangalore' → 'restaurants'
     'coffee shops near Times Square' → 'coffee shops'
     'hotels New York City' → 'hotels'
+    'all places in new york' → 'places' (strips vague filler words too)
 
-    This forces Google to return LOCAL results for the given coordinates
-    instead of the same city-wide top results.
+    Returns the original query if the stripped version is too vague.
     """
     # Remove "in/near/around <location>" patterns
     stripped = re.sub(
@@ -567,8 +567,16 @@ def _strip_location_from_query(query: str) -> str:
         flags=re.IGNORECASE,
     ).strip()
 
-    # If stripping removed everything, keep original
-    if len(stripped) < 2:
+    # Remove filler words that don't help search
+    stripped = re.sub(
+        r"\b(?:all|the|best|top|find|show|list of|list)\b",
+        "",
+        stripped,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    # If stripped result is too short or vague, keep original
+    if len(stripped) < 3:
         return query
 
     return stripped
@@ -1886,16 +1894,24 @@ async def google_maps(
                 # Use higher zoom for sub-searches (more local focus)
                 grid_zoom = max(zoom or 14, 14)
 
-                # Run grid sub-searches in parallel batches
+                logger.info(
+                    "Maps grid: query=%r → grid_query=%r, %d offsets, zoom=%d",
+                    search_query, grid_query, len(offsets), grid_zoom,
+                )
+
+                # Run grid sub-searches in parallel batches.
+                # If the stripped query fails, fall back to original query.
                 _GRID_BATCH = 3
-                for batch_start in range(0, len(offsets), _GRID_BATCH):
-                    if len(places) >= num_results:
-                        break
-                    batch_offsets = offsets[batch_start:batch_start + _GRID_BATCH]
+                active_query = grid_query
+
+                async def _run_grid_batch(
+                    batch_offsets: list[tuple[float, float]], q: str,
+                ) -> int:
+                    """Run one parallel batch, return count of new places."""
                     tasks = [
                         _fetch_maps_search(
                             _build_search_url(
-                                grid_query,
+                                q,
                                 f"{lat},{lng}",
                                 search_radius,
                                 grid_zoom,
@@ -1907,12 +1923,13 @@ async def google_maps(
                         )
                         for lat, lng in batch_offsets
                     ]
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                    batch_new = 0
+                    results = await asyncio.gather(
+                        *tasks, return_exceptions=True
+                    )
+                    new_count = 0
                     for result in results:
                         if isinstance(result, Exception):
-                            logger.debug("Grid sub-search failed: %s", result)
+                            logger.debug("Grid sub-search error: %s", result)
                             continue
                         _, sub_places = result
                         for p in sub_places:
@@ -1920,20 +1937,52 @@ async def google_maps(
                             if key not in seen:
                                 seen.add(key)
                                 places.append(p)
-                                batch_new += 1
+                                new_count += 1
+                    return new_count
+
+                for batch_start in range(0, len(offsets), _GRID_BATCH):
+                    if len(places) >= num_results:
+                        break
+                    batch_offsets = offsets[batch_start:batch_start + _GRID_BATCH]
+                    batch_new = await _run_grid_batch(
+                        batch_offsets, active_query
+                    )
 
                     logger.info(
-                        "Maps grid batch %d: +%d new → %d total",
+                        "Maps grid batch %d: +%d new → %d total (query=%r)",
                         batch_start // _GRID_BATCH + 1,
                         batch_new,
                         len(places),
+                        active_query,
                     )
 
                     if batch_new == 0:
-                        empty_streak += 1
-                        if empty_streak >= 2:
-                            logger.info("Maps grid: 2 empty batches, stopping")
-                            break
+                        # If stripped query gave 0, retry this batch
+                        # with the original query before giving up.
+                        if (
+                            active_query != search_query
+                            and grid_query != search_query
+                        ):
+                            logger.info(
+                                "Maps grid: %r returned 0, retrying with %r",
+                                active_query, search_query,
+                            )
+                            active_query = search_query
+                            batch_new = await _run_grid_batch(
+                                batch_offsets, active_query
+                            )
+                            logger.info(
+                                "Maps grid retry: +%d new → %d total",
+                                batch_new, len(places),
+                            )
+
+                        if batch_new == 0:
+                            empty_streak += 1
+                            if empty_streak >= 2:
+                                logger.info(
+                                    "Maps grid: 2 empty batches, stopping"
+                                )
+                                break
                     else:
                         empty_streak = 0
 
