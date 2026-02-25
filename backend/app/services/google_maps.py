@@ -1997,17 +1997,20 @@ async def google_maps(
                 ) -> int:
                     """Run one parallel batch, return count of new places."""
                     tasks = [
-                        _fetch_maps_search(
-                            _build_search_url(
-                                q,
-                                f"{lat},{lng}",
-                                search_radius,
-                                grid_zoom,
-                                language,
-                                type_filter,
+                        asyncio.wait_for(
+                            _fetch_maps_search(
+                                _build_search_url(
+                                    q,
+                                    f"{lat},{lng}",
+                                    search_radius,
+                                    grid_zoom,
+                                    language,
+                                    type_filter,
+                                ),
+                                20,
+                                fast=True,
                             ),
-                            20,
-                            fast=True,
+                            timeout=15,
                         )
                         for lat, lng in batch_offsets
                     ]

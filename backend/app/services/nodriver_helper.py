@@ -41,7 +41,7 @@ class NoDriverPool:
         self._display = None
         self._lock = asyncio.Lock()
         self._request_count = 0
-        self._max_requests = 50  # restart browser after this many
+        self._max_requests = 200  # restart browser after this many
         self._last_used = 0.0
         self._idle_timeout = 300  # 5 minutes
         self._starting = False
