@@ -162,6 +162,285 @@ def _group_attributes_to_extensions(
 
 
 # ═══════════════════════════════════════════════════════════════════
+# XHR response parser (protobuf-like JSON from Google Maps internal API)
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _safe_get(obj, *indices):
+    """Safely traverse nested arrays/dicts by index chain."""
+    current = obj
+    for idx in indices:
+        if current is None:
+            return None
+        if isinstance(current, list):
+            if isinstance(idx, int) and 0 <= idx < len(current):
+                current = current[idx]
+            else:
+                return None
+        elif isinstance(current, dict):
+            current = current.get(idx)
+        else:
+            return None
+    return current
+
+
+def _parse_xhr_response(body: str) -> list[GoogleMapsPlace]:
+    """Parse a Google Maps XHR response body into place objects.
+
+    Google Maps internal API returns protobuf-like nested JSON arrays
+    prefixed with )]}' XSS protection.  Rich place data lives at data[64].
+    """
+    if not body:
+        return []
+
+    # Strip XSS protection prefix
+    json_str = body
+    if body.startswith(")]}'"):
+        json_str = body[4:].strip()
+
+    try:
+        data = json.loads(json_str)
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    # Rich place data is at data[64] — each entry has full place details
+    places_data = _safe_get(data, 64)
+    if not isinstance(places_data, list):
+        return []
+
+    places: list[GoogleMapsPlace] = []
+    for i, entry in enumerate(places_data):
+        if entry is None:
+            continue
+        try:
+            place = _parse_xhr_place(entry, i + 1)
+            if place:
+                places.append(place)
+        except Exception as e:
+            logger.debug("XHR parse: failed to parse place %d: %s", i, e)
+
+    return places
+
+
+def _parse_xhr_place(entry: list, position: int) -> GoogleMapsPlace | None:
+    """Parse a single place from the XHR protobuf-like array.
+
+    Structure: entry[1] is the main data array with 260+ indices.
+    Key indices (in entry[1]):
+      [11]  name             [18]  full address       [39]  street address
+      [4][7] rating          [37][1] review count     [9][2]/[9][3] lat/lng
+      [10]  CID (hex)        [78]  place_id           [89]  provider_id
+      [13]  types list       [7][0] website            [178] phone data
+      [72]  photos           [203] hours               [100] attributes
+    """
+    pd = _safe_get(entry, 1)
+    if not isinstance(pd, list):
+        return None
+
+    # === Name ===
+    name = _safe_get(pd, 11)
+    if not name or not isinstance(name, str):
+        return None
+
+    # === Address ===
+    street_addr = _safe_get(pd, 39)  # full street (not truncated)
+    full_addr = _safe_get(pd, 18)  # may be truncated at ~100 chars
+    address = street_addr if isinstance(street_addr, str) else None
+    if not address and isinstance(full_addr, str):
+        address = full_addr
+
+    # === Coordinates ===
+    latitude = _safe_get(pd, 9, 2)
+    longitude = _safe_get(pd, 9, 3)
+    if not isinstance(latitude, (int, float)):
+        latitude = None
+    if not isinstance(longitude, (int, float)):
+        longitude = None
+
+    # === Rating & Reviews ===
+    rating = _safe_get(pd, 4, 7)
+    rating = float(rating) if isinstance(rating, (int, float)) else None
+
+    review_count = _safe_get(pd, 37, 1)
+    review_count = int(review_count) if isinstance(review_count, (int, float)) else None
+
+    # === Identity ===
+    cid = _safe_get(pd, 10)
+    cid = cid if isinstance(cid, str) else None
+
+    place_id = _safe_get(pd, 78)
+    place_id = place_id if isinstance(place_id, str) else None
+
+    provider_id = _safe_get(pd, 89)
+    provider_id = provider_id if isinstance(provider_id, str) else None
+
+    # === Types ===
+    types_raw = _safe_get(pd, 13)
+    place_type = None
+    subtypes: list[str] = []
+    if isinstance(types_raw, list):
+        for t in types_raw:
+            if isinstance(t, str):
+                if not place_type:
+                    place_type = t
+                subtypes.append(t)
+
+    # === Phone ===
+    phone = None
+    international_phone = None
+    phone_formatted = _safe_get(pd, 178, 0, 0)  # e.g. "070193 60404"
+    phone_digits = _safe_get(pd, 178, 0, 3)  # e.g. "07019360404"
+    if isinstance(phone_formatted, str):
+        phone = phone_formatted
+    elif isinstance(phone_digits, str):
+        phone = phone_digits
+
+    phone_variants = _safe_get(pd, 178, 0, 1)
+    if isinstance(phone_variants, list):
+        for variant in phone_variants:
+            if isinstance(variant, list) and len(variant) >= 2 and variant[1] == 2:
+                if isinstance(variant[0], str):
+                    international_phone = variant[0]
+                break
+
+    # === Website ===
+    website = _safe_get(pd, 7, 0)
+    website = website if isinstance(website, str) else None
+
+    # === Thumbnail ===
+    thumbnail = _safe_get(pd, 72, 0, 0, 6, 0)
+    thumbnail = thumbnail if isinstance(thumbnail, str) else None
+
+    # === Hours status ===
+    hours_status = _safe_get(pd, 203, 1, 4, 0)
+    open_now = None
+    if isinstance(hours_status, str):
+        hs_lower = hours_status.lower()
+        if hs_lower.startswith("close"):
+            open_now = False
+        elif "open" in hs_lower:
+            open_now = True
+    else:
+        hours_status = None
+
+    # === Working hours (today) ===
+    working_hours = None
+    today_data = _safe_get(pd, 203, 0, 0)
+    if isinstance(today_data, list) and len(today_data) >= 4:
+        day_name = today_data[0] if isinstance(today_data[0], str) else None
+        hours_ranges = today_data[3] if isinstance(today_data[3], list) else None
+        if day_name and hours_ranges:
+            hours_texts = [
+                h[0] for h in hours_ranges
+                if isinstance(h, list) and h and isinstance(h[0], str)
+            ]
+            if hours_texts:
+                working_hours = [{"day": day_name, "hours": ", ".join(hours_texts)}]
+
+    # === Attributes ===
+    attributes = _parse_xhr_attributes(pd)
+
+    # === Derived fields ===
+    data_id = cid
+    data_cid = _hex_cid_to_decimal(cid) if cid else None
+    google_maps_url = _build_google_maps_url(cid, place_id)
+    type_id = _type_to_id(place_type) if place_type else None
+    type_ids = [_type_to_id(s) for s in subtypes] if subtypes else None
+    image = _make_full_image_url(thumbnail)
+    extensions = _group_attributes_to_extensions(attributes)
+
+    gps_coordinates = None
+    if latitude is not None and longitude is not None:
+        gps_coordinates = {"latitude": latitude, "longitude": longitude}
+
+    return GoogleMapsPlace(
+        position=position,
+        title=name,
+        place_id=place_id,
+        cid=cid,
+        data_id=data_id,
+        data_cid=data_cid,
+        provider_id=provider_id,
+        url=google_maps_url or f"https://www.google.com/maps/search/{quote_plus(name)}",
+        google_maps_url=google_maps_url,
+        address=address,
+        gps_coordinates=gps_coordinates,
+        latitude=latitude,
+        longitude=longitude,
+        website=website,
+        phone=phone,
+        international_phone=international_phone,
+        rating=rating,
+        reviews=review_count,
+        review_count=review_count,
+        type=place_type,
+        type_id=type_id,
+        subtypes=subtypes if subtypes else None,
+        type_ids=type_ids,
+        open_state=hours_status,
+        open_now=open_now,
+        thumbnail=thumbnail,
+        image=image,
+        hours=hours_status,
+        working_hours=working_hours,
+        extensions=extensions,
+        attributes=attributes if attributes else None,
+        business_status="OPERATIONAL",
+    )
+
+
+def _parse_xhr_attributes(pd: list) -> list[str]:
+    """Extract service attributes from XHR protobuf data.
+
+    pd[100] = [None_or_group_list, None_or_group_list, ...]
+    Each group_list contains category groups:
+      [category_id, category_label, [attrs...]]
+    Each attr: [geo_path, label, [has_it, [[confirmed, text]]]]
+    """
+    attributes: list[str] = []
+    attrs_data = _safe_get(pd, 100)
+    if not isinstance(attrs_data, list):
+        return attributes
+
+    for top_group in attrs_data:
+        if not isinstance(top_group, list):
+            continue
+        # top_group is a list of category groups
+        for group in top_group:
+            if not isinstance(group, list) or len(group) < 3:
+                continue
+            attr_list = group[2]
+            if not isinstance(attr_list, list):
+                continue
+            for attr in attr_list:
+                if not isinstance(attr, list) or len(attr) < 3:
+                    continue
+                has_it = _safe_get(attr, 2, 0)
+                if has_it == 1:
+                    label = attr[1] if isinstance(attr[1], str) else None
+                    if label:
+                        attributes.append(label)
+
+    return attributes
+
+
+def _is_maps_data_url(url: str) -> bool:
+    """Check if a URL is a Google Maps data API endpoint."""
+    if "google.com" not in url:
+        return False
+    return any(p in url for p in [
+        "search?tbm=map",
+        "/maps/preview",
+        "/maps/rpc",
+        "search?q=",
+        "search?tbs=",
+    ])
+
+
+# ═══════════════════════════════════════════════════════════════════
 # Cache key
 # ═══════════════════════════════════════════════════════════════════
 
@@ -266,66 +545,171 @@ def _build_place_url(
 
 
 # ═══════════════════════════════════════════════════════════════════
+# Grid search helpers (for >20 results via multi-search)
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _strip_location_from_query(query: str) -> str:
+    """Strip location/city phrases from query for coordinate-based sub-searches.
+
+    'restaurants in Bangalore' → 'restaurants'
+    'coffee shops near Times Square' → 'coffee shops'
+    'hotels New York City' → 'hotels'
+
+    This forces Google to return LOCAL results for the given coordinates
+    instead of the same city-wide top results.
+    """
+    # Remove "in/near/around <location>" patterns
+    stripped = re.sub(
+        r"\s+(?:in|near|around|at|close to|nearby)\s+.+$",
+        "",
+        query,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    # If stripping removed everything, keep original
+    if len(stripped) < 2:
+        return query
+
+    return stripped
+
+
+def _generate_search_offsets(
+    center_lat: float,
+    center_lng: float,
+    radius_m: int = 5000,
+    rings: int = 1,
+) -> list[tuple[float, float]]:
+    """Generate coordinate offsets in concentric rings around a center.
+
+    Each ring has 8 points (N, NE, E, SE, S, SW, W, NW) at `radius_m * ring`
+    distance from center. This provides coverage for adjacent map areas
+    that a single Google Maps search wouldn't return.
+
+    Args:
+        center_lat/lng: Center coordinates.
+        radius_m: Base offset distance in meters.
+        rings: Number of concentric rings (1 ring = 8 points, 2 = 16, etc.).
+
+    Returns:
+        List of (lat, lng) tuples for sub-searches.
+    """
+    points: list[tuple[float, float]] = []
+
+    # Convert meters to approximate degrees
+    lat_deg = radius_m / 111_000  # 1° lat ≈ 111km everywhere
+    lng_deg = radius_m / (111_000 * max(0.01, math.cos(math.radians(center_lat))))
+
+    # 8 directions (normalized vectors)
+    directions = [
+        (1, 0), (0.707, 0.707), (0, 1), (-0.707, 0.707),
+        (-1, 0), (-0.707, -0.707), (0, -1), (0.707, -0.707),
+    ]
+
+    for ring in range(1, rings + 1):
+        for dlat, dlng in directions:
+            points.append((
+                round(center_lat + dlat * lat_deg * ring, 6),
+                round(center_lng + dlng * lng_deg * ring, 6),
+            ))
+
+    return points
+
+
+# ═══════════════════════════════════════════════════════════════════
 # nodriver fetch (uses persistent browser pool)
 # ═══════════════════════════════════════════════════════════════════
 
 
 async def _fetch_maps_search(
-    url: str, num_results: int = 20
-) -> str | None:
-    """Fetch Google Maps search results page using the persistent browser pool.
+    url: str, num_results: int = 20, *, fast: bool = False,
+) -> tuple[str | None, list[GoogleMapsPlace]]:
+    """Fetch Google Maps search results via CDP XHR interception.
 
-    Uses NoDriverPool to avoid the 5-10s browser startup cost on each call.
-    Fast redirect detection: checks URL after 2s instead of waiting for
-    selector timeouts (saves 10+ seconds on city-name searches).
-    Scrolls the results feed to load more places if needed.
+    Strategy:
+    1. Open a blank tab, enable CDP Network monitoring
+    2. Navigate to Google Maps — captures the initial XHR data response
+    3. Scroll the feed to trigger additional XHR batches (unless fast=True)
+    4. Parse all captured XHR responses (protobuf-like JSON) for rich data
+    5. Also return HTML for DOM-based fallback if XHR parsing fails
+
+    Args:
+        fast: Skip scrolling, just wait for initial XHR (used for grid sub-searches).
+
+    Returns:
+        (html, xhr_places) — html for fallback, xhr_places from intercepted API.
     """
+    from nodriver import cdp
+
     from app.services.nodriver_helper import NoDriverPool
 
     pool = NoDriverPool.get()
     tab = None
+
+    # Shared state for the CDP response handler
+    captured_ids: list[tuple[str, str]] = []  # (request_id_json, resp_url)
+
+    async def _on_response(event: cdp.network.ResponseReceived):
+        resp_url = event.response.url
+        if _is_maps_data_url(resp_url):
+            captured_ids.append((event.request_id.to_json(), resp_url))
+
     try:
-        tab = await pool.acquire_tab(url)
+        # Get a blank tab so we can set up CDP BEFORE navigation
+        tab = await pool.acquire_tab("about:blank")
         if tab is None:
             logger.warning("Maps search: failed to acquire tab")
-            return None
+            return None, []
 
-        # Brief initial wait for navigation
+        # Enable CDP network monitoring on this tab
+        await tab.send(cdp.network.enable())
+        tab.add_handler(cdp.network.ResponseReceived, _on_response)
+
+        # Navigate to Maps search URL
+        await tab.get(url)
         await tab.sleep(1)
 
         # Fast redirect detection: check URL immediately
         current_url = str(await tab.evaluate("window.location.href") or "")
         if "/maps/place/" in current_url:
-            # Google redirected to a place page (e.g. city name search).
-            # Return HTML immediately for fallback parsing as place_details.
+            if fast:
+                return None, []
             logger.info("Maps redirect to place detected, returning for fallback")
             html = await tab.get_content()
-            return html
+            return html, []
 
-        # Poll for search cards — check every 0.5s, max 3.5s
-        cards_found = False
-        for attempt in range(7):  # 7 × 0.5s = max 3.5s wait
-            card_count = await tab.evaluate(
-                "document.querySelectorAll('div.Nv2PK').length"
-            )
-            if card_count and int(card_count) > 0:
-                cards_found = True
-                logger.info(
-                    "Maps search: %s cards at attempt %d", card_count, attempt
+        if fast:
+            # Fast mode: wait for XHR response, skip DOM polling/scrolling.
+            # Maps XHR fires 2-4s after navigation; poll for captured responses.
+            for _ in range(8):
+                await tab.sleep(0.5)
+                if captured_ids:
+                    await tab.sleep(0.5)  # brief settle after first capture
+                    break
+        else:
+            # Poll for search cards — check every 0.5s, max 3.5s
+            cards_found = False
+            for attempt in range(7):
+                card_count = await tab.evaluate(
+                    "document.querySelectorAll('div.Nv2PK').length"
                 )
-                break
-            await tab.sleep(0.5)
+                if card_count and int(card_count) > 0:
+                    cards_found = True
+                    logger.info(
+                        "Maps search: %s cards at attempt %d", card_count, attempt
+                    )
+                    break
+                await tab.sleep(0.5)
 
-        if not cards_found:
-            logger.info("Maps search: no cards after polling")
+            if not cards_found:
+                logger.info("Maps search: no cards after polling")
 
-        # Scroll the feed to load ALL results.
-        # Google Maps lazy-loads ~7-10 cards at a time.
-        # Scroll first, then count — repeat until no new cards appear.
+        # Scroll the feed to load ALL results + trigger additional XHR batches.
+        # In fast mode (grid sub-searches), skip scrolling — initial XHR is enough.
+        scroll_rounds = 0 if fast else _MAX_SCROLL_ROUNDS
         prev_count = 0
         stale_rounds = 0
-        for i in range(_MAX_SCROLL_ROUNDS):
-            # Scroll the feed
+        for i in range(scroll_rounds):
             await tab.evaluate(
                 """
                 const feed = document.querySelector("div[role='feed']");
@@ -334,26 +718,21 @@ async def _fetch_maps_search(
             )
             await tab.sleep(1.5)
 
-            # Count cards after scroll
             count_raw = await tab.evaluate(
                 "document.querySelectorAll('div.Nv2PK').length"
             )
             current_count = int(count_raw) if count_raw else 0
             logger.info("Maps scroll %d: %d cards", i + 1, current_count)
 
-            # Enough results — stop
             if current_count >= num_results:
-                logger.info(
-                    "Maps scroll: hit target %d, stopping", num_results
-                )
+                logger.info("Maps scroll: hit target %d, stopping", num_results)
                 break
 
-            # No new cards loaded — all results are in
             if current_count == prev_count:
                 stale_rounds += 1
                 if stale_rounds >= 2:
                     logger.info(
-                        "Maps scroll: no new cards after %d stale scrolls (%d total)",
+                        "Maps scroll: no new cards after %d stale rounds (%d total)",
                         stale_rounds, current_count,
                     )
                     break
@@ -362,14 +741,51 @@ async def _fetch_maps_search(
 
             prev_count = current_count
 
-        html = await tab.get_content()
-        if not html:
-            html = await tab.evaluate("document.documentElement.outerHTML")
-        return html
+        # === Collect and parse XHR response bodies ===
+        xhr_places: list[GoogleMapsPlace] = []
+        seen_cids: set[str] = set()
+        base_xhr_url: str | None = None
+        logger.info("Maps XHR: captured %d data responses", len(captured_ids))
+
+        for req_id_json, req_url in captured_ids:
+            try:
+                body, _ = await tab.send(
+                    cdp.network.get_response_body(
+                        cdp.network.RequestId(req_id_json)
+                    )
+                )
+                batch = _parse_xhr_response(body)
+                for p in batch:
+                    dedup_key = p.cid or p.place_id or p.title
+                    if dedup_key not in seen_cids:
+                        seen_cids.add(dedup_key)
+                        xhr_places.append(p)
+                # Keep the URL that returned the most results for pagination
+                if batch and (not base_xhr_url or "tbm=map" in req_url):
+                    base_xhr_url = req_url
+            except Exception as e:
+                logger.debug("Maps XHR: failed to get body for %s: %s", req_url[:80], e)
+
+        logger.info("Maps XHR: initial batch = %d unique places", len(xhr_places))
+
+        # Re-number positions
+        for i, p in enumerate(xhr_places):
+            p.position = i + 1
+
+        if xhr_places:
+            logger.info("Maps XHR: final total = %d unique places", len(xhr_places))
+
+        # Get HTML for DOM fallback (skip in fast mode)
+        html = None
+        if not fast:
+            html = await tab.get_content()
+            if not html:
+                html = await tab.evaluate("document.documentElement.outerHTML")
+        return html, xhr_places
 
     except Exception as e:
         logger.warning("Maps search fetch failed: %s", e)
-        return None
+        return None, []
     finally:
         if tab:
             await pool.release_tab(tab)
@@ -1410,45 +1826,146 @@ async def google_maps(
         )
         logger.info("Maps search: %s", url)
 
-        html = await _fetch_maps_search(url, num_results)
-        if html:
+        html, xhr_places = await _fetch_maps_search(url, num_results)
+
+        # Prefer XHR-parsed results (richer data: phone, website, hours)
+        if xhr_places:
+            places = xhr_places
+            logger.info(
+                "Maps search: %d places from XHR interception", len(places)
+            )
+        elif html:
+            # Fall back to DOM parsing if XHR interception failed
             html_lower = html.lower()
             if "captcha" not in html_lower and "unusual traffic" not in html_lower:
                 places = _parse_search_results(html)
-                logger.info("Maps search: %d places parsed", len(places))
-
-                # Fallback: if no search cards found, Google may have
-                # navigated to a single place (e.g. searching a city name).
-                # Try parsing the page as a place details view.
-                if not places:
-                    # Extract coords from og:image since the search fetcher
-                    # doesn't do JS-based coordinate extraction
-                    meta: dict = {}
-                    og = BeautifulSoup(html, "lxml").select_one(
-                        "meta[property='og:image']"
-                    )
-                    if og:
-                        c = og.get("content", "")
-                        cm = re.search(r"center=([\d.-]+)%2C([\d.-]+)", c)
-                        if cm:
-                            try:
-                                meta["latitude"] = float(cm.group(1))
-                                meta["longitude"] = float(cm.group(2))
-                            except ValueError:
-                                pass
-
-                    place = _parse_place_details(
-                        html, include_reviews, reviews_limit, metadata=meta
-                    )
-                    if place:
-                        places.append(place)
-                        search_type = "place_details"
-                        logger.info(
-                            "Maps fallback: parsed as place details '%s'",
-                            place.title,
-                        )
+                logger.info("Maps search: %d places from DOM parsing", len(places))
             else:
                 logger.warning("Google CAPTCHA detected during Maps search")
+
+        # === Grid multi-search for >20 results ===
+        # Google Maps caps at ~20 per search. To get more, run additional
+        # searches with offset coordinates and deduplicate by CID.
+        if (
+            len(places) < num_results
+            and len(places) >= 5
+            and num_results > 20
+        ):
+            # Determine center coordinates
+            center_lat: float | None = None
+            center_lng: float | None = None
+
+            if coordinates:
+                parts = coordinates.split(",")
+                center_lat, center_lng = float(parts[0]), float(parts[1])
+            else:
+                lats = [p.latitude for p in places if p.latitude is not None]
+                lngs = [p.longitude for p in places if p.longitude is not None]
+                if lats and lngs:
+                    center_lat = sum(lats) / len(lats)
+                    center_lng = sum(lngs) / len(lngs)
+
+            if center_lat is not None and center_lng is not None:
+                search_radius = radius or 3000
+                # Calculate rings needed: 8 sub-searches per ring,
+                # each ring yields ~30-40 unique results after dedup.
+                remaining = num_results - len(places)
+                rings = min(4, max(1, (remaining + 29) // 30))
+                offsets = _generate_search_offsets(
+                    center_lat, center_lng, search_radius, rings
+                )
+
+                seen = {p.cid or p.place_id or p.title for p in places}
+                empty_streak = 0
+
+                # Strip location words from query for sub-searches so
+                # Google returns LOCAL results instead of the same
+                # city-wide top-20. E.g. "restaurants in Bangalore"
+                # becomes "restaurants" with explicit coordinates.
+                grid_query = _strip_location_from_query(search_query)
+                # Use higher zoom for sub-searches (more local focus)
+                grid_zoom = max(zoom or 14, 14)
+
+                # Run grid sub-searches in parallel batches
+                _GRID_BATCH = 3
+                for batch_start in range(0, len(offsets), _GRID_BATCH):
+                    if len(places) >= num_results:
+                        break
+                    batch_offsets = offsets[batch_start:batch_start + _GRID_BATCH]
+                    tasks = [
+                        _fetch_maps_search(
+                            _build_search_url(
+                                grid_query,
+                                f"{lat},{lng}",
+                                search_radius,
+                                grid_zoom,
+                                language,
+                                type_filter,
+                            ),
+                            20,
+                            fast=True,
+                        )
+                        for lat, lng in batch_offsets
+                    ]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                    batch_new = 0
+                    for result in results:
+                        if isinstance(result, Exception):
+                            logger.debug("Grid sub-search failed: %s", result)
+                            continue
+                        _, sub_places = result
+                        for p in sub_places:
+                            key = p.cid or p.place_id or p.title
+                            if key not in seen:
+                                seen.add(key)
+                                places.append(p)
+                                batch_new += 1
+
+                    logger.info(
+                        "Maps grid batch %d: +%d new → %d total",
+                        batch_start // _GRID_BATCH + 1,
+                        batch_new,
+                        len(places),
+                    )
+
+                    if batch_new == 0:
+                        empty_streak += 1
+                        if empty_streak >= 2:
+                            logger.info("Maps grid: 2 empty batches, stopping")
+                            break
+                    else:
+                        empty_streak = 0
+
+        # Fallback: if no results, Google may have redirected to a
+        # single place (e.g. searching a city name).
+        if not places and html:
+            html_lower = html.lower()
+            if "captcha" not in html_lower and "unusual traffic" not in html_lower:
+                meta: dict = {}
+                og = BeautifulSoup(html, "lxml").select_one(
+                    "meta[property='og:image']"
+                )
+                if og:
+                    c = og.get("content", "")
+                    cm = re.search(r"center=([\d.-]+)%2C([\d.-]+)", c)
+                    if cm:
+                        try:
+                            meta["latitude"] = float(cm.group(1))
+                            meta["longitude"] = float(cm.group(2))
+                        except ValueError:
+                            pass
+
+                place = _parse_place_details(
+                    html, include_reviews, reviews_limit, metadata=meta
+                )
+                if place:
+                    places.append(place)
+                    search_type = "place_details"
+                    logger.info(
+                        "Maps fallback: parsed as place details '%s'",
+                        place.title,
+                    )
 
     # === Post-processing: apply client-side filters ===
     if places and not is_detail_mode:

@@ -189,7 +189,7 @@ class GoogleMapsRequest(BaseModel):
     )
 
     # --- Pagination ---
-    num_results: int = Field(20, ge=1, le=100, description="Number of places (max 100)")
+    num_results: int = Field(20, ge=1, le=200, description="Number of places (max 200)")
 
     # --- Detail mode (single place lookup) ---
     place_id: str | None = Field(
