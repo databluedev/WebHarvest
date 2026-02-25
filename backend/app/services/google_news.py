@@ -107,7 +107,7 @@ async def _fetch_searxng_page(
     params: dict[str, str | int] = {
         "q": query,
         "format": "json",
-        "categories": "news",
+        "engines": "google news",
         "pageno": page,
         "language": lang,
     }
