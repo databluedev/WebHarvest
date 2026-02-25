@@ -816,6 +816,11 @@ async def _fetch_maps_search(
         return None, [], {}
     finally:
         if tab:
+            # Disable CDP network monitoring before closing
+            try:
+                await tab.send(cdp.network.disable())
+            except Exception:
+                pass
             await pool.release_tab(tab)
 
 
@@ -1990,6 +1995,8 @@ async def google_maps(
                 )
 
                 _GRID_BATCH = 3
+                _GRID_TIMEOUT = 60  # hard cap on grid search duration
+                grid_start = time.time()
                 active_query = grid_query
 
                 async def _run_grid_batch(
@@ -2033,6 +2040,12 @@ async def google_maps(
 
                 for batch_start in range(0, len(offsets), _GRID_BATCH):
                     if len(places) >= num_results:
+                        break
+                    if time.time() - grid_start > _GRID_TIMEOUT:
+                        logger.info(
+                            "Maps grid: timeout after %ds, returning %d results",
+                            _GRID_TIMEOUT, len(places),
+                        )
                         break
                     batch_offsets = offsets[
                         batch_start : batch_start + _GRID_BATCH

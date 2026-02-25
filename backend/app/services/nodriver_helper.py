@@ -32,6 +32,14 @@ class NoDriverPool:
     Each request gets its own tab — browser handles concurrent tabs.
     Browser restarts automatically after max_requests or on crash.
     Shuts down after idle_timeout seconds of inactivity.
+
+    Concurrency safety:
+    - ``_tab_semaphore`` limits simultaneous open tabs (prevents
+      Chrome OOM when many users hit the API at once).
+    - ``_generation`` counter prevents a stale error handler from
+      killing a *new* browser that replaced the one it was using.
+    - Tabs are **closed** on release (not navigated to about:blank)
+      to avoid accumulating zombie tabs.
     """
 
     _instance: "NoDriverPool | None" = None
@@ -45,6 +53,8 @@ class NoDriverPool:
         self._last_used = 0.0
         self._idle_timeout = 300  # 5 minutes
         self._starting = False
+        self._generation = 0  # incremented on every browser start
+        self._tab_semaphore = asyncio.Semaphore(6)  # max concurrent tabs
 
     @classmethod
     def get(cls) -> "NoDriverPool":
@@ -88,7 +98,8 @@ class NoDriverPool:
             )
             self._request_count = 0
             self._last_used = time.time()
-            logger.info("NoDriverPool: browser started")
+            self._generation += 1
+            logger.info("NoDriverPool: browser started (gen=%d)", self._generation)
             return True
 
         except Exception as e:
@@ -143,11 +154,16 @@ class NoDriverPool:
         """Open a new tab with the given URL. Returns the tab object.
 
         The caller MUST call release_tab() when done.
+        Blocks if the max-concurrent-tab limit is reached.
         """
+        await self._tab_semaphore.acquire()
+
         async with self._lock:
             if not await self._ensure_browser():
+                self._tab_semaphore.release()
                 return None
             self._request_count += 1
+            gen = self._generation
             self._last_used = time.time()
 
         # Navigate outside the lock so other requests can proceed
@@ -156,23 +172,35 @@ class NoDriverPool:
             return tab
         except Exception as e:
             logger.warning("NoDriverPool: navigation failed: %s", e)
-            # Browser might be dead — mark for restart
+            # Only cleanup if the browser hasn't already been replaced
+            # by another coroutine (generation check prevents cascade kills).
             async with self._lock:
-                await self._cleanup()
+                if self._generation == gen:
+                    await self._cleanup()
+            self._tab_semaphore.release()
             return None
 
     async def release_tab(self, tab):
         """Release a tab when done.
 
-        Navigates to about:blank to free page resources instead of
-        closing the tab — closing the last tab kills the browser.
+        Closes the tab to free Chrome resources.  The browser's
+        initial tab keeps it alive even when all opened tabs are closed.
         """
         if tab is None:
             return
         try:
-            await tab.evaluate("window.stop(); window.location='about:blank'")
+            await asyncio.wait_for(tab.close(), timeout=3)
         except Exception:
-            pass
+            # If close fails (dead browser, timeout), try lightweight fallback
+            try:
+                await asyncio.wait_for(
+                    tab.evaluate("window.stop(); window.location='about:blank'"),
+                    timeout=2,
+                )
+            except Exception:
+                pass
+        finally:
+            self._tab_semaphore.release()
 
     async def shutdown(self):
         """Shutdown the pool completely."""
