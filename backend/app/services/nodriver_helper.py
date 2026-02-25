@@ -81,19 +81,31 @@ class NoDriverPool:
                 self._display.display,
             )
 
+            # Build Chrome args
+            browser_args = [
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--window-size=1920,1080",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+            ]
+
+            # Wire in proxy from BUILTIN_PROXY_URL if configured.
+            # Rotating proxy services (BrightData, Oxylabs, SmartProxy)
+            # expose a single endpoint that rotates IPs internally —
+            # Chrome sends all traffic through it.
+            proxy_url = _get_proxy_url()
+            if proxy_url:
+                browser_args.append(f"--proxy-server={proxy_url}")
+                logger.info("NoDriverPool: using proxy %s", _mask_proxy(proxy_url))
+
             # Start browser
             self._browser = await uc.start(
                 headless=False,
                 browser_executable_path=chrome_path,
                 sandbox=False,
                 lang="en-US",
-                browser_args=[
-                    "--no-first-run",
-                    "--no-default-browser-check",
-                    "--window-size=1920,1080",
-                    "--disable-gpu",
-                    "--disable-dev-shm-usage",
-                ],
+                browser_args=browser_args,
             )
             self._request_count = 0
             self._last_used = time.time()
@@ -235,6 +247,36 @@ class NoDriverPool:
     def is_warm(self) -> bool:
         """True if the browser is already running."""
         return self._browser is not None
+
+
+def _get_proxy_url() -> str | None:
+    """Get the first proxy URL from BUILTIN_PROXY_URL setting.
+
+    Supports comma-separated list — picks the first one for the
+    browser-level --proxy-server flag.  The proxy service itself
+    should handle IP rotation (residential rotating proxies).
+    """
+    try:
+        from app.config import settings
+        raw = settings.BUILTIN_PROXY_URL
+        if not raw:
+            return None
+        first = raw.split(",")[0].strip()
+        return first if first else None
+    except Exception:
+        return None
+
+
+def _mask_proxy(url: str) -> str:
+    """Mask credentials in a proxy URL for logging."""
+    from urllib.parse import urlparse, urlunparse
+    parsed = urlparse(url)
+    if parsed.username:
+        masked = f"{parsed.username[:2]}***:***@{parsed.hostname}"
+        if parsed.port:
+            masked += f":{parsed.port}"
+        return f"{parsed.scheme}://{masked}"
+    return url
 
 
 def find_chrome_binary() -> str | None:
