@@ -1,11 +1,10 @@
 """Google News scraper — fetches and parses Google News results.
 
-Strategy chain:
-1. SearXNG (categories=news, parallel pagination in batches of 5)
-2. Google News RSS (news.google.com/rss/search, parsed with xml.etree)
-3. Direct Google scrape (tbm=nws, curl_cffi/httpx + BS4)
+Strategy chain (combined, not pure fallback):
+1. SearXNG (engines=google news, parallel pagination in batches of 5)
+2. Google News RSS (news.google.com/rss/search, ~100 articles fast)
+3. nodriver (real headed Chrome + Xvfb, paginated tbm=nws)
 
-No browser needed — pure HTTP, fast, multi-user safe.
 Results are cached in Redis for 5 minutes.
 """
 
@@ -388,89 +387,6 @@ def _build_google_news_url(
     return f"https://www.google.com/search?{'&'.join(params)}"
 
 
-def _get_proxy_url() -> str | None:
-    """Get proxy URL from BUILTIN_PROXY_URL for direct scrape requests."""
-    try:
-        from app.config import settings
-
-        raw = settings.BUILTIN_PROXY_URL
-        if not raw:
-            return None
-        first = raw.split(",")[0].strip()
-        return first if first else None
-    except Exception:
-        return None
-
-
-def _is_blocked_page(html: str) -> bool:
-    """Check if Google returned a JS-required redirect or consent page."""
-    lower = html.lower()
-    if "captcha" in lower or "unusual traffic" in lower:
-        return True
-    # JS-required redirect page (no actual results)
-    if "please click here if you are not redirected" in lower:
-        return True
-    return False
-
-
-async def _fetch_google_html(url: str) -> str | None:
-    """Fetch Google News HTML using curl_cffi with proxy support.
-
-    Uses BUILTIN_PROXY_URL if configured (rotating residential proxy).
-    Falls back to direct request if no proxy.
-    """
-    proxy_url = _get_proxy_url()
-    if not proxy_url:
-        logger.warning(
-            "Google News direct scrape: no BUILTIN_PROXY_URL configured — "
-            "Google will likely block server IP"
-        )
-
-    # Try curl_cffi (best TLS fingerprint)
-    try:
-        from curl_cffi.requests import AsyncSession
-
-        kwargs: dict = {
-            "headers": _GOOGLE_HEADERS,
-            "timeout": 20,
-            "allow_redirects": True,
-        }
-        if proxy_url:
-            kwargs["proxy"] = proxy_url
-
-        async with AsyncSession(impersonate="chrome124") as session:
-            resp = await session.get(url, **kwargs)
-            if resp.status_code == 200:
-                if not _is_blocked_page(resp.text):
-                    return resp.text
-                logger.warning("Google News: blocked page via curl_cffi")
-            else:
-                logger.warning(f"Google News returned status {resp.status_code}")
-    except Exception as e:
-        logger.warning(f"curl_cffi Google News fetch failed: {e}")
-
-    # Fallback to httpx (with proxy if available)
-    try:
-        client_kwargs: dict = {
-            "timeout": 20,
-            "follow_redirects": True,
-            "headers": _GOOGLE_HEADERS,
-        }
-        if proxy_url:
-            client_kwargs["proxy"] = proxy_url
-
-        async with httpx.AsyncClient(**client_kwargs) as client:
-            resp = await client.get(url)
-            if resp.status_code == 200:
-                if not _is_blocked_page(resp.text):
-                    return resp.text
-                logger.warning("Google News: blocked page via httpx")
-    except Exception as e:
-        logger.warning(f"httpx Google News fetch failed: {e}")
-
-    return None
-
-
 def _parse_google_news_html(
     html: str, query: str, offset: int = 0
 ) -> tuple[list[GoogleNewsArticle], list[RelatedSearch]]:
@@ -619,51 +535,59 @@ def _parse_related_searches(soup: BeautifulSoup) -> list[RelatedSearch]:
     return related
 
 
-_SCRAPE_PAGE_SIZE = 10  # Google News tbm=nws returns ~10 per page
-_SCRAPE_MAX_PAGES = 50  # Safety cap for direct scrape pagination
-_SCRAPE_BATCH_SIZE = 3  # Parallel pages per batch
-_SCRAPE_BATCH_DELAY = 1.0  # Seconds between batches (be gentle with Google)
+# ===================================================================
+# Strategy 3: nodriver (real headed Chrome + Xvfb, same as Shopping)
+# ===================================================================
+
+_NODRIVER_MAX_PAGES = 10  # Max pages to fetch via nodriver
+_NODRIVER_PAGE_DELAY = 2.0  # Seconds between page fetches
 
 
-async def _fetch_scrape_page(
-    query: str,
-    lang: str,
-    country: str | None,
-    time_range: str | None,
-    sort_by: str | None,
-    start: int,
-) -> tuple[list[GoogleNewsArticle], list[RelatedSearch]] | None:
-    """Fetch a single page of direct Google News scrape results."""
-    url = _build_google_news_url(
-        query,
-        num=_SCRAPE_PAGE_SIZE,
-        lang=lang,
-        country=country,
-        time_range=time_range,
-        sort_by=sort_by,
-        start=start,
-    )
+async def _fetch_nodriver_page(
+    url: str,
+) -> str | None:
+    """Fetch a single Google News page using the persistent NoDriverPool.
 
-    html = await _fetch_google_html(url)
-    if not html:
-        return None
-
-    html_lower = html.lower()
-    if "captcha" in html_lower or "unusual traffic" in html_lower:
-        logger.warning("Google CAPTCHA detected during news direct scrape (start=%d)", start)
-        return None
-
+    Uses a real headed Chrome browser (nodriver + Xvfb) that bypasses
+    Google's bot detection — same approach as Google Shopping.
+    """
     try:
-        articles, related = _parse_google_news_html(html, query, offset=start)
-        if articles:
-            return articles, related
+        from app.services.nodriver_helper import NoDriverPool
+
+        pool = NoDriverPool.get()
+        tab = await pool.acquire_tab(url)
+        if not tab:
+            return None
+
+        try:
+            # Wait for news cards to render
+            try:
+                await tab.select("div.SoaBEf", timeout=10)
+            except Exception:
+                # Try fallback selector
+                try:
+                    await tab.select("div[data-news-doc-id]", timeout=5)
+                except Exception:
+                    pass
+
+            # Let JS settle
+            await tab.sleep(2)
+
+            # Get rendered HTML
+            html = await tab.get_content()
+            if not html:
+                html = await tab.evaluate("document.documentElement.outerHTML")
+
+            return html
+        finally:
+            await pool.release_tab(tab)
+
     except Exception as e:
-        logger.warning(f"Google News HTML parsing failed (start={start}): {e}")
+        logger.warning("nodriver news fetch failed: %s", e)
+        return None
 
-    return None
 
-
-async def _search_via_direct_scrape(
+async def _search_via_nodriver(
     query: str,
     num_results: int,
     lang: str,
@@ -672,64 +596,76 @@ async def _search_via_direct_scrape(
     sort_by: str | None,
     seen_urls: set[str] | None = None,
 ) -> tuple[list[GoogleNewsArticle], list[RelatedSearch]] | None:
-    """Fetch Google News via tbm=nws with paginated scraping.
+    """Fetch Google News using nodriver (real headed Chrome).
 
-    Paginates with start=0,10,20... in parallel batches of 3.
-    Deduplicates against seen_urls (from RSS or other sources).
+    Paginates via start=0,10,20... using the persistent browser pool.
+    Same approach as Google Shopping's nodriver fallback.
     """
     if seen_urls is None:
         seen_urls = set()
 
-    pages_needed = min(_SCRAPE_MAX_PAGES, ceil(num_results / _SCRAPE_PAGE_SIZE))
+    pages_needed = min(
+        _NODRIVER_MAX_PAGES, ceil(num_results / 10),
+    )
 
     all_articles: list[GoogleNewsArticle] = []
     all_related: list[RelatedSearch] = []
 
-    start_offsets = [i * _SCRAPE_PAGE_SIZE for i in range(pages_needed)]
-
-    for batch_start in range(0, len(start_offsets), _SCRAPE_BATCH_SIZE):
-        batch = start_offsets[batch_start : batch_start + _SCRAPE_BATCH_SIZE]
-
-        tasks = [
-            _fetch_scrape_page(query, lang, country, time_range, sort_by, offset)
-            for offset in batch
-        ]
-        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        new_in_batch = 0
-        for page_result in batch_results:
-            if isinstance(page_result, Exception) or page_result is None:
-                continue
-
-            articles, related = page_result
-            if not all_related and related:
-                all_related = related
-
-            for article in articles:
-                normalized = article.url.rstrip("/")
-                if normalized in seen_urls:
-                    continue
-                seen_urls.add(normalized)
-                all_articles.append(article)
-                new_in_batch += 1
-
-        logger.info(
-            "Direct scrape batch start=%d-%d: +%d articles (total: %d)",
-            batch[0], batch[-1], new_in_batch, len(all_articles),
+    for page_idx in range(pages_needed):
+        start_offset = page_idx * 10
+        url = _build_google_news_url(
+            query, num=10, lang=lang, country=country,
+            time_range=time_range, sort_by=sort_by, start=start_offset,
         )
 
-        # Stop early if batch returned no new results (hit end of Google results)
-        if new_in_batch == 0:
-            logger.info("Direct scrape: no new results in batch, stopping")
+        logger.info("nodriver news page %d: %s", page_idx + 1, url)
+
+        html = await _fetch_nodriver_page(url)
+        if not html:
+            logger.warning("nodriver news: no HTML for page %d", page_idx + 1)
             break
 
-        # Have enough?
+        # Check for CAPTCHA
+        html_lower = html.lower()
+        if "unusual traffic" in html_lower:
+            logger.warning("nodriver news: CAPTCHA detected on page %d", page_idx + 1)
+            break
+
+        try:
+            articles, page_related = _parse_google_news_html(
+                html, query, offset=start_offset,
+            )
+        except Exception as e:
+            logger.warning("nodriver news parse failed page %d: %s", page_idx + 1, e)
+            break
+
+        if not all_related and page_related:
+            all_related = page_related
+
+        new_count = 0
+        for article in articles:
+            normalized = article.url.rstrip("/")
+            if normalized in seen_urls:
+                continue
+            seen_urls.add(normalized)
+            all_articles.append(article)
+            new_count += 1
+
+        logger.info(
+            "nodriver news page %d: +%d articles (total: %d)",
+            page_idx + 1, new_count, len(all_articles),
+        )
+
+        if new_count == 0:
+            logger.info("nodriver news: no new results on page %d, stopping", page_idx + 1)
+            break
+
         if len(all_articles) >= num_results:
             break
 
-        # Delay between batches
-        if batch_start + _SCRAPE_BATCH_SIZE < len(start_offsets):
-            await asyncio.sleep(_SCRAPE_BATCH_DELAY)
+        # Delay between pages
+        if page_idx < pages_needed - 1:
+            await asyncio.sleep(_NODRIVER_PAGE_DELAY)
 
     if not all_articles:
         return None
@@ -821,23 +757,23 @@ async def google_news(
                     added, len(articles), query,
                 )
 
-    # ── Strategy 3: Direct Google scrape (paginated, fills remaining) ──
+    # ── Strategy 3: nodriver (real headed Chrome, bypasses bot detection) ──
     if len(articles) < num_results:
         remaining = num_results - len(articles)
-        scrape_result = await _search_via_direct_scrape(
+        nodriver_result = await _search_via_nodriver(
             query, remaining, language, country, time_range, sort_by,
             seen_urls=seen_urls,
         )
-        if scrape_result is not None:
-            scrape_articles, scrape_related = scrape_result
-            articles.extend(scrape_articles)
-            if scrape_related and not related:
-                related = scrape_related
-            if scrape_articles:
-                strategies_used.append("direct_scrape")
+        if nodriver_result is not None:
+            nd_articles, nd_related = nodriver_result
+            articles.extend(nd_articles)
+            if nd_related and not related:
+                related = nd_related
+            if nd_articles:
+                strategies_used.append("nodriver")
                 logger.info(
-                    "Google News direct scrape: +%d articles (total: %d) for '%s'",
-                    len(scrape_articles), len(articles), query,
+                    "Google News nodriver: +%d articles (total: %d) for '%s'",
+                    len(nd_articles), len(articles), query,
                 )
 
     elapsed = round(time.time() - start, 3)

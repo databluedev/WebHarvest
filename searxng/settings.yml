@@ -29,6 +29,11 @@ engines:
     engine: brave
     shortcut: br
     disabled: false
+  # News engines
+  - name: google news
+    engine: google_news
+    shortcut: gn
+    disabled: false
   # Shopping engines (module names use underscores)
   - name: google shopping
     engine: google_shopping
