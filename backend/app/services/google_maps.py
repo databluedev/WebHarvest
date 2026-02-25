@@ -631,7 +631,7 @@ def _generate_search_offsets(
 
 async def _fetch_maps_search(
     url: str, num_results: int = 20, *, fast: bool = False,
-) -> tuple[str | None, list[GoogleMapsPlace]]:
+) -> tuple[str | None, list[GoogleMapsPlace], dict]:
     """Fetch Google Maps search results via CDP XHR interception.
 
     Strategy:
@@ -645,7 +645,7 @@ async def _fetch_maps_search(
         fast: Skip scrolling, just wait for initial XHR (used for grid sub-searches).
 
     Returns:
-        (html, xhr_places) — html for fallback, xhr_places from intercepted API.
+        (html, xhr_places, metadata) — metadata has redirect_lat/lng if detected.
     """
     from nodriver import cdp
 
@@ -667,7 +667,7 @@ async def _fetch_maps_search(
         tab = await pool.acquire_tab("about:blank")
         if tab is None:
             logger.warning("Maps search: failed to acquire tab")
-            return None, []
+            return None, [], {}
 
         # Enable CDP network monitoring on this tab
         await tab.send(cdp.network.enable())
@@ -680,11 +680,17 @@ async def _fetch_maps_search(
         # Fast redirect detection: check URL immediately
         current_url = str(await tab.evaluate("window.location.href") or "")
         if "/maps/place/" in current_url:
+            # Extract coordinates from the redirect URL (@lat,lng)
+            redirect_meta: dict = {}
+            cm = re.search(r"@(-?\d+\.?\d+),(-?\d+\.?\d+)", current_url)
+            if cm:
+                redirect_meta["latitude"] = float(cm.group(1))
+                redirect_meta["longitude"] = float(cm.group(2))
             if fast:
-                return None, []
+                return None, [], redirect_meta
             logger.info("Maps redirect to place detected, returning for fallback")
             html = await tab.get_content()
-            return html, []
+            return html, [], redirect_meta
 
         if fast:
             # Fast mode: wait for XHR response, skip DOM polling/scrolling.
@@ -749,6 +755,20 @@ async def _fetch_maps_search(
 
             prev_count = current_count
 
+        # Late redirect check: city/area queries may redirect to
+        # /maps/place/ AFTER initial load + scrolling.
+        final_url = str(await tab.evaluate("window.location.href") or "")
+        search_metadata: dict = {}
+        if "/maps/place/" in final_url:
+            cm = re.search(r"@(-?\d+\.?\d+),(-?\d+\.?\d+)", final_url)
+            if cm:
+                search_metadata["latitude"] = float(cm.group(1))
+                search_metadata["longitude"] = float(cm.group(2))
+                logger.info(
+                    "Maps: late redirect detected → %s,%s",
+                    cm.group(1), cm.group(2),
+                )
+
         # === Collect and parse XHR response bodies ===
         xhr_places: list[GoogleMapsPlace] = []
         seen_cids: set[str] = set()
@@ -789,11 +809,11 @@ async def _fetch_maps_search(
             html = await tab.get_content()
             if not html:
                 html = await tab.evaluate("document.documentElement.outerHTML")
-        return html, xhr_places
+        return html, xhr_places, search_metadata
 
     except Exception as e:
         logger.warning("Maps search fetch failed: %s", e)
-        return None, []
+        return None, [], {}
     finally:
         if tab:
             await pool.release_tab(tab)
@@ -1834,7 +1854,7 @@ async def google_maps(
         )
         logger.info("Maps search: %s", url)
 
-        html, xhr_places = await _fetch_maps_search(url, num_results)
+        html, xhr_places, search_meta = await _fetch_maps_search(url, num_results)
 
         # Prefer XHR-parsed results (richer data: phone, website, hours)
         if xhr_places:
@@ -1851,22 +1871,99 @@ async def google_maps(
             else:
                 logger.warning("Google CAPTCHA detected during Maps search")
 
-        # === Grid multi-search for >20 results ===
-        # Google Maps caps at ~20 per search. To get more, run additional
-        # searches with offset coordinates and deduplicate by CID.
+        # Fallback: if no results, Google may have redirected to a
+        # single place / city page (e.g. searching "new york places").
+        # When the user wants multiple results, detect the city, extract
+        # its coordinates, and re-search with "places" + those coordinates.
+        if not places and html:
+            html_lower = html.lower()
+            if "captcha" not in html_lower and "unusual traffic" not in html_lower:
+                # Use coordinates from the redirect URL (extracted by
+                # _fetch_maps_search from the browser URL bar).
+                place = _parse_place_details(
+                    html, include_reviews, reviews_limit,
+                    metadata=search_meta,
+                )
+
+                # Prefer redirect URL coords, then place coords
+                city_lat = search_meta.get("latitude") or (
+                    place.latitude if place else None
+                )
+                city_lng = search_meta.get("longitude") or (
+                    place.longitude if place else None
+                )
+
+                if place and num_results > 1 and city_lat and city_lng:
+                    city_coords = f"{city_lat},{city_lng}"
+
+                    # Build a search query: strip the city name from
+                    # the query so Google returns search results instead
+                    # of redirecting to the city page again.
+                    # "new york places" → strip "New York" → "places"
+                    re_query = search_query
+                    if place.title:
+                        # Remove city name (case-insensitive)
+                        re_query = re.sub(
+                            re.escape(place.title),
+                            "",
+                            re_query,
+                            flags=re.IGNORECASE,
+                        ).strip()
+                    re_query = _strip_location_from_query(re_query)
+                    if len(re_query) < 3:
+                        re_query = type_filter or "places"
+
+                    re_url = _build_search_url(
+                        re_query, city_coords,
+                        radius, zoom or 13, language, type_filter,
+                    )
+                    logger.info(
+                        "Maps: city redirect '%s' → re-searching %r at %s",
+                        place.title, re_query, city_coords,
+                    )
+                    re_html, re_xhr, _ = await _fetch_maps_search(
+                        re_url, num_results
+                    )
+                    if re_xhr:
+                        places = re_xhr
+                        coordinates = city_coords
+                        search_query = re_query
+                        logger.info(
+                            "Maps re-search: %d places from XHR", len(places)
+                        )
+                    elif re_html:
+                        places = _parse_search_results(re_html)
+                        coordinates = city_coords
+                        search_query = re_query
+                elif place:
+                    places.append(place)
+                    search_type = "place_details"
+                    logger.info(
+                        "Maps fallback: parsed as place details '%s'",
+                        place.title,
+                    )
+
+        # === Grid multi-search: expand results beyond first 20 ===
+        # Runs AFTER fallback so city-redirect re-searches also benefit.
         if (
-            len(places) < num_results
+            not is_detail_mode
             and len(places) >= 5
-            and num_results > 20
+            and num_results > len(places)
         ):
-            # Determine center coordinates
+            # Determine center coordinates from existing results
             center_lat: float | None = None
             center_lng: float | None = None
 
             if coordinates:
                 parts = coordinates.split(",")
-                center_lat, center_lng = float(parts[0]), float(parts[1])
-            else:
+                if len(parts) == 2:
+                    try:
+                        center_lat = float(parts[0])
+                        center_lng = float(parts[1])
+                    except ValueError:
+                        pass
+
+            if center_lat is None or center_lng is None:
                 lats = [p.latitude for p in places if p.latitude is not None]
                 lngs = [p.longitude for p in places if p.longitude is not None]
                 if lats and lngs:
@@ -1875,8 +1972,6 @@ async def google_maps(
 
             if center_lat is not None and center_lng is not None:
                 search_radius = radius or 3000
-                # Calculate rings needed: 8 sub-searches per ring,
-                # each ring yields ~30-40 unique results after dedup.
                 remaining = num_results - len(places)
                 rings = min(4, max(1, (remaining + 29) // 30))
                 offsets = _generate_search_offsets(
@@ -1886,12 +1981,7 @@ async def google_maps(
                 seen = {p.cid or p.place_id or p.title for p in places}
                 empty_streak = 0
 
-                # Strip location words from query for sub-searches so
-                # Google returns LOCAL results instead of the same
-                # city-wide top-20. E.g. "restaurants in Bangalore"
-                # becomes "restaurants" with explicit coordinates.
                 grid_query = _strip_location_from_query(search_query)
-                # Use higher zoom for sub-searches (more local focus)
                 grid_zoom = max(zoom or 14, 14)
 
                 logger.info(
@@ -1899,8 +1989,6 @@ async def google_maps(
                     search_query, grid_query, len(offsets), grid_zoom,
                 )
 
-                # Run grid sub-searches in parallel batches.
-                # If the stripped query fails, fall back to original query.
                 _GRID_BATCH = 3
                 active_query = grid_query
 
@@ -1931,7 +2019,7 @@ async def google_maps(
                         if isinstance(result, Exception):
                             logger.debug("Grid sub-search error: %s", result)
                             continue
-                        _, sub_places = result
+                        _, sub_places, _ = result
                         for p in sub_places:
                             key = p.cid or p.place_id or p.title
                             if key not in seen:
@@ -1943,7 +2031,9 @@ async def google_maps(
                 for batch_start in range(0, len(offsets), _GRID_BATCH):
                     if len(places) >= num_results:
                         break
-                    batch_offsets = offsets[batch_start:batch_start + _GRID_BATCH]
+                    batch_offsets = offsets[
+                        batch_start : batch_start + _GRID_BATCH
+                    ]
                     batch_new = await _run_grid_batch(
                         batch_offsets, active_query
                     )
@@ -1957,8 +2047,6 @@ async def google_maps(
                     )
 
                     if batch_new == 0:
-                        # If stripped query gave 0, retry this batch
-                        # with the original query before giving up.
                         if (
                             active_query != search_query
                             and grid_query != search_query
@@ -1985,36 +2073,6 @@ async def google_maps(
                                 break
                     else:
                         empty_streak = 0
-
-        # Fallback: if no results, Google may have redirected to a
-        # single place (e.g. searching a city name).
-        if not places and html:
-            html_lower = html.lower()
-            if "captcha" not in html_lower and "unusual traffic" not in html_lower:
-                meta: dict = {}
-                og = BeautifulSoup(html, "lxml").select_one(
-                    "meta[property='og:image']"
-                )
-                if og:
-                    c = og.get("content", "")
-                    cm = re.search(r"center=([\d.-]+)%2C([\d.-]+)", c)
-                    if cm:
-                        try:
-                            meta["latitude"] = float(cm.group(1))
-                            meta["longitude"] = float(cm.group(2))
-                        except ValueError:
-                            pass
-
-                place = _parse_place_details(
-                    html, include_reviews, reviews_limit, metadata=meta
-                )
-                if place:
-                    places.append(place)
-                    search_type = "place_details"
-                    logger.info(
-                        "Maps fallback: parsed as place details '%s'",
-                        place.title,
-                    )
 
     # === Post-processing: apply client-side filters ===
     if places and not is_detail_mode:
