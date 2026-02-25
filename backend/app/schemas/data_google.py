@@ -353,3 +353,55 @@ class GoogleMapsResponse(BaseModel):
     filters_applied: dict[str, str | float | bool] | None = None
     places: list[GoogleMapsPlace] = []
     related_searches: list[RelatedSearch] = []
+
+
+# ===================================================================
+# Google News
+# ===================================================================
+
+
+class GoogleNewsRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2048, description="News search query")
+    num_results: int = Field(100, ge=1, le=500, description="Number of articles (max 500)")
+    language: str = Field("en", description="Language code (hl parameter)")
+    country: str | None = Field(
+        None, description="Country code for geo-targeting (gl parameter, e.g. us, uk, in)"
+    )
+    time_range: str | None = Field(
+        None,
+        pattern=r"^(hour|day|week|month|year)$",
+        description="Time filter: hour, day, week, month, year",
+    )
+    sort_by: str | None = Field(
+        None,
+        pattern=r"^(relevance|date)$",
+        description="Sort order: relevance, date",
+    )
+
+
+class GoogleNewsArticle(BaseModel):
+    model_config = {"exclude_none": True}
+
+    position: int = Field(..., description="1-indexed rank in results")
+    title: str
+    url: str
+    source: str | None = Field(None, description="News outlet name")
+    source_url: str | None = Field(None, description="News outlet URL/domain")
+    date: str | None = Field(None, description="Display date (e.g. '2 hours ago')")
+    published_date: str | None = Field(None, description="ISO date if available")
+    snippet: str | None = None
+    thumbnail: str | None = Field(None, description="Image URL")
+
+
+class GoogleNewsResponse(BaseModel):
+    model_config = {"exclude_none": True}
+
+    success: bool = True
+    query: str
+    total_results: str | None = None
+    time_taken: float = Field(..., description="API response time in seconds")
+    source_strategy: str = Field(
+        ..., description="Strategy that produced results: searxng, rss, direct_scrape"
+    )
+    articles: list[GoogleNewsArticle] = []
+    related_searches: list[RelatedSearch] = []

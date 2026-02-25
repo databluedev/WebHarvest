@@ -693,6 +693,38 @@ class ApiClient {
     });
   }
 
+  async googleNews(params: {
+    query: string;
+    num_results?: number;
+    language?: string;
+    country?: string;
+    time_range?: string;
+    sort_by?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      query: string;
+      total_results?: string;
+      time_taken: number;
+      source_strategy: string;
+      articles: Array<{
+        position: number;
+        title: string;
+        url: string;
+        source?: string;
+        source_url?: string;
+        date?: string;
+        published_date?: string;
+        snippet?: string;
+        thumbnail?: string;
+      }>;
+      related_searches?: Array<{ query: string }>;
+    }>("/v1/data/google/news", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
   async googleMaps(params: {
     query?: string;
     coordinates?: string;

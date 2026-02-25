@@ -4,6 +4,7 @@ Endpoints:
   POST /v1/data/google/search   — Google SERP results (structured JSON)
   POST /v1/data/google/shopping — Google Shopping with filters (structured JSON)
   POST /v1/data/google/maps     — Google Maps places and details (structured JSON)
+  POST /v1/data/google/news     — Google News articles (structured JSON)
 """
 
 import logging
@@ -18,12 +19,15 @@ from app.models.user import User
 from app.schemas.data_google import (
     GoogleMapsRequest,
     GoogleMapsResponse,
+    GoogleNewsRequest,
+    GoogleNewsResponse,
     GoogleSearchRequest,
     GoogleSearchResponse,
     GoogleShoppingRequest,
     GoogleShoppingResponse,
 )
 from app.services.google_maps import google_maps
+from app.services.google_news import google_news
 from app.services.google_serp import google_search
 from app.services.google_shopping import google_shopping
 
@@ -170,6 +174,48 @@ async def search_google_maps(
         include_reviews=request.include_reviews,
         reviews_limit=request.reviews_limit,
         reviews_sort=request.reviews_sort,
+    )
+
+    return result
+
+
+@router.post(
+    "/news",
+    response_model=GoogleNewsResponse,
+    response_model_exclude_none=True,
+    summary="Google News API",
+    description=(
+        "Search Google News and return structured article data including titles, "
+        "sources, dates, snippets, and thumbnails. "
+        "Supports time range filtering and sorting by date or relevance. "
+        "No result limit — fetches as many articles as available (up to 500). "
+        "Results are cached for 5 minutes."
+    ),
+    response_description="Structured Google News article data",
+)
+async def search_google_news(
+    request: GoogleNewsRequest,
+    response: Response,
+    user: User = Depends(get_current_user),
+):
+    """Search Google News and return structured article data."""
+    # Rate limiting
+    rl = await check_rate_limit_full(
+        f"rate:data:{user.id}", settings.RATE_LIMIT_DATA_API
+    )
+    response.headers["X-RateLimit-Limit"] = str(rl.limit)
+    response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
+    response.headers["X-RateLimit-Reset"] = str(rl.reset)
+    if not rl.allowed:
+        raise RateLimitError("Data API rate limit exceeded. Try again in a minute.")
+
+    result = await google_news(
+        query=request.query,
+        num_results=request.num_results,
+        language=request.language,
+        country=request.country,
+        time_range=request.time_range,
+        sort_by=request.sort_by,
     )
 
     return result

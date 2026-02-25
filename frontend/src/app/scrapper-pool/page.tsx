@@ -67,7 +67,7 @@ const SCRAPER_APIS: Array<{
     description: "News articles with sources, dates, and snippets",
     icon: Newspaper,
     accent: "violet",
-    status: "coming-soon",
+    status: "active",
   },
   {
     id: "google-jobs",
@@ -154,6 +154,14 @@ export default function ScrapperPoolPage() {
   const [mapsNumResults, setMapsNumResults] = useState(20);
   const [mapsSortBy, setMapsSortBy] = useState("");
 
+  // Google News state
+  const [newsQuery, setNewsQuery] = useState("");
+  const [newsNumResults, setNewsNumResults] = useState(100);
+  const [newsLanguage, setNewsLanguage] = useState("en");
+  const [newsCountry, setNewsCountry] = useState("");
+  const [newsTimeRange, setNewsTimeRange] = useState("");
+  const [newsSortBy, setNewsSortBy] = useState("");
+
   const handleCardClick = (apiId: string, status: ApiStatus) => {
     if (status !== "active") return;
     if (activePanel === apiId) {
@@ -224,6 +232,28 @@ export default function ScrapperPoolPage() {
         num_results: mapsNumResults,
         ...(mapsSortBy && { sort_by: mapsSortBy }),
         include_reviews: true,
+      });
+      setResult(res);
+    } catch (err: any) {
+      setError(err.message || "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleNews = async () => {
+    if (!newsQuery.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api.googleNews({
+        query: newsQuery.trim(),
+        num_results: newsNumResults,
+        language: newsLanguage,
+        ...(newsCountry && { country: newsCountry }),
+        ...(newsTimeRange && { time_range: newsTimeRange }),
+        ...(newsSortBy && { sort_by: newsSortBy }),
       });
       setResult(res);
     } catch (err: any) {
@@ -1286,6 +1316,288 @@ export default function ScrapperPoolPage() {
                                         </div>
                                       ))}
                                     </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Raw JSON toggle */}
+                        <details className="border border-white/[0.06]">
+                          <summary className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono cursor-pointer hover:text-white/50 transition-colors">
+                            Raw JSON Response
+                          </summary>
+                          <pre className="px-4 pb-4 text-[11px] text-white/50 font-mono overflow-x-auto max-h-[400px] overflow-y-auto leading-relaxed">
+                            {JSON.stringify(result, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── TRYOUT PANEL: Google News ── */}
+            {activePanel === "google-news" && (
+              <div ref={panelRef} className="mt-[1px] border border-white/[0.08] bg-[#0a0a0a]">
+                {/* Panel header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 border border-violet-500/20 grid place-items-center">
+                      <Newspaper className="h-4 w-4 text-violet-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-[14px] font-bold uppercase tracking-[0.05em] font-mono">Google News API</h3>
+                      <code className="text-[11px] text-violet-400/60 font-mono">POST /v1/data/google/news</code>
+                    </div>
+                  </div>
+                  <button onClick={() => setActivePanel(null)} className="h-8 w-8 grid place-items-center text-white/30 hover:text-white transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+                  {/* Left: Input form */}
+                  <div className="p-6 space-y-5">
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono mb-4">Request Parameters</div>
+
+                    {/* Query input */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Query *</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={newsQuery}
+                          onChange={(e) => setNewsQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleGoogleNews()}
+                          placeholder="e.g. artificial intelligence breakthroughs"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/40 transition-colors"
+                        />
+                        <Newspaper className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                      </div>
+                    </div>
+
+                    {/* Results + Language */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Results</label>
+                        <div className="relative">
+                          <select
+                            value={newsNumResults}
+                            onChange={(e) => setNewsNumResults(Number(e.target.value))}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-violet-500/40 transition-colors"
+                          >
+                            {[10, 25, 50, 100, 200, 300, 500].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Language</label>
+                        <div className="relative">
+                          <select
+                            value={newsLanguage}
+                            onChange={(e) => setNewsLanguage(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-violet-500/40 transition-colors"
+                          >
+                            <option value="en">English</option>
+                            <option value="es">Spanish</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="pt">Portuguese</option>
+                            <option value="ja">Japanese</option>
+                            <option value="ko">Korean</option>
+                            <option value="zh">Chinese</option>
+                            <option value="ar">Arabic</option>
+                            <option value="hi">Hindi</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Country + Time Range */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Country</label>
+                        <div className="relative">
+                          <select
+                            value={newsCountry}
+                            onChange={(e) => setNewsCountry(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-violet-500/40 transition-colors"
+                          >
+                            <option value="">Any</option>
+                            <option value="us">United States</option>
+                            <option value="gb">United Kingdom</option>
+                            <option value="ca">Canada</option>
+                            <option value="au">Australia</option>
+                            <option value="in">India</option>
+                            <option value="de">Germany</option>
+                            <option value="fr">France</option>
+                            <option value="jp">Japan</option>
+                            <option value="br">Brazil</option>
+                            <option value="mx">Mexico</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Time Range</label>
+                        <div className="relative">
+                          <select
+                            value={newsTimeRange}
+                            onChange={(e) => setNewsTimeRange(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-violet-500/40 transition-colors"
+                          >
+                            <option value="">Any time</option>
+                            <option value="hour">Past hour</option>
+                            <option value="day">Past 24 hours</option>
+                            <option value="week">Past week</option>
+                            <option value="month">Past month</option>
+                            <option value="year">Past year</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sort By */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Sort By</label>
+                        <div className="relative">
+                          <select
+                            value={newsSortBy}
+                            onChange={(e) => setNewsSortBy(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-violet-500/40 transition-colors"
+                          >
+                            <option value="">Relevance</option>
+                            <option value="date">Date (newest first)</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Submit button */}
+                    <button
+                      onClick={handleGoogleNews}
+                      disabled={loading || !newsQuery.trim()}
+                      className="w-full border border-violet-500/40 bg-violet-500/10 text-violet-400 py-3 text-[12px] uppercase tracking-[0.2em] font-mono hover:bg-violet-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Fetching News...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          Search News
+                        </>
+                      )}
+                    </button>
+
+                    {error && (
+                      <div className="border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-400 font-mono">
+                        {error}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Response */}
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono">Articles</div>
+                      {result && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-white/30 font-mono">
+                            {result.articles?.length || 0} articles &middot; {result.time_taken?.toFixed(2)}s
+                            {result.source_strategy && (
+                              <span className="text-violet-400/50 ml-1">via {result.source_strategy}</span>
+                            )}
+                          </span>
+                          <button onClick={handleCopyResult} className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-white/30 hover:text-white/60 font-mono transition-colors">
+                            {copied ? <Check className="h-3 w-3 text-violet-400" /> : <Copy className="h-3 w-3" />}
+                            {copied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {!result && !loading && !error && (
+                      <div className="h-[400px] border border-dashed border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Newspaper className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                          <p className="text-[12px] text-white/20 font-mono">Search for news to see results</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {loading && (
+                      <div className="h-[400px] border border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Loader2 className="h-6 w-6 text-violet-400 animate-spin mx-auto mb-3" />
+                          <p className="text-[12px] text-white/30 font-mono">Fetching news articles...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {result && (
+                      <div className="space-y-4">
+                        {/* Article cards */}
+                        <div className="max-h-[600px] overflow-y-auto space-y-[1px] scrollbar-thin">
+                          {result.articles?.map((article: any, i: number) => (
+                            <div key={i} className="bg-[#050505] border border-white/[0.04] p-4 hover:border-white/[0.08] transition-colors">
+                              <div className="flex gap-4">
+                                {/* Thumbnail */}
+                                {article.thumbnail && (
+                                  <div className="flex-shrink-0 h-16 w-20 border border-white/[0.06] bg-white/[0.02] grid place-items-center overflow-hidden">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={article.thumbnail} alt={article.title} className="h-full w-full object-cover" />
+                                  </div>
+                                )}
+
+                                <div className="min-w-0 flex-1">
+                                  {/* Position + Source + Date */}
+                                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                    <span className="text-[10px] text-white/20 font-mono">#{article.position}</span>
+                                    {article.source && (
+                                      <span className="text-[9px] uppercase tracking-wider text-violet-400 bg-violet-500/10 border border-violet-500/20 px-1.5 py-0.5 font-mono">
+                                        {article.source}
+                                      </span>
+                                    )}
+                                    {(article.date || article.published_date) && (
+                                      <span className="text-[10px] text-white/25 font-mono">
+                                        {article.date || article.published_date}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Title */}
+                                  <div className="flex items-start justify-between gap-2 mb-1">
+                                    <a href={article.url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-white/80 font-mono hover:text-violet-400 transition-colors line-clamp-2">
+                                      {article.title}
+                                    </a>
+                                    <a href={article.url} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/50 flex-shrink-0 mt-0.5">
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                    </a>
+                                  </div>
+
+                                  {/* Snippet */}
+                                  {article.snippet && (
+                                    <p className="text-[11px] text-white/30 font-mono line-clamp-2 leading-relaxed">
+                                      {article.snippet}
+                                    </p>
+                                  )}
+
+                                  {/* Source URL */}
+                                  {article.source_url && (
+                                    <span className="text-[10px] text-white/15 font-mono">{article.source_url}</span>
                                   )}
                                 </div>
                               </div>
