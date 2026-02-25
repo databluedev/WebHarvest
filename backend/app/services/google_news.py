@@ -121,6 +121,15 @@ async def _fetch_searxng_page(
             data = resp.json()
 
         results = data.get("results", [])
+        if not results and page == 1:
+            # Debug: log why SearXNG returned empty
+            engines = data.get("unresponsive_engines", [])
+            if engines:
+                logger.warning("SearXNG: unresponsive engines: %s", engines)
+            logger.debug(
+                "SearXNG news page 1 empty — keys: %s, engines: %s",
+                list(data.keys()), data.get("unresponsive_engines"),
+            )
         return results if results else None
 
     except Exception as e:
@@ -379,34 +388,78 @@ def _build_google_news_url(
     return f"https://www.google.com/search?{'&'.join(params)}"
 
 
+def _get_proxy_url() -> str | None:
+    """Get proxy URL from BUILTIN_PROXY_URL for direct scrape requests."""
+    try:
+        from app.config import settings
+
+        raw = settings.BUILTIN_PROXY_URL
+        if not raw:
+            return None
+        first = raw.split(",")[0].strip()
+        return first if first else None
+    except Exception:
+        return None
+
+
+def _is_blocked_page(html: str) -> bool:
+    """Check if Google returned a JS-required redirect or consent page."""
+    lower = html.lower()
+    if "captcha" in lower or "unusual traffic" in lower:
+        return True
+    # JS-required redirect page (no actual results)
+    if "please click here if you are not redirected" in lower:
+        return True
+    return False
+
+
 async def _fetch_google_html(url: str) -> str | None:
-    """Fetch Google News HTML using curl_cffi with fallback to httpx."""
+    """Fetch Google News HTML using curl_cffi with proxy support.
+
+    Uses BUILTIN_PROXY_URL if configured (rotating residential proxy).
+    Falls back to direct request if no proxy.
+    """
+    proxy_url = _get_proxy_url()
+
+    # Try curl_cffi (best TLS fingerprint)
     try:
         from curl_cffi.requests import AsyncSession
 
+        kwargs: dict = {
+            "headers": _GOOGLE_HEADERS,
+            "timeout": 20,
+            "allow_redirects": True,
+        }
+        if proxy_url:
+            kwargs["proxy"] = proxy_url
+
         async with AsyncSession(impersonate="chrome124") as session:
-            resp = await session.get(
-                url,
-                headers=_GOOGLE_HEADERS,
-                timeout=15,
-                allow_redirects=True,
-            )
+            resp = await session.get(url, **kwargs)
             if resp.status_code == 200:
-                return resp.text
-            logger.warning(f"Google News returned status {resp.status_code}")
+                if not _is_blocked_page(resp.text):
+                    return resp.text
+                logger.warning("Google News: blocked page via curl_cffi")
+            else:
+                logger.warning(f"Google News returned status {resp.status_code}")
     except Exception as e:
         logger.warning(f"curl_cffi Google News fetch failed: {e}")
 
-    # Fallback to httpx
+    # Fallback to httpx (with proxy if available)
     try:
-        async with httpx.AsyncClient(
-            timeout=15,
-            follow_redirects=True,
-            headers=_GOOGLE_HEADERS,
-        ) as client:
+        client_kwargs: dict = {
+            "timeout": 20,
+            "follow_redirects": True,
+            "headers": _GOOGLE_HEADERS,
+        }
+        if proxy_url:
+            client_kwargs["proxy"] = proxy_url
+
+        async with httpx.AsyncClient(**client_kwargs) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
-                return resp.text
+                if not _is_blocked_page(resp.text):
+                    return resp.text
+                logger.warning("Google News: blocked page via httpx")
     except Exception as e:
         logger.warning(f"httpx Google News fetch failed: {e}")
 
