@@ -26,20 +26,18 @@ logger = logging.getLogger(__name__)
 
 
 class NoDriverPool:
-    """Persistent nodriver browser pool.
+    """Persistent nodriver browser pool with tab recycling.
 
     Keeps a single browser + Xvfb display alive across requests.
-    Each request gets its own tab — browser handles concurrent tabs.
-    Browser restarts automatically after max_requests or on crash.
-    Shuts down after idle_timeout seconds of inactivity.
+    Released tabs are recycled (navigated to about:blank, handlers
+    cleared) and reused by subsequent requests — this avoids both
+    the zombie-tab memory leak *and* nodriver's tab.close() bugs.
 
     Concurrency safety:
     - ``_tab_semaphore`` limits simultaneous open tabs (prevents
       Chrome OOM when many users hit the API at once).
     - ``_generation`` counter prevents a stale error handler from
       killing a *new* browser that replaced the one it was using.
-    - Tabs are **closed** on release (not navigated to about:blank)
-      to avoid accumulating zombie tabs.
     """
 
     _instance: "NoDriverPool | None" = None
@@ -55,6 +53,7 @@ class NoDriverPool:
         self._starting = False
         self._generation = 0  # incremented on every browser start
         self._tab_semaphore = asyncio.Semaphore(6)  # max concurrent tabs
+        self._idle_tabs: list = []  # recycled tabs at about:blank
 
     @classmethod
     def get(cls) -> "NoDriverPool":
@@ -124,6 +123,7 @@ class NoDriverPool:
             self._display = None
 
         self._request_count = 0
+        self._idle_tabs.clear()  # all tabs are dead after browser stop
         logger.info("NoDriverPool: cleaned up")
 
     async def _ensure_browser(self) -> bool:
@@ -151,9 +151,13 @@ class NoDriverPool:
         return True
 
     async def acquire_tab(self, url: str):
-        """Open a new tab with the given URL. Returns the tab object.
+        """Get a tab navigated to *url*. Returns the tab object.
 
-        The caller MUST call release_tab() when done.
+        Reuses a recycled idle tab when available (avoids creating
+        new tabs and the zombie-tab leak). Falls back to opening
+        a new tab via ``browser.get()``.
+
+        The caller MUST call ``release_tab()`` when done.
         Blocks if the max-concurrent-tab limit is reached.
         """
         await self._tab_semaphore.acquire()
@@ -166,7 +170,16 @@ class NoDriverPool:
             gen = self._generation
             self._last_used = time.time()
 
-        # Navigate outside the lock so other requests can proceed
+        # Try to reuse a recycled tab (already at about:blank).
+        while self._idle_tabs:
+            candidate = self._idle_tabs.pop()
+            try:
+                await candidate.get(url)
+                return candidate
+            except Exception:
+                pass  # Dead tab (browser restarted, etc.) — skip it
+
+        # No reusable tabs — create a new one
         try:
             tab = await self._browser.get(url)
             return tab
@@ -181,24 +194,35 @@ class NoDriverPool:
             return None
 
     async def release_tab(self, tab):
-        """Release a tab when done.
+        """Release a tab for recycling.
 
-        Closes the tab to free Chrome resources.  The browser's
-        initial tab keeps it alive even when all opened tabs are closed.
+        Navigates to about:blank (frees page resources), clears CDP
+        event handlers, and adds the tab to the idle pool for reuse.
+        Does NOT call ``tab.close()`` — nodriver corrupts its internal
+        target list when tabs are closed, causing StopIteration errors.
         """
         if tab is None:
             return
         try:
-            await asyncio.wait_for(tab.close(), timeout=3)
-        except Exception:
-            # If close fails (dead browser, timeout), try lightweight fallback
+            # Disable CDP network monitoring (stop capturing events)
             try:
+                from nodriver import cdp
                 await asyncio.wait_for(
-                    tab.evaluate("window.stop(); window.location='about:blank'"),
-                    timeout=2,
+                    tab.send(cdp.network.disable()), timeout=2,
                 )
             except Exception:
                 pass
+            # Navigate to blank to free page resources
+            await asyncio.wait_for(
+                tab.evaluate("window.stop(); window.location='about:blank'"),
+                timeout=2,
+            )
+            # Clear event handlers so stale closures don't accumulate
+            if hasattr(tab, 'handlers'):
+                tab.handlers.clear()
+            self._idle_tabs.append(tab)
+        except Exception:
+            pass  # Tab is dead — don't recycle, just drop it
         finally:
             self._tab_semaphore.release()
 

@@ -816,11 +816,6 @@ async def _fetch_maps_search(
         return None, [], {}
     finally:
         if tab:
-            # Disable CDP network monitoring before closing
-            try:
-                await tab.send(cdp.network.disable())
-            except Exception:
-                pass
             await pool.release_tab(tab)
 
 
