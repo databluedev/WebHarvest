@@ -414,8 +414,7 @@ class GoogleNewsResponse(BaseModel):
 
 class GoogleJobsRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2048, description="Job search query")
-    num_results: int = Field(20, ge=1, le=500, description="Number of jobs (max 500, 20 per page)")
-    page: int = Field(1, ge=1, le=100, description="Page number (1-indexed)")
+    num_results: int = Field(100, ge=1, le=500, description="Number of jobs to fetch (auto-paginates, 20 per page)")
     has_remote: bool | None = Field(None, description="Filter remote-eligible jobs only")
     target_level: list[str] | None = Field(
         None,
@@ -477,8 +476,6 @@ class GoogleJobsResponse(BaseModel):
     success: bool = True
     query: str
     total_results: int | None = Field(None, description="Total jobs matching query across all pages")
-    page: int = Field(1, description="Current page number")
-    page_size: int = Field(20, description="Jobs per page")
     time_taken: float = Field(..., description="API response time in seconds")
     jobs: list[GoogleJobListing] = []
     companies: list[str] | None = Field(None, description="Available company/org names from ds:0")

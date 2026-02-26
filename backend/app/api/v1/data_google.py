@@ -258,7 +258,6 @@ async def search_google_jobs(
     result = await google_jobs(
         query=request.query,
         num_results=request.num_results,
-        page=request.page,
         has_remote=request.has_remote,
         target_level=request.target_level,
         employment_type=request.employment_type,

@@ -728,7 +728,6 @@ class ApiClient {
   async googleJobs(params: {
     query: string;
     num_results?: number;
-    page?: number;
     has_remote?: boolean;
     target_level?: string[];
     employment_type?: string[];
@@ -742,8 +741,6 @@ class ApiClient {
       success: boolean;
       query: string;
       total_results?: number;
-      page: number;
-      page_size: number;
       time_taken: number;
       jobs: Array<{
         position: number;

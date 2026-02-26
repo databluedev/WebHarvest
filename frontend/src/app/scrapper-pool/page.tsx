@@ -164,7 +164,7 @@ export default function ScrapperPoolPage() {
 
   // Google Jobs state
   const [jobsQuery, setJobsQuery] = useState("");
-  const [jobsPage, setJobsPage] = useState(1);
+  const [jobsNumResults, setJobsNumResults] = useState(100);
   const [jobsRemote, setJobsRemote] = useState(false);
   const [jobsSortBy, setJobsSortBy] = useState("relevance");
   const [jobsCompany, setJobsCompany] = useState("");
@@ -280,7 +280,7 @@ export default function ScrapperPoolPage() {
     try {
       const res = await api.googleJobs({
         query: jobsQuery.trim(),
-        page: jobsPage,
+        num_results: jobsNumResults,
         has_remote: jobsRemote || undefined,
         sort_by: jobsSortBy,
         ...(jobsCompany && { company: [jobsCompany] }),
@@ -1751,15 +1751,15 @@ export default function ScrapperPoolPage() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Page</label>
-                        <input
-                          type="number"
-                          value={jobsPage}
-                          onChange={(e) => setJobsPage(Math.max(1, Number(e.target.value)))}
-                          min={1}
-                          max={100}
-                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white focus:outline-none focus:border-pink-500/40 transition-colors"
-                        />
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Results</label>
+                        <div className="relative">
+                          <select value={jobsNumResults} onChange={(e) => setJobsNumResults(Number(e.target.value))} className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-pink-500/40 transition-colors">
+                            {[20, 50, 100, 200, 300, 500].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
                       </div>
                       <div className="flex items-end pb-1">
                         <label className="flex items-center gap-3 cursor-pointer">

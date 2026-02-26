@@ -37,9 +37,12 @@ _EXPERIENCE_LEVELS = {
 }
 
 
+_CONCURRENT_PAGES = 3  # Parallel page fetches
+
+
 def _cache_key(
     query: str,
-    page: int,
+    num_results: int,
     has_remote: bool | None,
     target_level: list[str] | None,
     employment_type: list[str] | None,
@@ -47,7 +50,7 @@ def _cache_key(
     sort_by: str,
 ) -> str:
     raw = (
-        f"jobs:{query}|{page}|{has_remote}|"
+        f"jobs:{query}|{num_results}|{has_remote}|"
         f"{','.join(sorted(target_level or []))}|"
         f"{','.join(sorted(employment_type or []))}|"
         f"{','.join(sorted(company or []))}|{sort_by}"
@@ -391,10 +394,39 @@ async def _fetch_jobs_html(url: str) -> str | None:
 # ===================================================================
 
 
+async def _fetch_and_parse_page(
+    query: str,
+    page: int,
+    has_remote: bool | None,
+    target_level: list[str] | None,
+    employment_type: list[str] | None,
+    company: list[str] | None,
+    location: list[str] | None,
+    degree: str | None,
+    skills: str | None,
+    sort_by: str,
+) -> tuple[list[GoogleJobListing], int | None, list[str]]:
+    """Fetch a single page and parse jobs from it."""
+    url = _build_jobs_url(
+        query, page, has_remote, target_level, employment_type,
+        company, location, degree, skills, sort_by,
+    )
+    logger.info("Google Jobs page %d: %s", page, url)
+
+    html = await _fetch_jobs_html(url)
+    if not html:
+        return [], None, []
+
+    af_blobs = _extract_af_init_data(html)
+    if not af_blobs:
+        return [], None, []
+
+    return _parse_jobs_blob(af_blobs)
+
+
 async def google_jobs(
     query: str,
-    num_results: int = 20,
-    page: int = 1,
+    num_results: int = 100,
     has_remote: bool | None = None,
     target_level: list[str] | None = None,
     employment_type: list[str] | None = None,
@@ -404,19 +436,17 @@ async def google_jobs(
     skills: str | None = None,
     sort_by: str = "relevance",
 ) -> GoogleJobsResponse:
-    """Fetch Google Careers job listings via AF_initDataCallback parsing.
+    """Fetch Google Careers job listings with auto-pagination.
 
-    Loads the Google Careers SPA with nodriver, extracts the ds:1 blob,
-    and parses structured job data including titles, locations, descriptions,
-    qualifications, timestamps, experience levels, and more.
+    Automatically paginates through pages (20 per page) to collect up to
+    num_results jobs. Fetches pages in parallel batches for speed.
 
-    Supports all Google Careers filters and pagination (20 per page).
     Results cached in Redis for 5 minutes.
     """
     start = time.time()
 
     # Check Redis cache
-    key = _cache_key(query, page, has_remote, target_level, employment_type, company, sort_by)
+    key = _cache_key(query, num_results, has_remote, target_level, employment_type, company, sort_by)
     try:
         from app.core.redis import redis_client
 
@@ -424,70 +454,99 @@ async def google_jobs(
         if cached:
             data = json.loads(cached)
             data["time_taken"] = round(time.time() - start, 3)
-            logger.info("Jobs cache hit for '%s' page %d", query, page)
+            logger.info("Jobs cache hit for '%s'", query)
             return GoogleJobsResponse(**data)
     except Exception:
         pass
 
-    # Build URL with filters
-    url = _build_jobs_url(
-        query, page, has_remote, target_level, employment_type,
+    # ── Page 1: get first batch + total count + companies ──
+    jobs_page1, total_count, companies = await _fetch_and_parse_page(
+        query, 1, has_remote, target_level, employment_type,
         company, location, degree, skills, sort_by,
     )
-    logger.info("Google Jobs: %s", url)
-
-    # Fetch page with nodriver
-    html = await _fetch_jobs_html(url)
-    elapsed = round(time.time() - start, 3)
-
-    if not html:
-        logger.warning("Google Jobs: no HTML returned")
-        return GoogleJobsResponse(
-            success=False, query=query, time_taken=elapsed,
-        )
-
-    logger.info("Google Jobs: %d bytes HTML", len(html))
-
-    # Extract AF_initDataCallback blobs
-    af_blobs = _extract_af_init_data(html)
-    if not af_blobs:
-        logger.warning("Google Jobs: no AF_initDataCallback found")
-        return GoogleJobsResponse(
-            success=False, query=query, time_taken=elapsed,
-        )
-
-    logger.info(
-        "Google Jobs: found %d AF_initDataCallback blobs: %s",
-        len(af_blobs), [b["key"] for b in af_blobs],
-    )
-
-    # Parse jobs from ds:1
-    jobs, total_count, companies = _parse_jobs_blob(af_blobs)
 
     elapsed = round(time.time() - start, 3)
 
-    if not jobs:
-        logger.warning("Google Jobs: 0 jobs parsed from AF_initDataCallback")
+    if not jobs_page1:
+        logger.warning("Google Jobs: 0 jobs on page 1")
         return GoogleJobsResponse(
             success=False, query=query, time_taken=elapsed,
             total_results=total_count, companies=companies or None,
         )
 
-    # Trim to requested count
-    jobs = jobs[:num_results]
+    all_jobs: list[GoogleJobListing] = list(jobs_page1)
+    seen_ids: set[str] = {j.job_id for j in all_jobs}
 
     logger.info(
-        "Google Jobs: %d jobs (total %s) for '%s' page %d",
-        len(jobs), total_count, query, page,
+        "Google Jobs page 1: %d jobs (total available: %s) for '%s'",
+        len(all_jobs), total_count, query,
+    )
+
+    # ── Auto-paginate remaining pages ──
+    if total_count and len(all_jobs) < num_results:
+        import asyncio
+        from math import ceil
+
+        # Cap at actual available results
+        target = min(num_results, total_count)
+        pages_needed = ceil(target / _PAGE_SIZE)
+        remaining_pages = list(range(2, pages_needed + 1))
+
+        # Fetch in parallel batches
+        for batch_start in range(0, len(remaining_pages), _CONCURRENT_PAGES):
+            if len(all_jobs) >= num_results:
+                break
+
+            batch = remaining_pages[batch_start : batch_start + _CONCURRENT_PAGES]
+
+            tasks = [
+                _fetch_and_parse_page(
+                    query, pg, has_remote, target_level, employment_type,
+                    company, location, degree, skills, sort_by,
+                )
+                for pg in batch
+            ]
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            new_in_batch = 0
+            for page_result in batch_results:
+                if isinstance(page_result, Exception):
+                    logger.warning("Google Jobs page fetch failed: %s", page_result)
+                    continue
+
+                page_jobs, _, _ = page_result
+                for job in page_jobs:
+                    if job.job_id not in seen_ids:
+                        seen_ids.add(job.job_id)
+                        all_jobs.append(job)
+                        new_in_batch += 1
+
+            logger.info(
+                "Google Jobs pages %d-%d: +%d jobs (total: %d)",
+                batch[0], batch[-1], new_in_batch, len(all_jobs),
+            )
+
+            if new_in_batch == 0:
+                logger.info("Google Jobs: no new results in batch, stopping")
+                break
+
+    elapsed = round(time.time() - start, 3)
+
+    # Trim and re-number
+    all_jobs = all_jobs[:num_results]
+    for i, job in enumerate(all_jobs):
+        job.position = i + 1
+
+    logger.info(
+        "Google Jobs: %d jobs fetched (total %s) for '%s' in %.1fs",
+        len(all_jobs), total_count, query, elapsed,
     )
 
     result = GoogleJobsResponse(
         query=query,
         total_results=total_count,
-        page=page,
-        page_size=_PAGE_SIZE,
         time_taken=elapsed,
-        jobs=jobs,
+        jobs=all_jobs,
         companies=companies or None,
     )
 
