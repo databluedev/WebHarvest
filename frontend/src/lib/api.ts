@@ -725,6 +725,56 @@ class ApiClient {
     });
   }
 
+  async googleJobs(params: {
+    query: string;
+    num_results?: number;
+    page?: number;
+    has_remote?: boolean;
+    target_level?: string[];
+    employment_type?: string[];
+    company?: string[];
+    location?: string[];
+    degree?: string;
+    skills?: string;
+    sort_by?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      query: string;
+      total_results?: number;
+      page: number;
+      page_size: number;
+      time_taken: number;
+      jobs: Array<{
+        position: number;
+        job_id: string;
+        title: string;
+        company: string;
+        locations: Array<{
+          display_name: string;
+          city?: string;
+          state?: string;
+          country?: string;
+        }>;
+        apply_url?: string;
+        detail_url?: string;
+        description_html?: string;
+        responsibilities_html?: string;
+        qualifications_html?: string;
+        min_qualifications_html?: string;
+        benefits_html?: string;
+        experience_level?: string;
+        category_ids?: number[];
+        created_at?: string;
+        updated_at?: string;
+      }>;
+      companies?: string[];
+    }>("/v1/data/google/jobs", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
   async googleMaps(params: {
     query?: string;
     coordinates?: string;

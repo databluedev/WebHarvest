@@ -405,3 +405,80 @@ class GoogleNewsResponse(BaseModel):
     )
     articles: list[GoogleNewsArticle] = []
     related_searches: list[RelatedSearch] = []
+
+
+# ===================================================================
+# Google Jobs (Careers) — reverse-engineered AF_initDataCallback
+# ===================================================================
+
+
+class GoogleJobsRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2048, description="Job search query")
+    num_results: int = Field(20, ge=1, le=500, description="Number of jobs (max 500, 20 per page)")
+    page: int = Field(1, ge=1, le=100, description="Page number (1-indexed)")
+    has_remote: bool | None = Field(None, description="Filter remote-eligible jobs only")
+    target_level: list[str] | None = Field(
+        None,
+        description="Experience levels: INTERN_AND_APPRENTICE, EARLY, MID, ADVANCED, DIRECTOR",
+    )
+    employment_type: list[str] | None = Field(
+        None,
+        description="Job types: FULL_TIME, PART_TIME, TEMPORARY, INTERN",
+    )
+    company: list[str] | None = Field(
+        None,
+        description="Organizations: Google, DeepMind, GFiber, Waymo, Wing, YouTube, Verily Life Sciences",
+    )
+    location: list[str] | None = Field(
+        None, description="Location filters (e.g. 'New York, NY, USA')"
+    )
+    degree: str | None = Field(
+        None,
+        description="Degree filter: PURSUING_DEGREE, ASSOCIATE, BACHELORS, MASTERS, PHD",
+    )
+    skills: str | None = Field(None, description="Skills filter (e.g. 'coding')")
+    sort_by: str = Field("relevance", description="Sort order: relevance, date")
+
+
+class GoogleJobLocation(BaseModel):
+    model_config = {"exclude_none": True}
+
+    display_name: str = Field(..., description="Full location string (e.g. 'Kirkland, WA, USA')")
+    city: str | None = Field(None, description="City name")
+    state: str | None = Field(None, description="State/region code")
+    country: str | None = Field(None, description="Country code (e.g. US, PL, SG)")
+    postal_code: str | None = None
+
+
+class GoogleJobListing(BaseModel):
+    model_config = {"exclude_none": True}
+
+    position: int = Field(..., description="1-indexed rank in results")
+    job_id: str = Field(..., description="Numeric job ID")
+    title: str
+    company: str = Field(..., description="Organization name (Google, DeepMind, etc.)")
+    locations: list[GoogleJobLocation] = []
+    apply_url: str | None = Field(None, description="Direct apply/sign-in URL")
+    detail_url: str | None = Field(None, description="Job detail page URL")
+    description_html: str | None = Field(None, description="Job description as HTML")
+    responsibilities_html: str | None = Field(None, description="Responsibilities as HTML")
+    qualifications_html: str | None = Field(None, description="Combined qualifications as HTML")
+    min_qualifications_html: str | None = Field(None, description="Minimum qualifications only as HTML")
+    benefits_html: str | None = Field(None, description="Benefits/compensation as HTML")
+    experience_level: str | None = Field(None, description="Entry, Mid, Advanced, or Director")
+    category_ids: list[int] | None = Field(None, description="Category codes (2=SWE, 3=TechInfra, etc.)")
+    created_at: str | None = Field(None, description="ISO date when job was first posted")
+    updated_at: str | None = Field(None, description="ISO date when job was last updated")
+
+
+class GoogleJobsResponse(BaseModel):
+    model_config = {"exclude_none": True}
+
+    success: bool = True
+    query: str
+    total_results: int | None = Field(None, description="Total jobs matching query across all pages")
+    page: int = Field(1, description="Current page number")
+    page_size: int = Field(20, description="Jobs per page")
+    time_taken: float = Field(..., description="API response time in seconds")
+    jobs: list[GoogleJobListing] = []
+    companies: list[str] | None = Field(None, description="Available company/org names from ds:0")

@@ -5,6 +5,7 @@ Endpoints:
   POST /v1/data/google/shopping — Google Shopping with filters (structured JSON)
   POST /v1/data/google/maps     — Google Maps places and details (structured JSON)
   POST /v1/data/google/news     — Google News articles (structured JSON)
+  POST /v1/data/google/jobs     — Google Careers job listings (structured JSON)
 """
 
 import logging
@@ -17,6 +18,8 @@ from app.core.exceptions import BadRequestError, RateLimitError
 from app.core.rate_limiter import check_rate_limit_full
 from app.models.user import User
 from app.schemas.data_google import (
+    GoogleJobsRequest,
+    GoogleJobsResponse,
     GoogleMapsRequest,
     GoogleMapsResponse,
     GoogleNewsRequest,
@@ -26,6 +29,7 @@ from app.schemas.data_google import (
     GoogleShoppingRequest,
     GoogleShoppingResponse,
 )
+from app.services.google_jobs import google_jobs
 from app.services.google_maps import google_maps
 from app.services.google_news import google_news
 from app.services.google_serp import google_search
@@ -215,6 +219,53 @@ async def search_google_news(
         language=request.language,
         country=request.country,
         time_range=request.time_range,
+        sort_by=request.sort_by,
+    )
+
+    return result
+
+
+@router.post(
+    "/jobs",
+    response_model=GoogleJobsResponse,
+    response_model_exclude_none=True,
+    summary="Google Jobs (Careers) API",
+    description=(
+        "Search Google Careers for job listings with structured data including "
+        "titles, locations, descriptions, qualifications, experience levels, and more. "
+        "Supports all Google Careers filters: remote, experience level, employment type, "
+        "organization, location, degree, and skills. "
+        "20 results per page with pagination. Results are cached for 5 minutes."
+    ),
+    response_description="Structured Google Careers job listing data",
+)
+async def search_google_jobs(
+    request: GoogleJobsRequest,
+    response: Response,
+    user: User = Depends(get_current_user),
+):
+    """Search Google Careers and return structured job listing data."""
+    # Rate limiting
+    rl = await check_rate_limit_full(
+        f"rate:data:{user.id}", settings.RATE_LIMIT_DATA_API
+    )
+    response.headers["X-RateLimit-Limit"] = str(rl.limit)
+    response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
+    response.headers["X-RateLimit-Reset"] = str(rl.reset)
+    if not rl.allowed:
+        raise RateLimitError("Data API rate limit exceeded. Try again in a minute.")
+
+    result = await google_jobs(
+        query=request.query,
+        num_results=request.num_results,
+        page=request.page,
+        has_remote=request.has_remote,
+        target_level=request.target_level,
+        employment_type=request.employment_type,
+        company=request.company,
+        location=request.location,
+        degree=request.degree,
+        skills=request.skills,
         sort_by=request.sort_by,
     )
 
