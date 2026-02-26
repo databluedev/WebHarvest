@@ -64,13 +64,18 @@ def _cache_key(
     target_level: list[str] | None,
     employment_type: list[str] | None,
     company: list[str] | None,
+    location: list[str] | None,
+    degree: str | None,
+    skills: str | None,
     sort_by: str,
 ) -> str:
     raw = (
         f"jobs:{query}|{num_results}|{has_remote}|"
         f"{','.join(sorted(target_level or []))}|"
         f"{','.join(sorted(employment_type or []))}|"
-        f"{','.join(sorted(company or []))}|{sort_by}"
+        f"{','.join(sorted(company or []))}|"
+        f"{','.join(sorted(location or []))}|"
+        f"{degree or ''}|{skills or ''}|{sort_by}"
     )
     h = hashlib.md5(raw.encode()).hexdigest()[:16]
     return f"serp:gjobs:{h}"
@@ -530,7 +535,7 @@ async def google_jobs(
     start = time.time()
 
     # Check Redis cache
-    key = _cache_key(query, num_results, has_remote, target_level, employment_type, company, sort_by)
+    key = _cache_key(query, num_results, has_remote, target_level, employment_type, company, location, degree, skills, sort_by)
     try:
         from app.core.redis import redis_client
 
