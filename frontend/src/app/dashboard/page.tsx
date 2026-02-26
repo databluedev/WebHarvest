@@ -24,6 +24,13 @@ import {
   XCircle,
   Timer,
   Database,
+  Key,
+  Plus,
+  Copy,
+  Check,
+  Trash2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   LineChart,
@@ -81,6 +88,14 @@ interface QuotaData {
   total_pages_scraped: number;
   total_bytes_processed: number;
   operations: Record<string, { limit: number; used: number; remaining: number; unlimited: boolean }>;
+}
+
+interface ApiKeyItem {
+  id: string;
+  key_prefix: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
 }
 
 // ---- Chart color palette ----
@@ -227,6 +242,15 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // API Keys state
+  const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
+  const [apiKeysLoading, setApiKeysLoading] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [keyCopied, setKeyCopied] = useState(false);
+  const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+  const [showKeyValue, setShowKeyValue] = useState(false);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -260,6 +284,48 @@ export default function DashboardPage() {
     }
   }, []);
 
+  const loadApiKeys = useCallback(async () => {
+    setApiKeysLoading(true);
+    try {
+      const keys = await api.listApiKeys();
+      setApiKeys(keys as ApiKeyItem[]);
+    } catch {
+    } finally {
+      setApiKeysLoading(false);
+    }
+  }, []);
+
+  const handleGenerateKey = async () => {
+    setApiKeysLoading(true);
+    try {
+      const res = await api.createApiKey(newKeyName.trim() || undefined) as any;
+      setGeneratedKey(res.full_key);
+      setNewKeyName("");
+      setShowKeyValue(true);
+      await loadApiKeys();
+    } catch {
+    } finally {
+      setApiKeysLoading(false);
+    }
+  };
+
+  const handleRevokeKey = async (keyId: string) => {
+    setRevokingKeyId(keyId);
+    try {
+      await api.revokeApiKey(keyId);
+      await loadApiKeys();
+    } catch {
+    } finally {
+      setRevokingKeyId(null);
+    }
+  };
+
+  const handleCopyKey = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setKeyCopied(true);
+    setTimeout(() => setKeyCopied(false), 2000);
+  };
+
   useEffect(() => {
     const token = api.getToken();
     if (!token) {
@@ -267,7 +333,8 @@ export default function DashboardPage() {
       return;
     }
     loadData();
-  }, [router, loadData]);
+    loadApiKeys();
+  }, [router, loadData, loadApiKeys]);
 
   // Auto-refresh active jobs every 10s
   useEffect(() => {
@@ -335,6 +402,134 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* ── API Keys ── */}
+        <div className="mb-8 border border-white/10 bg-white/[0.02] p-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 to-emerald-500" />
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-cyan-400" />
+              <h2 className="text-lg font-bold text-white font-mono">API Keys</h2>
+              <span className="text-xs font-mono text-white/50 ml-1">
+                ({apiKeys.filter((k) => k.is_active).length} active)
+              </span>
+            </div>
+          </div>
+
+          {/* Generate new key */}
+          <div className="flex items-center gap-3 mb-5">
+            <input
+              type="text"
+              placeholder="Key name (optional)"
+              value={newKeyName}
+              onChange={(e) => setNewKeyName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleGenerateKey()}
+              className="flex-1 max-w-[300px] bg-transparent border border-white/10 px-3 py-2 text-sm font-mono text-white placeholder:text-white/25 focus:outline-none focus:border-cyan-500/40 transition-colors"
+            />
+            <button
+              onClick={handleGenerateKey}
+              disabled={apiKeysLoading}
+              className="flex items-center gap-2 border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-cyan-400 hover:bg-cyan-500/20 transition-all disabled:opacity-50"
+            >
+              {apiKeysLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Plus className="h-3.5 w-3.5" />
+              )}
+              Generate Key
+            </button>
+          </div>
+
+          {/* Newly generated key (shown once) */}
+          {generatedKey && (
+            <div className="mb-5 border border-emerald-500/30 bg-emerald-500/[0.06] p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Check className="h-4 w-4 text-emerald-400" />
+                <span className="text-sm font-bold text-emerald-400 font-mono">Key Generated</span>
+                <span className="text-[10px] uppercase tracking-wider text-amber-400 font-mono ml-2">Save it now — it won&apos;t be shown again</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-black/30 border border-white/10 px-3 py-2 text-sm font-mono text-white break-all select-all">
+                  {showKeyValue ? generatedKey : "•".repeat(40)}
+                </code>
+                <button
+                  onClick={() => setShowKeyValue(!showKeyValue)}
+                  className="h-9 w-9 grid place-items-center border border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors"
+                  title={showKeyValue ? "Hide" : "Reveal"}
+                >
+                  {showKeyValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+                <button
+                  onClick={() => handleCopyKey(generatedKey)}
+                  className="h-9 w-9 grid place-items-center border border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors"
+                  title="Copy"
+                >
+                  {keyCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Key list */}
+          {apiKeys.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/[0.06] text-left">
+                    <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">Name</th>
+                    <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">Key</th>
+                    <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">Status</th>
+                    <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">Created</th>
+                    <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {apiKeys.map((k) => (
+                    <tr key={k.id} className="border-b border-white/[0.06]">
+                      <td className="py-2.5 pr-3">
+                        <span className="text-white font-mono">{k.name || "—"}</span>
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <code className="text-cyan-400/70 font-mono text-xs">{k.key_prefix}••••••••</code>
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        {k.is_active ? (
+                          <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-emerald-400/30 text-emerald-400">Active</span>
+                        ) : (
+                          <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-white/20 text-white/30">Revoked</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <span className="text-white/50 font-mono text-xs">{timeAgo(k.created_at)}</span>
+                      </td>
+                      <td className="py-2.5 text-right">
+                        {k.is_active && (
+                          <button
+                            onClick={() => handleRevokeKey(k.id)}
+                            disabled={revokingKeyId === k.id}
+                            className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-red-400/30 text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50"
+                          >
+                            {revokingKeyId === k.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin inline" />
+                            ) : (
+                              "Revoke"
+                            )}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-6 text-white/30">
+              <Key className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm font-mono">No API keys yet</p>
+              <p className="text-xs font-mono mt-1">Generate a key to use the API programmatically</p>
+            </div>
+          )}
+        </div>
 
         {/* Loading skeleton */}
         {loading && !stats && (
