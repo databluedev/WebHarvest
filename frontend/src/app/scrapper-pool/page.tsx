@@ -1693,14 +1693,14 @@ export default function ScrapperPoolPage() {
                     </div>
 
                     <div>
-                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Location</label>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Location <span className="normal-case tracking-normal text-white/20">(Google/Alphabet offices only)</span></label>
                       <div className="relative">
                         <input
                           type="text"
                           value={jobsLocation}
                           onChange={(e) => setJobsLocation(e.target.value)}
                           onKeyDown={(e) => e.key === "Enter" && handleGoogleJobs()}
-                          placeholder="e.g. New York, NY, USA"
+                          placeholder="e.g. Bengaluru, India / New York / London"
                           className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/40 transition-colors"
                         />
                         <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
@@ -1855,6 +1855,17 @@ export default function ScrapperPoolPage() {
 
                     {result && (
                       <div className="space-y-4">
+                        {result.jobs?.length === 0 && (
+                          <div className="text-center py-8 border border-white/[0.06] bg-[#050505]">
+                            <Briefcase className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                            <p className="text-[13px] text-white/40 font-mono mb-2">No jobs found{jobsLocation.trim() ? ` in "${jobsLocation.trim()}"` : ""}</p>
+                            {jobsLocation.trim() && (
+                              <p className="text-[11px] text-white/20 font-mono px-6">
+                                Google Careers only lists jobs at Alphabet office locations. Try: Bengaluru, Hyderabad, Pune, New York, London, Singapore, Tokyo, or a country name like India, USA.
+                              </p>
+                            )}
+                          </div>
+                        )}
                         <div className="max-h-[600px] overflow-y-auto space-y-[1px] scrollbar-thin">
                           {result.jobs?.map((job: any, i: number) => (
                             <div key={i} className="bg-[#050505] border border-white/[0.04] p-4 hover:border-white/[0.08] transition-colors">
