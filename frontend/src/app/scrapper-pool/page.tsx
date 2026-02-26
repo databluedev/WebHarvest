@@ -1754,7 +1754,7 @@ export default function ScrapperPoolPage() {
                         <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Results</label>
                         <div className="relative">
                           <select value={jobsNumResults} onChange={(e) => setJobsNumResults(Number(e.target.value))} className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-pink-500/40 transition-colors">
-                            {[20, 50, 100, 200, 300, 500].map((n) => (
+                            {[20, 50, 100, 200, 500, 1000, 2000].map((n) => (
                               <option key={n} value={n}>{n}</option>
                             ))}
                           </select>

@@ -414,7 +414,7 @@ class GoogleNewsResponse(BaseModel):
 
 class GoogleJobsRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2048, description="Job search query")
-    num_results: int = Field(100, ge=1, le=500, description="Number of jobs to fetch (auto-paginates, 20 per page)")
+    num_results: int = Field(100, ge=1, le=2000, description="Number of jobs to fetch (auto-paginates, 20 per page)")
     has_remote: bool | None = Field(None, description="Filter remote-eligible jobs only")
     target_level: list[str] | None = Field(
         None,
