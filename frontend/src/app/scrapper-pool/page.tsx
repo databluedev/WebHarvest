@@ -155,7 +155,6 @@ export default function ScrapperPoolPage() {
 
   // Google Shopping state
   const [shopQuery, setShopQuery] = useState("");
-  const [shopNumResults, setShopNumResults] = useState(10);
   const [shopLanguage, setShopLanguage] = useState("en");
   const [shopCountry, setShopCountry] = useState("");
   const [shopSortBy, setShopSortBy] = useState("");
@@ -238,7 +237,6 @@ export default function ScrapperPoolPage() {
     try {
       const res = await api.googleShopping({
         query: shopQuery.trim(),
-        num_results: shopNumResults,
         language: shopLanguage,
         ...(shopCountry && { country: shopCountry }),
         ...(shopSortBy && { sort_by: shopSortBy }),
@@ -878,21 +876,6 @@ export default function ScrapperPoolPage() {
                             <option value="price_high">Price: High → Low</option>
                             <option value="rating">Rating</option>
                             <option value="reviews">Reviews</option>
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Results</label>
-                        <div className="relative">
-                          <select
-                            value={shopNumResults}
-                            onChange={(e) => setShopNumResults(Number(e.target.value))}
-                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-amber-500/40 transition-colors"
-                          >
-                            {[5, 10, 20, 30, 50, 75, 100].map((n) => (
-                              <option key={n} value={n}>{n}</option>
-                            ))}
                           </select>
                           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
                         </div>

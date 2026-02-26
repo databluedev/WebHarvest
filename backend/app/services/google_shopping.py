@@ -35,8 +35,9 @@ logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 300  # 5 minutes
 _RESULTS_PER_PAGE = 20
-_MAX_PAGES = 5
+_MAX_PAGES = 50  # effectively unlimited — stops when Google returns empty
 _PAGE_DELAY = 2.0
+_MAX_CONSECUTIVE_EMPTY = 2
 
 # Currency symbol → code mapping
 _CURRENCY_MAP = {
@@ -908,17 +909,13 @@ async def google_shopping(
     except Exception:
         pass
 
-    # Calculate pages needed
-    pages_needed = min(
-        _MAX_PAGES,
-        (num_results + _RESULTS_PER_PAGE - 1) // _RESULTS_PER_PAGE,
-    )
-
+    # Paginate until Google returns no more results
     all_products: list[GoogleShoppingProduct] = []
     seen_urls: set[str] = set()
     first_page_extras: dict | None = None
+    consecutive_empty = 0
 
-    for pg_offset in range(pages_needed):
+    for pg_offset in range(_MAX_PAGES):
         current_page = page + pg_offset
 
         page_result = await _fetch_single_shopping_page(
@@ -926,13 +923,19 @@ async def google_shopping(
         )
 
         if not page_result or not page_result.products:
+            consecutive_empty += 1
             logger.info(
-                "Shopping page %d returned no products, stopping",
-                current_page,
+                "Shopping page %d returned no products (%d consecutive empty)",
+                current_page, consecutive_empty,
             )
-            break
+            if consecutive_empty >= _MAX_CONSECUTIVE_EMPTY:
+                break
+            continue
+
+        consecutive_empty = 0
 
         # Collect products (deduplicate by title since URLs are constructed)
+        new_count = 0
         for p in page_result.products:
             dedup_key = p.title.lower().strip()
             if dedup_key in seen_urls:
@@ -940,12 +943,11 @@ async def google_shopping(
             seen_urls.add(dedup_key)
             p.position = len(all_products) + 1
             all_products.append(p)
+            new_count += 1
 
         logger.info(
-            "Shopping page %d: +%d products (total: %d)",
-            current_page,
-            len(page_result.products),
-            len(all_products),
+            "Shopping page %d: +%d new products (total: %d unique)",
+            current_page, new_count, len(all_products),
         )
 
         if pg_offset == 0:
@@ -954,10 +956,13 @@ async def google_shopping(
                 "related_searches": page_result.related_searches,
             }
 
-        if len(all_products) >= num_results:
-            break
+        # If page returned all dupes, Google is recycling — stop
+        if new_count == 0:
+            consecutive_empty += 1
+            if consecutive_empty >= _MAX_CONSECUTIVE_EMPTY:
+                break
 
-        if pg_offset < pages_needed - 1:
+        if pg_offset < _MAX_PAGES - 1:
             await asyncio.sleep(_PAGE_DELAY)
 
     elapsed = round(time.time() - start, 3)
@@ -966,8 +971,6 @@ async def google_shopping(
         return GoogleShoppingResponse(
             success=False, query=query, time_taken=elapsed,
         )
-
-    all_products = all_products[:num_results]
 
     # Filters echo
     filters_applied: dict[str, str | float | bool] = {}

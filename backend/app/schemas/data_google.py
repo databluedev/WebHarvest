@@ -88,8 +88,8 @@ class GoogleSearchResponse(BaseModel):
 
 class GoogleShoppingRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2048, description="Product search query")
-    num_results: int = Field(10, ge=1, le=100, description="Number of products (max 100)")
-    page: int = Field(1, ge=1, le=10, description="Starting page (1-10)")
+    num_results: int = Field(1000, ge=1, le=5000, description="Max products to fetch (auto-paginates)")
+    page: int = Field(1, ge=1, le=50, description="Starting page")
     language: str = Field("en", description="Language code (hl parameter)")
     country: str | None = Field(None, description="Country code for geo-targeting (gl parameter)")
 
