@@ -170,6 +170,7 @@ export default function ScrapperPoolPage() {
   const [jobsCompany, setJobsCompany] = useState("");
   const [jobsLevel, setJobsLevel] = useState("");
   const [jobsType, setJobsType] = useState("");
+  const [jobsLocation, setJobsLocation] = useState("");
 
   const handleCardClick = (apiId: string, status: ApiStatus) => {
     if (status !== "active") return;
@@ -286,6 +287,7 @@ export default function ScrapperPoolPage() {
         ...(jobsCompany && { company: [jobsCompany] }),
         ...(jobsLevel && { target_level: [jobsLevel] }),
         ...(jobsType && { employment_type: [jobsType] }),
+        ...(jobsLocation.trim() && { location: [jobsLocation.trim()] }),
       });
       setResult(res);
     } catch (err: any) {
@@ -1687,6 +1689,21 @@ export default function ScrapperPoolPage() {
                           className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/40 transition-colors"
                         />
                         <Briefcase className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Location</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={jobsLocation}
+                          onChange={(e) => setJobsLocation(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleGoogleJobs()}
+                          placeholder="e.g. New York, NY, USA"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-pink-500/40 transition-colors"
+                        />
+                        <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
                       </div>
                     </div>
 
