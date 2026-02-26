@@ -135,6 +135,8 @@ const TICKER_ITEMS = [
 export default function ScrapperPoolPage() {
   const [mobileNav, setMobileNav] = useState(false);
   const [activePanel, setActivePanel] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState("google");
+  const [slideDir, setSlideDir] = useState<"left" | "right">("right");
 
   // Shared tryout state
   const [loading, setLoading] = useState(false);
@@ -186,6 +188,15 @@ export default function ScrapperPoolPage() {
   const [jobsLevel, setJobsLevel] = useState("");
   const [jobsType, setJobsType] = useState("");
   const [jobsLocation, setJobsLocation] = useState("");
+
+  const handleCategorySwitch = (key: string) => {
+    if (key === activeCategory) return;
+    const currentIdx = API_CATEGORIES.findIndex((c) => c.key === activeCategory);
+    const nextIdx = API_CATEGORIES.findIndex((c) => c.key === key);
+    setSlideDir(nextIdx > currentIdx ? "right" : "left");
+    setActivePanel(null);
+    setActiveCategory(key);
+  };
 
   const handleCardClick = (apiId: string, status: ApiStatus) => {
     if (status !== "active") return;
@@ -422,84 +433,113 @@ export default function ScrapperPoolPage() {
         {/* ── API CARDS ── */}
         <section className="px-6 md:px-10 py-16 relative z-10">
           <div className="max-w-[1400px] mx-auto">
-            {API_CATEGORIES.map((cat, catIdx) => {
-              const categoryApis = SCRAPER_APIS.filter((a) => a.category === cat.key);
-              if (categoryApis.length === 0) return null;
-              return (
-                <div key={cat.key} className={catIdx > 0 ? "mt-14" : ""}>
-                  {/* Category header */}
-                  <div className="flex items-center gap-4 mb-6">
-                    <div>
-                      <h2 className="text-[22px] font-bold uppercase tracking-[-0.5px] font-mono">{cat.label}</h2>
-                      <div className="text-[11px] uppercase tracking-[0.2em] text-white/30 font-mono mt-1">{cat.sublabel}</div>
+            {/* Category tabs */}
+            <div className="flex items-center gap-3 mb-8">
+              {API_CATEGORIES.map((cat) => {
+                const isSelected = activeCategory === cat.key;
+                const count = SCRAPER_APIS.filter((a) => a.category === cat.key).length;
+                return (
+                  <button
+                    key={cat.key}
+                    onClick={() => handleCategorySwitch(cat.key)}
+                    className={`group relative px-6 py-3.5 border font-mono text-left transition-all duration-200 ${
+                      isSelected
+                        ? "border-cyan-500/40 bg-cyan-500/[0.06]"
+                        : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.15] hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={`text-[14px] font-bold uppercase tracking-[0.05em] transition-colors ${isSelected ? "text-white" : "text-white/50 group-hover:text-white/70"}`}>
+                        {cat.label}
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 font-mono transition-colors ${
+                        isSelected ? "bg-cyan-500/20 text-cyan-400" : "bg-white/[0.06] text-white/30"
+                      }`}>
+                        {count}
+                      </span>
                     </div>
-                    <div className="flex-1 h-[1px] bg-white/[0.06]" />
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-white/25 font-mono">
-                      {categoryApis.length} {categoryApis.length === 1 ? "endpoint" : "endpoints"}
-                    </span>
+                    <div className={`text-[10px] uppercase tracking-[0.15em] mt-0.5 transition-colors ${isSelected ? "text-white/40" : "text-white/20"}`}>
+                      {cat.sublabel}
+                    </div>
+                    {isSelected && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-cyan-500" />}
+                  </button>
+                );
+              })}
+              <div className="flex-1 h-[1px] bg-white/[0.06]" />
+            </div>
+
+            {/* Animated cards container */}
+            <div className="overflow-hidden">
+              {API_CATEGORIES.map((cat) => {
+                if (cat.key !== activeCategory) return null;
+                const categoryApis = SCRAPER_APIS.filter((a) => a.category === cat.key);
+                return (
+                  <div
+                    key={cat.key}
+                    className={`animate-slide-in-${slideDir}`}
+                    style={{ animation: `slide-in-${slideDir} 0.3s ease-out` }}
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-[1px] bg-white/[0.06]">
+                      {categoryApis.map((scraperApi) => {
+                        const Icon = scraperApi.icon;
+                        const colors = ACCENT_MAP[scraperApi.accent];
+                        const isActive = scraperApi.status === "active";
+                        const isOpen = activePanel === scraperApi.id;
+
+                        return (
+                          <div
+                            key={scraperApi.id}
+                            onClick={() => handleCardClick(scraperApi.id, scraperApi.status)}
+                            className={`bg-[#050505] p-8 group transition-colors relative ${
+                              isActive ? "cursor-pointer hover:bg-white/[0.02]" : ""
+                            } ${isOpen ? "bg-white/[0.03] border-l-2 border-l-cyan-500" : ""}`}
+                          >
+                            {/* Status badge */}
+                            <div className="absolute top-6 right-6">
+                              {isActive ? (
+                                <span className="text-[10px] uppercase tracking-[0.2em] text-emerald-400 font-mono flex items-center gap-1.5">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                  Active
+                                </span>
+                              ) : (
+                                <span className="text-[10px] uppercase tracking-[0.2em] text-white/25 font-mono flex items-center gap-1.5">
+                                  <Lock className="h-3 w-3" />
+                                  Soon
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Icon */}
+                            <div className={`h-10 w-10 border ${colors.border} grid place-items-center mb-6`}>
+                              <Icon className={`h-5 w-5 ${colors.text}`} />
+                            </div>
+
+                            {/* Name */}
+                            <h3 className="text-[16px] font-bold uppercase tracking-[0.05em] mb-2 font-mono">{scraperApi.name}</h3>
+
+                            {/* Description */}
+                            <p className="text-[13px] text-white/40 leading-[1.7] mb-6 font-mono">{scraperApi.description}</p>
+
+                            {/* Endpoint + Try It */}
+                            <div className="border-t border-white/[0.06] pt-4 flex items-center justify-between">
+                              <code className={`text-[11px] ${colors.text} font-mono tracking-wider`}>
+                                {scraperApi.endpoint}
+                              </code>
+                              {isActive && (
+                                <span className={`text-[10px] uppercase tracking-[0.2em] font-mono flex items-center gap-1.5 ${isOpen ? "text-cyan-400" : "text-white/30 group-hover:text-white/60"} transition-colors`}>
+                                  <Play className="h-3 w-3" />
+                                  {isOpen ? "Close" : "Try it"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-
-                  {/* Cards grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-[1px] bg-white/[0.06]">
-                    {categoryApis.map((scraperApi) => {
-                      const Icon = scraperApi.icon;
-                      const colors = ACCENT_MAP[scraperApi.accent];
-                      const isActive = scraperApi.status === "active";
-                      const isOpen = activePanel === scraperApi.id;
-
-                      return (
-                        <div
-                          key={scraperApi.id}
-                          onClick={() => handleCardClick(scraperApi.id, scraperApi.status)}
-                          className={`bg-[#050505] p-8 group transition-colors relative ${
-                            isActive ? "cursor-pointer hover:bg-white/[0.02]" : ""
-                          } ${isOpen ? "bg-white/[0.03] border-l-2 border-l-cyan-500" : ""}`}
-                        >
-                          {/* Status badge */}
-                          <div className="absolute top-6 right-6">
-                            {isActive ? (
-                              <span className="text-[10px] uppercase tracking-[0.2em] text-emerald-400 font-mono flex items-center gap-1.5">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                Active
-                              </span>
-                            ) : (
-                              <span className="text-[10px] uppercase tracking-[0.2em] text-white/25 font-mono flex items-center gap-1.5">
-                                <Lock className="h-3 w-3" />
-                                Soon
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Icon */}
-                          <div className={`h-10 w-10 border ${colors.border} grid place-items-center mb-6`}>
-                            <Icon className={`h-5 w-5 ${colors.text}`} />
-                          </div>
-
-                          {/* Name */}
-                          <h3 className="text-[16px] font-bold uppercase tracking-[0.05em] mb-2 font-mono">{scraperApi.name}</h3>
-
-                          {/* Description */}
-                          <p className="text-[13px] text-white/40 leading-[1.7] mb-6 font-mono">{scraperApi.description}</p>
-
-                          {/* Endpoint + Try It */}
-                          <div className="border-t border-white/[0.06] pt-4 flex items-center justify-between">
-                            <code className={`text-[11px] ${colors.text} font-mono tracking-wider`}>
-                              {scraperApi.endpoint}
-                            </code>
-                            {isActive && (
-                              <span className={`text-[10px] uppercase tracking-[0.2em] font-mono flex items-center gap-1.5 ${isOpen ? "text-cyan-400" : "text-white/30 group-hover:text-white/60"} transition-colors`}>
-                                <Play className="h-3 w-3" />
-                                {isOpen ? "Close" : "Try it"}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
 
             {/* ── TRYOUT PANEL: Google Search ── */}
             {activePanel === "google-search" && (
