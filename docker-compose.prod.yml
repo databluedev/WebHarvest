@@ -157,7 +157,7 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 2G
+          memory: 1G
 
   celery-beat:
     build:
@@ -269,8 +269,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      - STEALTH_CHROMIUM_POOL_SIZE=4
-      - STEALTH_FIREFOX_POOL_SIZE=2
+      - STEALTH_CHROMIUM_POOL_SIZE=2
+      - STEALTH_FIREFOX_POOL_SIZE=1
       - STEALTH_HEADLESS=true
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=production
@@ -284,7 +284,7 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 3G
+          memory: 2G
 
   searxng:
     image: searxng/searxng:latest
