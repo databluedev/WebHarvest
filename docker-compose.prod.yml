@@ -110,7 +110,7 @@ services:
       - SENTRY_ENVIRONMENT=production
       - CHROMIUM_POOL_SIZE=1
       - FIREFOX_POOL_SIZE=0
-    command: celery -A app.workers.celery_app worker -l warning -c 1 -Q crawl
+    command: celery -A app.workers.celery_app worker -l warning -c 1 -Q crawl --max-memory-per-child=0
     restart: unless-stopped
     stop_grace_period: 30s
     healthcheck:

@@ -1,3 +1,4 @@
+import asyncio
 import fnmatch
 import json
 import logging
@@ -101,10 +102,8 @@ class WebCrawler:
         else:
             self._strategy.seed(self.base_url)
 
-        # Sitemap-first seeding
-        await self._seed_from_sitemaps()
-
-        # Create persistent browser session for this crawl
+        # Create persistent browser session and seed sitemaps in parallel
+        # (they're independent — browser launch is slow, sitemap is IO)
         from app.services.browser import CrawlSession, browser_pool
 
         self._crawl_session = CrawlSession(browser_pool)
@@ -113,7 +112,19 @@ class WebCrawler:
             proxy_obj = self._proxy_manager.get_random()
             if proxy_obj:
                 proxy = self._proxy_manager.to_playwright(proxy_obj)
-        await self._crawl_session.start(proxy=proxy, target_url=self.base_url)
+
+        async def _sitemap_with_timeout():
+            try:
+                await asyncio.wait_for(self._seed_from_sitemaps(), timeout=10)
+            except asyncio.TimeoutError:
+                logger.warning(f"Sitemap seeding timed out for {self.base_url}")
+            except Exception as e:
+                logger.warning(f"Sitemap seeding failed for {self.base_url}: {e}")
+
+        await asyncio.gather(
+            _sitemap_with_timeout(),
+            self._crawl_session.start(proxy=proxy, target_url=self.base_url),
+        )
 
     def _init_memory_strategy(self):
         """Initialize in-memory fallback strategy (CLI mode)."""
