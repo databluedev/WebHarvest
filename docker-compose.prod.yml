@@ -1,14 +1,5 @@
 # Production docker-compose
 # Usage: docker compose -f docker-compose.prod.yml up --build -d
-#
-# Required: create a .env file with production values:
-#   SECRET_KEY=<random-64-char-string>
-#   ENCRYPTION_KEY=<random-32-char-string>
-#   POSTGRES_PASSWORD=<strong-password>
-#   NEXT_PUBLIC_API_URL=https://yourdomain.com  (or http://your-server-ip:8000)
-#
-# Optional monitoring stack:
-#   docker compose -f docker-compose.prod.yml --profile monitoring up --build -d
 
 services:
   backend:
@@ -49,6 +40,12 @@ services:
         limits:
           cpus: "2.0"
           memory: 2G
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.datablue-backend.rule=Host(`api-datablue.welocalhost.com`)"
+      - "traefik.http.routers.datablue-backend.entrypoints=websecure"
+      - "traefik.http.routers.datablue-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.datablue-backend.loadbalancer.server.port=8000"
     networks:
       - default
       - dokploy-network
@@ -209,6 +206,12 @@ services:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.datablue-frontend.rule=Host(`datablue.welocalhost.com`)"
+      - "traefik.http.routers.datablue-frontend.entrypoints=websecure"
+      - "traefik.http.routers.datablue-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.datablue-frontend.loadbalancer.server.port=3000"
     networks:
       - default
       - dokploy-network
@@ -221,7 +224,6 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-webharvest}
       - POSTGRES_USER=${POSTGRES_USER:-webharvest}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-webharvest}
-    # No ports exposed to host in production — only internal network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-webharvest}"]
       interval: 5s
@@ -245,7 +247,6 @@ services:
     image: redis:7-alpine
     volumes:
       - redisdata:/data
-    # No ports exposed to host in production — only internal network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
