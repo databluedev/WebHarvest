@@ -520,45 +520,23 @@ def process_crawl(self, job_id: str, config: dict):
                         async with browser_pool.get_page(
                             target_url=url
                         ) as _ss_page:
-                            # Block heavy resources — only allow CSS + images
-                            # for visual fidelity. Dramatically speeds up
-                            # rendering for large pages (Amazon ~1-2MB HTML).
-                            _BLOCK_TYPES = frozenset((
-                                "script", "font", "media", "websocket",
-                                "manifest", "texttrack", "eventsource",
-                                "xhr", "fetch", "other",
-                            ))
-
-                            async def _abort_heavy(route):
-                                if route.request.resource_type in _BLOCK_TYPES:
-                                    await route.abort()
-                                else:
-                                    await route.continue_()
-
-                            await _ss_page.route("**", _abort_heavy)
+                            # Block ALL external resources — this is a
+                            # fallback screenshot from cached HTML.  Blocking
+                            # everything makes set_content near-instant even
+                            # for 1-2MB pages (Amazon).  Inline styles still
+                            # render so the layout is preserved.
+                            await _ss_page.route(
+                                "**", lambda route: route.abort()
+                            )
 
                             if raw_html:
-                                # Inject <base href> so relative URLs resolve
-                                base_tag = f'<base href="{url}">'
-                                if _re.search(
-                                    r"<head[^>]*>", raw_html, _re.IGNORECASE
-                                ):
-                                    raw_html = _re.sub(
-                                        r"(<head[^>]*>)",
-                                        rf"\1{base_tag}",
-                                        raw_html,
-                                        count=1,
-                                        flags=_re.IGNORECASE,
-                                    )
-                                else:
-                                    raw_html = base_tag + raw_html
                                 await _ss_page.set_content(
                                     raw_html,
                                     wait_until="domcontentloaded",
-                                    timeout=10000,
+                                    timeout=8000,
                                 )
-                                # Let CSS / images load briefly
-                                await _ss_page.wait_for_timeout(1000)
+                                # Brief settle for inline rendering
+                                await _ss_page.wait_for_timeout(300)
                             else:
                                 # No cached HTML — navigate fresh
                                 await _ss_page.goto(
@@ -727,14 +705,19 @@ def process_crawl(self, job_id: str, config: dict):
                                 logger.warning(f"LLM extraction failed for {url}: {e}")
 
                         # Capture screenshot — only if user requested it.
-                        # Retry once if the browser was mid-reinitialisation.
-                        # Entire block is time-boxed to prevent the consumer
-                        # from stalling on huge pages (set_content /
-                        # full_page screenshot with megabytes of HTML).
+                        # Priority: 1) scrape_data.screenshot (full scrape path)
+                        #           2) fetch_result screenshot_b64 (browser-tier capture)
+                        #           3) _capture_screenshot fallback (render raw HTML)
                         screenshot_val = None
                         if _user_formats and "screenshot" not in _user_formats:
                             pass  # User didn't request screenshots — skip entirely
-                        elif not (screenshot_val := scrape_data.screenshot):
+                        elif scrape_data.screenshot:
+                            screenshot_val = scrape_data.screenshot
+                        elif "fetch_result" in item and item["fetch_result"].get("screenshot_b64"):
+                            # Browser tier already captured screenshot during fetch
+                            screenshot_val = item["fetch_result"]["screenshot_b64"]
+                        else:
+                            # HTTP-tier fallback: render raw HTML in a fresh browser page
                             try:
                                 screenshot_val = await asyncio.wait_for(
                                     _capture_screenshot(
