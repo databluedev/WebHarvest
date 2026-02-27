@@ -168,7 +168,7 @@ def process_crawl(self, job_id: str, config: dict):
             # fetches. The successful result is used as page 1 directly.
             # =============================================================
             _warmup_result = None
-            _warmup_max = 3
+            _warmup_max = 2
             for _warmup_attempt in range(_warmup_max):
                 try:
                     logger.warning(
@@ -210,6 +210,9 @@ def process_crawl(self, job_id: str, config: dict):
                     logger.warning(
                         f"Session warm-up attempt {_warmup_attempt + 1} failed: {e}"
                     )
+
+                # Free memory from failed/successful warm-up attempt
+                gc.collect()
 
                 if _warmup_attempt < _warmup_max - 1:
                     _backoff = (2 ** _warmup_attempt) * 5  # 5s, 10s
