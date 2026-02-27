@@ -73,9 +73,9 @@ celery_app.conf.update(
             "schedule": 86400.0,  # Every 24 hours
         },
     },
-    # Graceful shutdown / memory protection
-    worker_max_tasks_per_child=50,  # Restart child after 50 tasks (was 100)
-    worker_max_memory_per_child=384000,  # 384 MB soft limit (was 512)
+    # Graceful shutdown
+    worker_max_tasks_per_child=100,  # Prevent memory leaks
+    worker_max_memory_per_child=512000,  # 512 MB soft limit
 )
 
 # Explicitly include tasks

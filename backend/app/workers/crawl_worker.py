@@ -13,9 +13,8 @@ logger = logging.getLogger(__name__)
 
 _WORKER_NAME = "crawl"
 
-# Shared thread pool for CPU-bound content extraction in crawl pipeline.
-# Keep small — crawl concurrency is 1, so only 1 extraction at a time.
-_extraction_executor = ThreadPoolExecutor(max_workers=2)
+# Shared thread pool for CPU-bound content extraction in crawl pipeline
+_extraction_executor = ThreadPoolExecutor(max_workers=8)
 
 
 def _run_async(coro):
@@ -168,7 +167,7 @@ def process_crawl(self, job_id: str, config: dict):
             # fetches. The successful result is used as page 1 directly.
             # =============================================================
             _warmup_result = None
-            _warmup_max = 2
+            _warmup_max = 3
             for _warmup_attempt in range(_warmup_max):
                 try:
                     logger.warning(
