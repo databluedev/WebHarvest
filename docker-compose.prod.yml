@@ -77,7 +77,7 @@ services:
       timeout: 10s
       retries: 3
     deploy:
-      replicas: 3
+      replicas: 2
       resources:
         limits:
           cpus: "2.0"
