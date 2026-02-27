@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import gc
 import logging
 import time as _time_mod
 from concurrent.futures import ThreadPoolExecutor
@@ -12,8 +13,9 @@ logger = logging.getLogger(__name__)
 
 _WORKER_NAME = "crawl"
 
-# Shared thread pool for CPU-bound content extraction in crawl pipeline
-_extraction_executor = ThreadPoolExecutor(max_workers=8)
+# Shared thread pool for CPU-bound content extraction in crawl pipeline.
+# Keep small — crawl concurrency is 1, so only 1 extraction at a time.
+_extraction_executor = ThreadPoolExecutor(max_workers=2)
 
 
 def _run_async(coro):
@@ -274,6 +276,10 @@ def process_crawl(self, job_id: str, config: dict):
                 # Seed frontier with discovered links for BFS continuation
                 if _warmup_links and pages_crawled < request.max_pages:
                     await crawler.add_to_frontier(_warmup_links, 1)
+
+                # Free warm-up data — it's saved in DB now
+                del _wu_data, _wu_meta, _warmup_result
+                gc.collect()
 
                 # Pin strategy to crawl_session — cookies are now established
                 _pinned_strategy = "crawl_session"
@@ -675,6 +681,17 @@ def process_crawl(self, job_id: str, config: dict):
                         # already hit the page limit — no point expanding)
                         if discovered_links and pages_crawled < request.max_pages:
                             await crawler.add_to_frontier(discovered_links, depth + 1)
+
+                        # Explicitly free large objects to prevent OOM.
+                        # The scrape_data, metadata, and fetch_result dicts
+                        # hold full HTML/markdown/images that accumulate fast.
+                        del metadata, scrape_data
+                        if "fetch_result" in item:
+                            del item["fetch_result"]
+                        if "scrape_data" in item:
+                            del item["scrape_data"]
+                        del item
+                        gc.collect()
 
                     except Exception as e:
                         logger.warning(

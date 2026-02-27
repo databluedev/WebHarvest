@@ -234,6 +234,31 @@ class ResilientRedis:
     async def ping(self):
         return await self._safe_op("ping", self.client.ping, default=False)
 
+    async def scan_iter(self, match=None, count=None):
+        """Async generator wrapping Redis SCAN for pattern matching."""
+        if self._is_circuit_open():
+            return
+        try:
+            kwargs = {}
+            if match is not None:
+                kwargs["match"] = match
+            if count is not None:
+                kwargs["count"] = count
+            async for key in self.client.scan_iter(**kwargs):
+                yield key
+            self._record_success()
+        except (
+            aioredis.ConnectionError,
+            aioredis.TimeoutError,
+            ConnectionRefusedError,
+            OSError,
+        ) as e:
+            self._record_failure()
+            logger.warning(f"Redis scan_iter failed (degraded): {e}")
+        except Exception as e:
+            logger.debug(f"Redis scan_iter error: {e}")
+            raise
+
     def pipeline(self):
         """Return the underlying pipeline for batch operations.
 

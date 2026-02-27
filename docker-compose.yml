@@ -63,6 +63,11 @@ services:
       retries: 3
     deploy:
       replicas: 3
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 512M
 
   celery-worker-crawl:
     build:
@@ -95,6 +100,11 @@ services:
       retries: 3
     deploy:
       replicas: 3
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 512M
 
   celery-worker-search:
     build:
