@@ -863,6 +863,7 @@ class ApiClient {
         emissions?: string;
       }>;
       search_url: string;
+      error?: string;
     }>("/v1/data/google/flights", {
       method: "POST",
       body: JSON.stringify(params),
