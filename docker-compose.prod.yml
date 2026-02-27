@@ -2,22 +2,22 @@
 # Deployed via Dokploy — Traefik labels are managed by Dokploy
 
 services:
-  backend:
+  datablue-api:
     build:
       context: ./backend
       dockerfile: Dockerfile
     depends_on:
-      db:
+      datablue-db:
         condition: service_healthy
-      redis:
+      datablue-redis:
         condition: service_healthy
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@db:5432/${POSTGRES_DB:-webharvest}
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@datablue-db:5432/${POSTGRES_DB:-webharvest}
+      - REDIS_URL=redis://datablue-redis:6379/0
+      - CELERY_BROKER_URL=redis://datablue-redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://datablue-redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SEARXNG_URL=http://searxng:8080
@@ -49,17 +49,17 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     depends_on:
-      db:
+      datablue-db:
         condition: service_healthy
-      redis:
+      datablue-redis:
         condition: service_healthy
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@db:5432/${POSTGRES_DB:-webharvest}
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@datablue-db:5432/${POSTGRES_DB:-webharvest}
+      - REDIS_URL=redis://datablue-redis:6379/0
+      - CELERY_BROKER_URL=redis://datablue-redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://datablue-redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SEARXNG_URL=http://searxng:8080
@@ -88,17 +88,17 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     depends_on:
-      db:
+      datablue-db:
         condition: service_healthy
-      redis:
+      datablue-redis:
         condition: service_healthy
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@db:5432/${POSTGRES_DB:-webharvest}
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@datablue-db:5432/${POSTGRES_DB:-webharvest}
+      - REDIS_URL=redis://datablue-redis:6379/0
+      - CELERY_BROKER_URL=redis://datablue-redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://datablue-redis:6379/2
       - GO_HTML_TO_MD_URL=http://go-html-to-md:8080
       - STEALTH_ENGINE_URL=http://stealth-engine:8888
       - SEARXNG_URL=http://searxng:8080
@@ -127,17 +127,17 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     depends_on:
-      db:
+      datablue-db:
         condition: service_healthy
-      redis:
+      datablue-redis:
         condition: service_healthy
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@db:5432/${POSTGRES_DB:-webharvest}
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@datablue-db:5432/${POSTGRES_DB:-webharvest}
+      - REDIS_URL=redis://datablue-redis:6379/0
+      - CELERY_BROKER_URL=redis://datablue-redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://datablue-redis:6379/2
       - SEARXNG_URL=http://searxng:8080
       - SCRAPE_DO_API_KEY=${SCRAPE_DO_API_KEY:-}
       - BUILTIN_PROXY_URL=${BUILTIN_PROXY_URL:-}
@@ -164,17 +164,17 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     depends_on:
-      db:
+      datablue-db:
         condition: service_healthy
-      redis:
+      datablue-redis:
         condition: service_healthy
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@db:5432/${POSTGRES_DB:-webharvest}
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-webharvest}:${POSTGRES_PASSWORD:-webharvest}@datablue-db:5432/${POSTGRES_DB:-webharvest}
+      - REDIS_URL=redis://datablue-redis:6379/0
+      - CELERY_BROKER_URL=redis://datablue-redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://datablue-redis:6379/2
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=production
     command: celery -A app.workers.celery_app beat -l warning
@@ -195,7 +195,7 @@ services:
         - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
         - CACHE_BUST=${CACHE_BUST:-v6}
     depends_on:
-      - backend
+      - datablue-api
     environment:
       - NODE_ENV=production
       - HOSTNAME=0.0.0.0
@@ -204,7 +204,7 @@ services:
       - default
       - dokploy-network
 
-  db:
+  datablue-db:
     image: postgres:16-alpine
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -231,7 +231,7 @@ services:
       -c work_mem=4MB
       -c maintenance_work_mem=64MB
 
-  redis:
+  datablue-redis:
     image: redis:7-alpine
     volumes:
       - redisdata:/data
