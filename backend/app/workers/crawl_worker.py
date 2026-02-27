@@ -180,12 +180,6 @@ def process_crawl(self, job_id: str, config: dict):
                     # Fast path: use CrawlSession browser directly
                     _wu_page = await crawler._crawl_session.new_page()
                     try:
-                        # Block heavy resources to save memory (images, fonts, media)
-                        await _wu_page.route("**/*", lambda route: (
-                            route.abort()
-                            if route.request.resource_type in ("image", "media", "font", "stylesheet")
-                            else route.continue_()
-                        ))
                         await _wu_page.goto(
                             request.url,
                             wait_until="domcontentloaded",
@@ -232,6 +226,7 @@ def process_crawl(self, job_id: str, config: dict):
                         _warmup_result = {
                             "scrape_data": _warmup_data,
                             "discovered_links": _warmup_data.links or [],
+                            "_direct": True,
                         }
                         break
                 except Exception as e:
@@ -325,16 +320,25 @@ def process_crawl(self, job_id: str, config: dict):
                     await crawler.add_to_frontier(_warmup_links, 1)
 
                 # Free warm-up data — it's saved in DB now
+                _warmup_was_direct = "discovered_links" in _warmup_result and _warmup_result.get("_direct", False)
                 del _wu_data, _wu_meta, _warmup_result
                 gc.collect()
 
-                # Pin strategy to crawl_session — cookies are now established
-                _pinned_strategy = "crawl_session"
-                _pinned_tier = 2
-                logger.warning(
-                    f"Pinned strategy: crawl_session (from warm-up) "
-                    f"for crawl {job_id}"
-                )
+                # Only pin to crawl_session if direct warm-up succeeded.
+                # If fallback scrape_page() was used, leave unpinned so
+                # each page tries all strategies (stealth-engine, etc.).
+                if _warmup_was_direct:
+                    _pinned_strategy = "crawl_session"
+                    _pinned_tier = 2
+                    logger.warning(
+                        f"Pinned strategy: crawl_session (from direct warm-up) "
+                        f"for crawl {job_id}"
+                    )
+                else:
+                    logger.warning(
+                        f"Warm-up used fallback scrape_page — not pinning strategy "
+                        f"for crawl {job_id}"
+                    )
 
             # Producer-consumer pipeline queue
             extract_queue = asyncio.Queue(maxsize=concurrency * 2)
