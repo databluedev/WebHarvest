@@ -169,26 +169,25 @@ from celery.signals import worker_process_init  # noqa: E402
 
 @worker_process_init.connect
 def prewarm_browser_pool(sender=None, **kwargs):
-    """Launch Chromium immediately when a worker child process forks.
+    """Launch Chromium and create the persistent event loop on worker fork.
 
-    This ensures the browser is ready BEFORE any crawl task arrives,
-    eliminating ~1-2s of cold-start latency on the first task.
-    Only runs in workers that handle the 'crawl' queue.
+    The persistent loop is stored in crawl_worker._persistent_loop so that
+    browser pool, HTTP clients, and cookie jar survive across tasks —
+    eliminating re-initialization overhead between crawl jobs.
     """
     import asyncio
     import os
 
-    # Only pre-warm for crawl workers (they're the ones that need browsers)
-    queues = os.environ.get("CELERY_QUEUES", "")
-    # Celery sets the -Q flag but doesn't expose it as an env var easily,
-    # so we just try to initialize — it's a no-op if unused.
     try:
         from app.services.browser import browser_pool
+        import app.workers.crawl_worker as cw
 
+        # Create the persistent loop and store it in crawl_worker
         loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         loop.run_until_complete(browser_pool.initialize())
-        loop.close()
-        logger.info("Pre-warmed BrowserPool on worker startup")
+        cw._persistent_loop = loop  # Tasks will reuse this loop
+        logger.info("Pre-warmed BrowserPool + persistent loop on worker startup")
     except Exception as e:
         logger.warning(f"BrowserPool pre-warm failed (non-fatal): {e}")
 

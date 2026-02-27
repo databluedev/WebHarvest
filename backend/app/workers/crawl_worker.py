@@ -17,26 +17,26 @@ _WORKER_NAME = "crawl"
 _extraction_executor = ThreadPoolExecutor(max_workers=8)
 
 
+# Persistent event loop — survives across tasks so the browser pool,
+# HTTP clients, and cookie jar stay warm between crawl jobs.
+_persistent_loop: asyncio.AbstractEventLoop | None = None
+
+
 def _run_async(coro):
-    # Drop stale pool references from a previous task whose loop is dead.
-    # cleanup_async_pools() in the finally block can be skipped if Celery
-    # kills the task (time limit), leaving refs to a closed loop.
+    global _persistent_loop
+
+    # Reuse the existing loop — browser pool, HTTP clients all stay warm
+    if _persistent_loop is not None and not _persistent_loop.is_closed():
+        asyncio.set_event_loop(_persistent_loop)
+        return _persistent_loop.run_until_complete(coro)
+
+    # First task in this worker process, or loop died — create fresh
     from app.services.scraper import reset_pool_state_sync
     reset_pool_state_sync()
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        # Tear down all pooled async clients BEFORE closing the loop
-        # so nothing is left referencing a dead event loop.
-        try:
-            from app.services.scraper import cleanup_async_pools
-            loop.run_until_complete(cleanup_async_pools())
-        except Exception:
-            pass
-        loop.close()
+    _persistent_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_persistent_loop)
+    return _persistent_loop.run_until_complete(coro)
 
 
 @celery_app.task(
