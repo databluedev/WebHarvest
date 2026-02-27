@@ -492,27 +492,75 @@ def process_crawl(self, job_id: str, config: dict):
 
                 Uses browser_pool only (not crawl_session) to avoid conflicts
                 with the producer which uses crawl_session for fetching.
-                Single attempt with short timeouts to prevent stalling.
-                """
-                try:
-                    from app.services.browser import browser_pool
 
-                    async with browser_pool.get_page(
-                        target_url=url
-                    ) as _ss_page:
-                        await _ss_page.goto(
-                            url,
-                            wait_until="domcontentloaded",
-                            timeout=10000,
-                        )
-                        # Brief settle — no networkidle (can hang on streaming sites)
-                        await _ss_page.wait_for_timeout(500)
-                        _ss_bytes = await _ss_page.screenshot(
-                            type="png", full_page=False
-                        )
-                        return base64.b64encode(_ss_bytes).decode()
-                except Exception as e:
-                    logger.debug(f"Screenshot failed for {url}: {e}")
+                Fast path: loads the already-fetched raw HTML via set_content()
+                with a <base href> tag so relative CSS/images resolve correctly.
+                This avoids an extra network round-trip and bot-detection risk.
+
+                Fallback: page.goto() if no raw HTML is available (e.g. the
+                scrape_data path where fetch_result isn't present).
+
+                Retries once on transient browser errors (pool exhaustion,
+                mid-reinitialisation).
+                """
+                import re as _re
+                from app.services.browser import browser_pool
+
+                # Grab raw HTML from the fetch phase if available
+                raw_html_orig = None
+                if "fetch_result" in item:
+                    raw_html_orig = item["fetch_result"].get("raw_html")
+
+                last_err = None
+                for _attempt in range(2):
+                    try:
+                        # Copy so base-tag injection doesn't stack on retry
+                        raw_html = raw_html_orig
+
+                        async with browser_pool.get_page(
+                            target_url=url
+                        ) as _ss_page:
+                            if raw_html:
+                                # Inject <base href> so relative URLs resolve
+                                base_tag = f'<base href="{url}">'
+                                if _re.search(
+                                    r"<head[^>]*>", raw_html, _re.IGNORECASE
+                                ):
+                                    raw_html = _re.sub(
+                                        r"(<head[^>]*>)",
+                                        rf"\1{base_tag}",
+                                        raw_html,
+                                        count=1,
+                                        flags=_re.IGNORECASE,
+                                    )
+                                else:
+                                    raw_html = base_tag + raw_html
+                                await _ss_page.set_content(
+                                    raw_html,
+                                    wait_until="domcontentloaded",
+                                    timeout=10000,
+                                )
+                                # Let CSS / images load briefly
+                                await _ss_page.wait_for_timeout(1500)
+                            else:
+                                # No cached HTML — navigate fresh
+                                await _ss_page.goto(
+                                    url,
+                                    wait_until="domcontentloaded",
+                                    timeout=15000,
+                                )
+                                await _ss_page.wait_for_timeout(500)
+
+                            _ss_bytes = await _ss_page.screenshot(
+                                type="png", full_page=False
+                            )
+                            return base64.b64encode(_ss_bytes).decode()
+                    except Exception as e:
+                        last_err = e
+                        if _attempt == 0:
+                            await asyncio.sleep(0.5)
+
+                logger.warning(f"Screenshot capture failed for {url}: {last_err}")
                 return None
 
             async def extract_consumer():
