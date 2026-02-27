@@ -772,6 +772,49 @@ class ApiClient {
     });
   }
 
+  async googleImages(params: {
+    query: string;
+    num_results?: number;
+    language?: string;
+    country?: string;
+    safe_search?: boolean;
+    colour?: string;
+    size?: string;
+    type?: string;
+    time_range?: string;
+    aspect_ratio?: string;
+    licence?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      query: string;
+      total_results?: number;
+      time_taken: number;
+      images: Array<{
+        position: number;
+        title: string;
+        url: string;
+        image_url: string;
+        image_width?: number;
+        image_height?: number;
+        thumbnail_url?: string;
+        thumbnail_width?: number;
+        thumbnail_height?: number;
+        domain?: string;
+        file_size?: string;
+        site_name?: string;
+        dominant_color?: string;
+        doc_id?: string;
+        licence_page?: string;
+        licence_url?: string;
+        licensor?: string;
+      }>;
+    }>("/v1/data/google/images", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
   async googleMaps(params: {
     query?: string;
     coordinates?: string;

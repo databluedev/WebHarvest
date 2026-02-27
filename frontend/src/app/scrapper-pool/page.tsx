@@ -8,6 +8,7 @@ import {
   MapPin,
   Newspaper,
   Briefcase,
+  Image,
   Package,
   Linkedin,
   Menu,
@@ -87,6 +88,16 @@ const SCRAPER_APIS: ScraperApi[] = [
     category: "google",
   },
   {
+    id: "google-images",
+    name: "Google Images",
+    endpoint: "/v1/data/google/images",
+    description: "Image results with full URLs, dimensions, thumbnails, and source pages",
+    icon: Image,
+    accent: "rose",
+    status: "active",
+    category: "google",
+  },
+  {
     id: "amazon-product",
     name: "Amazon Product",
     endpoint: "/v1/data/amazon/product",
@@ -109,7 +120,7 @@ const SCRAPER_APIS: ScraperApi[] = [
 ];
 
 const API_CATEGORIES: Array<{ key: string; label: string; sublabel: string }> = [
-  { key: "google", label: "Google", sublabel: "Search, Shopping, Maps, News & Jobs" },
+  { key: "google", label: "Google", sublabel: "Search, Shopping, Maps, News, Jobs & Images" },
   { key: "other", label: "More Platforms", sublabel: "Coming Soon" },
 ];
 
@@ -119,6 +130,7 @@ const ACCENT_MAP: Record<string, { text: string; border: string; bg: string }> =
   emerald: { text: "text-emerald-400", border: "border-emerald-500/20", bg: "bg-emerald-500/10" },
   violet: { text: "text-violet-400", border: "border-violet-500/20", bg: "bg-violet-500/10" },
   pink: { text: "text-pink-400", border: "border-pink-500/20", bg: "bg-pink-500/10" },
+  rose: { text: "text-rose-400", border: "border-rose-500/20", bg: "bg-rose-500/10" },
 };
 
 const TICKER_ITEMS = [
@@ -187,6 +199,15 @@ export default function ScrapperPoolPage() {
   const [jobsLevel, setJobsLevel] = useState("");
   const [jobsType, setJobsType] = useState("");
   const [jobsLocation, setJobsLocation] = useState("");
+
+  // Google Images
+  const [imagesQuery, setImagesQuery] = useState("");
+  const [imagesNumResults, setImagesNumResults] = useState(0);
+  const [imagesColour, setImagesColour] = useState("");
+  const [imagesSize, setImagesSize] = useState("");
+  const [imagesType, setImagesType] = useState("");
+  const [imagesAspect, setImagesAspect] = useState("");
+  const [imagesSafe, setImagesSafe] = useState(false);
 
   const handleCategorySwitch = (key: string) => {
     if (key === activeCategory) return;
@@ -312,6 +333,29 @@ export default function ScrapperPoolPage() {
         ...(jobsLevel && { target_level: [jobsLevel] }),
         ...(jobsType && { employment_type: [jobsType] }),
         ...(jobsLocation.trim() && { location: [jobsLocation.trim()] }),
+      });
+      setResult(res);
+    } catch (err: any) {
+      setError(err.message || "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleImages = async () => {
+    if (!imagesQuery.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api.googleImages({
+        query: imagesQuery.trim(),
+        num_results: imagesNumResults,
+        safe_search: imagesSafe || undefined,
+        ...(imagesColour && { colour: imagesColour }),
+        ...(imagesSize && { size: imagesSize }),
+        ...(imagesType && { type: imagesType }),
+        ...(imagesAspect && { aspect_ratio: imagesAspect }),
       });
       setResult(res);
     } catch (err: any) {
@@ -1955,6 +1999,262 @@ export default function ScrapperPoolPage() {
                                   Posted: {new Date(job.created_at).toLocaleDateString()}
                                 </span>
                               )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <details className="border border-white/[0.06]">
+                          <summary className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono cursor-pointer hover:text-white/50 transition-colors">
+                            Raw JSON Response
+                          </summary>
+                          <pre className="px-4 pb-4 text-[11px] text-white/50 font-mono overflow-x-auto max-h-[400px] overflow-y-auto leading-relaxed">
+                            {JSON.stringify(result, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            {activePanel === "google-images" && (
+              <div ref={panelRef} className="mt-[1px] border border-white/[0.08] bg-[#0a0a0a]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 border border-rose-500/20 grid place-items-center">
+                      <Image className="h-4 w-4 text-rose-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-[14px] font-bold uppercase tracking-[0.05em] font-mono">Google Images API</h3>
+                      <code className="text-[11px] text-rose-400/60 font-mono">POST /v1/data/google/images</code>
+                    </div>
+                  </div>
+                  <button onClick={() => setActivePanel(null)} className="h-8 w-8 grid place-items-center text-white/30 hover:text-white transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+                  <div className="p-6 space-y-5">
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono mb-4">Request Parameters</div>
+
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Query *</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={imagesQuery}
+                          onChange={(e) => setImagesQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleGoogleImages()}
+                          placeholder="e.g. sunset, cat, hinata, architecture"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-rose-500/40 transition-colors"
+                        />
+                        <Image className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Results</label>
+                        <div className="relative">
+                          <select value={imagesNumResults} onChange={(e) => setImagesNumResults(Number(e.target.value))} className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-rose-500/40 transition-colors">
+                            <option value={25}>25</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                            <option value={200}>200</option>
+                            <option value={500}>500</option>
+                            <option value={0}>Max (all)</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Colour</label>
+                        <div className="relative">
+                          <select value={imagesColour} onChange={(e) => setImagesColour(e.target.value)} className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-rose-500/40 transition-colors">
+                            <option value="">Any</option>
+                            <option value="red">Red</option>
+                            <option value="orange">Orange</option>
+                            <option value="yellow">Yellow</option>
+                            <option value="green">Green</option>
+                            <option value="teal">Teal</option>
+                            <option value="blue">Blue</option>
+                            <option value="purple">Purple</option>
+                            <option value="pink">Pink</option>
+                            <option value="white">White</option>
+                            <option value="gray">Gray</option>
+                            <option value="black">Black</option>
+                            <option value="brown">Brown</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Size</label>
+                        <div className="relative">
+                          <select value={imagesSize} onChange={(e) => setImagesSize(e.target.value)} className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-rose-500/40 transition-colors">
+                            <option value="">Any</option>
+                            <option value="large">Large</option>
+                            <option value="medium">Medium</option>
+                            <option value="icon">Icon</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Type</label>
+                        <div className="relative">
+                          <select value={imagesType} onChange={(e) => setImagesType(e.target.value)} className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-rose-500/40 transition-colors">
+                            <option value="">Any</option>
+                            <option value="photo">Photo</option>
+                            <option value="clipart">Clip Art</option>
+                            <option value="lineart">Line Art</option>
+                            <option value="animated">Animated</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Aspect Ratio</label>
+                        <div className="relative">
+                          <select value={imagesAspect} onChange={(e) => setImagesAspect(e.target.value)} className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-rose-500/40 transition-colors">
+                            <option value="">Any</option>
+                            <option value="tall">Tall</option>
+                            <option value="square">Square</option>
+                            <option value="wide">Wide</option>
+                            <option value="panoramic">Panoramic</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={imagesSafe}
+                            onChange={(e) => setImagesSafe(e.target.checked)}
+                            className="h-4 w-4 accent-rose-500"
+                          />
+                          <span className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono">Safe Search</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleGoogleImages}
+                      disabled={loading || !imagesQuery.trim()}
+                      className="w-full border border-rose-500/40 bg-rose-500/10 text-rose-400 py-3 text-[12px] uppercase tracking-[0.2em] font-mono hover:bg-rose-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Searching Images...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          Search Images
+                        </>
+                      )}
+                    </button>
+
+                    {error && (
+                      <div className="border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-400 font-mono">
+                        {error}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono">Image Results</div>
+                      {result && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-white/30 font-mono">
+                            {result.images?.length || 0} images &middot; {result.time_taken?.toFixed(2)}s
+                          </span>
+                          <button onClick={handleCopyResult} className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-white/30 hover:text-white/60 font-mono transition-colors">
+                            {copied ? <Check className="h-3 w-3 text-rose-400" /> : <Copy className="h-3 w-3" />}
+                            {copied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {!result && !loading && !error && (
+                      <div className="h-[400px] border border-dashed border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Image className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                          <p className="text-[12px] text-white/20 font-mono">Search for images to see results</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {loading && (
+                      <div className="h-[400px] border border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Loader2 className="h-6 w-6 text-rose-400 animate-spin mx-auto mb-3" />
+                          <p className="text-[12px] text-white/30 font-mono">Fetching images...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {result && (
+                      <div className="space-y-4">
+                        {result.images?.length === 0 && (
+                          <div className="text-center py-8 border border-white/[0.06] bg-[#050505]">
+                            <Image className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                            <p className="text-[13px] text-white/40 font-mono">No images found</p>
+                          </div>
+                        )}
+                        <div className="max-h-[600px] overflow-y-auto space-y-[1px] scrollbar-thin">
+                          {result.images?.map((img: any, i: number) => (
+                            <div key={i} className="bg-[#050505] border border-white/[0.04] p-3 hover:border-white/[0.08] transition-colors">
+                              <div className="flex gap-3">
+                                {img.thumbnail_url && (
+                                  <a href={img.image_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                                    <img
+                                      src={img.thumbnail_url}
+                                      alt={img.title}
+                                      className="w-20 h-16 object-cover border border-white/10"
+                                      loading="lazy"
+                                    />
+                                  </a>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-[10px] text-white/20 font-mono">#{img.position}</span>
+                                    {img.domain && (
+                                      <span className="text-[9px] uppercase tracking-wider text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 font-mono truncate max-w-[150px]">
+                                        {img.domain}
+                                      </span>
+                                    )}
+                                    {img.file_size && (
+                                      <span className="text-[9px] text-white/25 font-mono">{img.file_size}</span>
+                                    )}
+                                  </div>
+                                  <a href={img.url} target="_blank" rel="noopener noreferrer" className="text-[12px] text-white/70 font-mono hover:text-rose-400 transition-colors line-clamp-1 block">
+                                    {img.title}
+                                  </a>
+                                  <div className="flex items-center gap-3 mt-1">
+                                    {img.image_width && img.image_height && (
+                                      <span className="text-[10px] text-white/20 font-mono">{img.image_width}×{img.image_height}</span>
+                                    )}
+                                    {img.site_name && (
+                                      <span className="text-[10px] text-white/20 font-mono">{img.site_name}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <a href={img.image_url} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/50 flex-shrink-0 mt-0.5">
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              </div>
                             </div>
                           ))}
                         </div>

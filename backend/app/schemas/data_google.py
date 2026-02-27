@@ -408,6 +408,81 @@ class GoogleNewsResponse(BaseModel):
 
 
 # ===================================================================
+# Google Images
+# ===================================================================
+
+
+class GoogleImagesRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2048, description="Image search query")
+    num_results: int = Field(0, ge=0, description="Number of images to fetch. 0 = fetch all pages until exhausted (~500-600 images).")
+    language: str = Field("en", description="Language code (hl parameter)")
+    country: str | None = Field(None, description="Country code for geo-targeting (gl parameter)")
+    safe_search: bool = Field(False, description="Enable safe search filter")
+    colour: str | None = Field(
+        None,
+        pattern=r"^(red|orange|yellow|green|teal|blue|purple|pink|white|gray|black|brown)$",
+        description="Colour filter: red, orange, yellow, green, teal, blue, purple, pink, white, gray, black, brown",
+    )
+    size: str | None = Field(
+        None,
+        pattern=r"^(large|medium|icon)$",
+        description="Size filter: large, medium, icon",
+    )
+    type: str | None = Field(
+        None,
+        pattern=r"^(photo|clipart|lineart|animated)$",
+        description="Image type: photo, clipart, lineart, animated",
+    )
+    time_range: str | None = Field(
+        None,
+        pattern=r"^(hour|day|week|month|year)$",
+        description="Time filter: hour, day, week, month, year",
+    )
+    aspect_ratio: str | None = Field(
+        None,
+        pattern=r"^(tall|square|wide|panoramic)$",
+        description="Aspect ratio: tall, square, wide, panoramic",
+    )
+    licence: str | None = Field(
+        None,
+        pattern=r"^(creative_commons|commercial)$",
+        description="Usage rights: creative_commons, commercial",
+    )
+
+
+class GoogleImageResult(BaseModel):
+    model_config = {"exclude_none": True}
+
+    position: int = Field(..., description="1-indexed rank in results")
+    title: str = Field(..., description="Image/page title")
+    url: str = Field(..., description="Source page URL")
+    image_url: str = Field(..., description="Full-resolution image URL")
+    image_width: int | None = Field(None, description="Full image width in pixels")
+    image_height: int | None = Field(None, description="Full image height in pixels")
+    thumbnail_url: str | None = Field(None, description="Google-hosted thumbnail URL")
+    thumbnail_width: int | None = Field(None, description="Thumbnail width in pixels")
+    thumbnail_height: int | None = Field(None, description="Thumbnail height in pixels")
+    domain: str | None = Field(None, description="Source domain (e.g. 'unsplash.com')")
+    file_size: str | None = Field(None, description="Image file size (e.g. '1.2MB')")
+    site_name: str | None = Field(None, description="Source site name (e.g. 'Unsplash')")
+    dominant_color: str | None = Field(None, description="Dominant colour as CSS rgb (e.g. 'rgb(184,155,114)')")
+    doc_id: str | None = Field(None, description="Google internal document ID")
+    licence_page: str | None = Field(None, description="Image licence/attribution page URL")
+    licence_url: str | None = Field(None, description="Licence terms URL")
+    licensor: str | None = Field(None, description="Licensor name")
+
+
+class GoogleImagesResponse(BaseModel):
+    model_config = {"exclude_none": True}
+
+    success: bool = True
+    query: str
+    total_results: int | None = Field(None, description="Number of images returned")
+    time_taken: float = Field(..., description="API response time in seconds")
+    images: list[GoogleImageResult] = []
+
+
+# ===================================================================
 # Google Jobs (Careers) — reverse-engineered AF_initDataCallback
 # ===================================================================
 
@@ -479,3 +554,121 @@ class GoogleJobsResponse(BaseModel):
     time_taken: float = Field(..., description="API response time in seconds")
     jobs: list[GoogleJobListing] = []
     companies: list[str] | None = Field(None, description="Available company/org names from ds:0")
+
+
+# ===================================================================
+# Google Flights — reverse-engineered protobuf tfs encoding
+# ===================================================================
+
+
+class GoogleFlightsRequest(BaseModel):
+    origin: str = Field(
+        ..., min_length=3, max_length=3,
+        pattern=r"^[A-Za-z]{3}$",
+        description="Origin IATA airport code (e.g. 'MAA', 'JFK')",
+    )
+    destination: str = Field(
+        ..., min_length=3, max_length=3,
+        pattern=r"^[A-Za-z]{3}$",
+        description="Destination IATA airport code (e.g. 'BLR', 'LAX')",
+    )
+    departure_date: str = Field(
+        ...,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Departure date (YYYY-MM-DD)",
+    )
+    return_date: str | None = Field(
+        None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Return date for round-trip (YYYY-MM-DD), omit for one-way",
+    )
+
+    # Passengers
+    adults: int = Field(1, ge=1, le=9, description="Number of adult passengers")
+    children: int = Field(0, ge=0, le=8, description="Number of child passengers")
+    infants_in_seat: int = Field(0, ge=0, le=4, description="Number of infants with own seat")
+    infants_on_lap: int = Field(0, ge=0, le=4, description="Number of lap infants")
+
+    # Preferences
+    seat: str = Field(
+        "economy",
+        pattern=r"^(economy|premium_economy|business|first)$",
+        description="Cabin class: economy, premium_economy, business, first",
+    )
+    max_stops: int | None = Field(
+        None, ge=0, le=3,
+        description="Maximum stops (0=nonstop, 1=max 1 stop, etc.)",
+    )
+
+    # Locale
+    language: str = Field("en", description="Language code (hl parameter)")
+    currency: str | None = Field(
+        None, description="Currency code (e.g. 'USD', 'INR', 'EUR')"
+    )
+    country: str | None = Field(
+        None, description="Country code for geo-targeting (gl parameter)",
+    )
+
+
+class GoogleFlightsListing(BaseModel):
+    model_config = {"exclude_none": True}
+
+    position: int = Field(..., description="1-indexed rank")
+    is_best: bool = Field(False, description="Part of 'Best flights' section")
+
+    # Flight info
+    airline: str = Field(..., description="Airline name")
+    airline_logo_url: str | None = Field(None, description="Airline logo URL")
+    flight_number: str | None = Field(None, description="Flight number (e.g. 'AI 567')")
+
+    # Route
+    origin: str | None = Field(None, description="Origin IATA code")
+    destination: str | None = Field(None, description="Destination IATA code")
+
+    # Times
+    departure_time: str = Field(..., description="Departure time (e.g. '6:30 AM')")
+    arrival_time: str = Field(..., description="Arrival time (e.g. '8:45 AM')")
+    arrival_time_ahead: str | None = Field(
+        None, description="Day offset (e.g. '+1' for next day arrival)"
+    )
+    duration: str = Field(..., description="Flight duration (e.g. '2 hr 15 min')")
+    duration_minutes: int | None = Field(None, description="Duration in minutes")
+
+    # Stops
+    stops: int = Field(..., description="Number of stops (0=nonstop)")
+    stops_text: str | None = Field(None, description="Stops display text (e.g. '1 stop')")
+    layover_airports: list[str] | None = Field(
+        None, description="Layover airport codes (e.g. ['DEL', 'BOM'])"
+    )
+
+    # Price
+    price: str | None = Field(None, description="Display price (e.g. '$234')")
+    price_value: float | None = Field(None, description="Numeric price value")
+    currency_symbol: str | None = Field(None, description="Currency symbol (e.g. '$', '₹')")
+
+    # Aircraft
+    aircraft: str | None = Field(None, description="Aircraft type (e.g. 'Airbus A321neo')")
+
+    # Extra
+    delay: str | None = Field(None, description="Delay info if any")
+    emissions: str | None = Field(None, description="CO2 emissions info")
+
+
+class GoogleFlightsResponse(BaseModel):
+    model_config = {"exclude_none": True}
+
+    success: bool = True
+    origin: str
+    destination: str
+    departure_date: str
+    return_date: str | None = None
+    trip_type: str = Field("round_trip", description="round_trip or one_way")
+    adults: int = 1
+    seat: str = "economy"
+    time_taken: float = Field(..., description="API response time in seconds")
+    total_results: int | None = None
+    price_trend: str | None = Field(
+        None, description="Price trend indicator (e.g. 'low', 'typical', 'high')"
+    )
+    flights: list[GoogleFlightsListing] = []
+    search_url: str | None = Field(None, description="Google Flights search URL used")

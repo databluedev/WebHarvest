@@ -6,6 +6,8 @@ Endpoints:
   POST /v1/data/google/maps     — Google Maps places and details (structured JSON)
   POST /v1/data/google/news     — Google News articles (structured JSON)
   POST /v1/data/google/jobs     — Google Careers job listings (structured JSON)
+  POST /v1/data/google/images   — Google Images with filters (structured JSON)
+  POST /v1/data/google/flights  — Google Flights search (structured JSON)
 """
 
 import logging
@@ -18,6 +20,10 @@ from app.core.exceptions import BadRequestError, RateLimitError
 from app.core.rate_limiter import check_rate_limit_full
 from app.models.user import User
 from app.schemas.data_google import (
+    GoogleFlightsRequest,
+    GoogleFlightsResponse,
+    GoogleImagesRequest,
+    GoogleImagesResponse,
     GoogleJobsRequest,
     GoogleJobsResponse,
     GoogleMapsRequest,
@@ -29,6 +35,8 @@ from app.schemas.data_google import (
     GoogleShoppingRequest,
     GoogleShoppingResponse,
 )
+from app.services.google_flights import google_flights
+from app.services.google_images import google_images
 from app.services.google_jobs import google_jobs
 from app.services.google_maps import google_maps
 from app.services.google_news import google_news
@@ -266,6 +274,110 @@ async def search_google_jobs(
         degree=request.degree,
         skills=request.skills,
         sort_by=request.sort_by,
+    )
+
+    return result
+
+
+@router.post(
+    "/images",
+    response_model=GoogleImagesResponse,
+    response_model_exclude_none=True,
+    summary="Google Images API",
+    description=(
+        "Search Google Images and return structured image data including "
+        "full-resolution URLs, dimensions, thumbnails, source pages, domains, "
+        "file sizes, and dominant colours. "
+        "Supports filters: colour, size, type, time range, aspect ratio, and licence. "
+        "No result limit — set num_results=0 to fetch all pages until exhausted (~500-600 images). "
+        "Results are cached for 5 minutes."
+    ),
+    response_description="Structured Google Images data",
+)
+async def search_google_images(
+    request: GoogleImagesRequest,
+    response: Response,
+    user: User = Depends(get_current_user),
+):
+    """Search Google Images and return structured image data."""
+    # Rate limiting
+    rl = await check_rate_limit_full(
+        f"rate:data:{user.id}", settings.RATE_LIMIT_DATA_API
+    )
+    response.headers["X-RateLimit-Limit"] = str(rl.limit)
+    response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
+    response.headers["X-RateLimit-Reset"] = str(rl.reset)
+    if not rl.allowed:
+        raise RateLimitError("Data API rate limit exceeded. Try again in a minute.")
+
+    result = await google_images(
+        query=request.query,
+        num_results=request.num_results,
+        language=request.language,
+        country=request.country,
+        safe_search=request.safe_search,
+        colour=request.colour,
+        size=request.size,
+        type_filter=request.type,
+        time_range=request.time_range,
+        aspect_ratio=request.aspect_ratio,
+        licence=request.licence,
+    )
+
+    return result
+
+
+@router.post(
+    "/flights",
+    response_model=GoogleFlightsResponse,
+    response_model_exclude_none=True,
+    summary="Google Flights API",
+    description=(
+        "Search Google Flights for flight listings with pricing, schedules, "
+        "airlines, stops, and duration. Uses reverse-engineered protobuf encoding "
+        "to build the search URL — HTTP-only, no browser needed. "
+        "Supports round-trip and one-way searches, cabin class, passenger counts, "
+        "and max stops filter. Results are cached for 5 minutes."
+    ),
+    response_description="Structured Google Flights data",
+)
+async def search_google_flights(
+    request: GoogleFlightsRequest,
+    response: Response,
+    user: User = Depends(get_current_user),
+):
+    """Search Google Flights and return structured flight data."""
+    # Validate passenger count
+    total_pax = request.adults + request.children + request.infants_in_seat + request.infants_on_lap
+    if total_pax > 9:
+        raise BadRequestError("Total passengers cannot exceed 9.")
+    if request.infants_on_lap > request.adults:
+        raise BadRequestError("Each lap infant requires at least one adult.")
+
+    # Rate limiting
+    rl = await check_rate_limit_full(
+        f"rate:data:{user.id}", settings.RATE_LIMIT_DATA_API
+    )
+    response.headers["X-RateLimit-Limit"] = str(rl.limit)
+    response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
+    response.headers["X-RateLimit-Reset"] = str(rl.reset)
+    if not rl.allowed:
+        raise RateLimitError("Data API rate limit exceeded. Try again in a minute.")
+
+    result = await google_flights(
+        origin=request.origin,
+        destination=request.destination,
+        departure_date=request.departure_date,
+        return_date=request.return_date,
+        adults=request.adults,
+        children=request.children,
+        infants_in_seat=request.infants_in_seat,
+        infants_on_lap=request.infants_on_lap,
+        seat=request.seat,
+        max_stops=request.max_stops,
+        language=request.language,
+        currency=request.currency,
+        country=request.country,
     )
 
     return result
