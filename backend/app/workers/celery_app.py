@@ -6,7 +6,10 @@ from datetime import datetime, timezone
 import redis
 import sentry_sdk
 from celery import Celery
-from celery.signals import task_failure, worker_shutting_down, after_setup_logger, after_setup_task_logger
+from celery.signals import (
+    task_failure, worker_shutting_down, after_setup_logger,
+    after_setup_task_logger, celeryd_init,
+)
 
 from app.config import settings
 
@@ -162,19 +165,61 @@ def on_worker_shutting_down(sig=None, how=None, exitcode=None, **kw):
 
 
 # ---------------------------------------------------------------------------
-# Pre-warm browser pool on worker child startup
+# Pre-warm browser pool — crawl workers only
+# ---------------------------------------------------------------------------
+#
+# celeryd_init fires ONCE in the main worker process BEFORE forking children.
+# We inspect the -Q queues CLI option to detect crawl workers and set a
+# module-level flag that child processes inherit via fork (copy-on-write).
+# worker_process_init then checks the flag before launching Chromium.
 # ---------------------------------------------------------------------------
 from celery.signals import worker_process_init  # noqa: E402
+
+# Module-level flag set by celeryd_init, inherited by forked children via COW.
+_is_crawl_worker = False
+
+
+@celeryd_init.connect
+def _detect_crawl_worker(conf=None, instance=None, options=None, **kwargs):
+    """Set _is_crawl_worker flag based on -Q queues CLI option.
+
+    Runs in the main (parent) process before prefork. The flag is inherited
+    by all child processes via fork, so worker_process_init can check it.
+    """
+    global _is_crawl_worker
+    raw_queues = (options or {}).get("queues") or []
+    # Celery passes queues as a list (e.g. ['crawl'] or ['search', 'map']).
+    # Handle both list and legacy comma-separated string formats.
+    if isinstance(raw_queues, str):
+        queue_list = [q.strip().lower() for q in raw_queues.split(",") if q.strip()]
+    else:
+        queue_list = [str(q).strip().lower() for q in raw_queues]
+    _is_crawl_worker = "crawl" in queue_list
+    queue_str = ",".join(queue_list) or "default"
+    if _is_crawl_worker:
+        logger.info(
+            f"Crawl worker detected (queues={queue_str}), "
+            "browser pre-warm enabled"
+        )
+    else:
+        logger.info(
+            f"Non-crawl worker (queues={queue_str}), "
+            "browser pre-warm disabled"
+        )
 
 
 @worker_process_init.connect
 def prewarm_browser_pool(sender=None, **kwargs):
     """Launch Chromium and create the persistent event loop on worker fork.
 
-    The persistent loop is stored in crawl_worker._persistent_loop so that
-    browser pool, HTTP clients, and cookie jar survive across tasks —
+    Only runs in crawl workers (gated by _is_crawl_worker flag set in
+    celeryd_init). The persistent loop is stored in crawl_worker._persistent_loop
+    so that browser pool, HTTP clients, and cookie jar survive across tasks —
     eliminating re-initialization overhead between crawl jobs.
     """
+    if not _is_crawl_worker:
+        return
+
     import asyncio
     import os
 
