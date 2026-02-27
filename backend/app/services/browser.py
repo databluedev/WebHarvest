@@ -987,6 +987,16 @@ class BrowserPool:
         except Exception:
             pass
 
+        # Reset semaphores — previous task may have leaked slots (crashed
+        # CrawlSession, cancelled race strategies, etc.). Between tasks no
+        # browser contexts should be active, so semaphores should be full.
+        self._chromium_semaphore = asyncio.Semaphore(settings.CHROMIUM_POOL_SIZE)
+        self._firefox_semaphore = asyncio.Semaphore(settings.FIREFOX_POOL_SIZE)
+        logger.info(
+            f"Health check: semaphores reset "
+            f"(chromium={settings.CHROMIUM_POOL_SIZE}, firefox={settings.FIREFOX_POOL_SIZE})"
+        )
+
         return True
 
     def _get_domain(self, url: str) -> str:

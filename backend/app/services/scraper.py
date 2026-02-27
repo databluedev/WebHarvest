@@ -2528,6 +2528,7 @@ async def _fetch_with_browser_stealth(
     proxy: dict | None = None,
     use_firefox: bool = False,
     stealth: bool = True,
+    capture_screenshot: bool = False,
 ) -> tuple[str, int, str | None, list[str], dict[str, str]]:
     """Fast browser fetch: domcontentloaded + short networkidle + request interception.
 
@@ -2711,8 +2712,9 @@ async def _fetch_with_browser_stealth(
             actions_dicts = [a.model_dump() for a in request.actions]
             action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
 
-        if "screenshot" in request.formats:
-            await _wait_for_images(page)
+        if "screenshot" in request.formats or capture_screenshot:
+            if "screenshot" in request.formats:
+                await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
                 type="png", full_page=False
             )
@@ -2736,6 +2738,7 @@ async def _fetch_with_browser_session(
     url: str,
     request: ScrapeRequest,
     crawl_session,
+    capture_screenshot: bool = False,
 ) -> tuple[str, int, str | None, list[str], dict[str, str]]:
     """Browser fetch reusing a persistent CrawlSession context."""
     screenshot_b64 = None
@@ -2895,8 +2898,9 @@ async def _fetch_with_browser_session(
             actions_dicts = [a.model_dump() for a in request.actions]
             action_screenshots = await browser_pool.execute_actions(page, actions_dicts)
 
-        if "screenshot" in request.formats:
-            await _wait_for_images(page)
+        if "screenshot" in request.formats or capture_screenshot:
+            if "screenshot" in request.formats:
+                await _wait_for_images(page)
             screenshot_bytes = await page.screenshot(
                 type="png", full_page=False
             )
@@ -3432,6 +3436,7 @@ async def scrape_url_fetch_only(
     pinned_strategy: str | None = None,
     pinned_tier: int | None = None,
     min_tier: int = 0,
+    capture_screenshot: bool = False,
 ) -> dict | None:
     """Fetch phase only — returns raw HTML + metadata without content extraction.
 
@@ -3497,7 +3502,7 @@ async def scrape_url_fetch_only(
             if _is_session_pinned and crawl_session:
                 # Persistent crawl session browser — reuses existing browser,
                 # just opens new tabs. Much faster than stealth engine.
-                result = await _fetch_with_browser_session(url, request, crawl_session)
+                result = await _fetch_with_browser_session(url, request, crawl_session, capture_screenshot=capture_screenshot)
                 html = result[0]
                 if html and not _looks_blocked(html):
                     raw_html, status_code, screenshot_b64, action_screenshots, response_headers = result
@@ -3710,7 +3715,7 @@ async def scrape_url_fetch_only(
             browser_coros = [
                 (
                     "chromium_stealth",
-                    _fetch_with_browser_session(url, request, crawl_session),
+                    _fetch_with_browser_session(url, request, crawl_session, capture_screenshot=capture_screenshot),
                 )
             ]
             # For hard sites, also race a fresh browser alongside the session
@@ -3718,7 +3723,7 @@ async def scrape_url_fetch_only(
                 browser_coros.append(
                     (
                         "chromium_stealth_fresh",
-                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright),
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, capture_screenshot=capture_screenshot),
                     ),
                 )
                 if _has_stealth_engine_fetch:
@@ -3743,12 +3748,12 @@ async def scrape_url_fetch_only(
                 browser_coros = [
                     (
                         "chromium_stealth",
-                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, stealth=True),
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, stealth=True, capture_screenshot=capture_screenshot),
                     ),
                     (
                         "firefox_stealth",
                         _fetch_with_browser_stealth(
-                            url, request, proxy=proxy_playwright, use_firefox=True, stealth=True
+                            url, request, proxy=proxy_playwright, use_firefox=True, stealth=True, capture_screenshot=capture_screenshot
                         ),
                     ),
                 ]
@@ -3793,14 +3798,14 @@ async def scrape_url_fetch_only(
                 browser_coros.append(
                     (
                         "chromium_light",
-                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, stealth=False),
+                        _fetch_with_browser_stealth(url, request, proxy=proxy_playwright, stealth=False, capture_screenshot=capture_screenshot),
                     ),
                 )
                 browser_coros.append(
                     (
                         "firefox_light",
                         _fetch_with_browser_stealth(
-                            url, request, proxy=proxy_playwright, use_firefox=True, stealth=False
+                            url, request, proxy=proxy_playwright, use_firefox=True, stealth=False, capture_screenshot=capture_screenshot
                         ),
                     ),
                 )
@@ -3928,7 +3933,7 @@ async def scrape_url_fetch_only(
             if not fetched:
                 try:
                     result = await asyncio.wait_for(
-                        _fetch_with_browser_stealth(url, request, proxy=_bp_pw),
+                        _fetch_with_browser_stealth(url, request, proxy=_bp_pw, capture_screenshot=capture_screenshot),
                         timeout=30,
                     )
                     html = result[0]

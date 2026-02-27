@@ -555,7 +555,9 @@ class WebCrawler:
         """
         opts = self.config.scrape_options or ScrapeOptions()
         # Exclude "screenshot" so needs_browser=False → fast HTTP tiers can run.
-        # Screenshots are captured separately by the crawl worker consumer.
+        # When a browser tier wins, capture_screenshot tells it to grab a
+        # screenshot while the page is still open (no extra browser slot).
+        _wants_screenshot = "screenshot" in opts.formats
         formats = list((set(opts.formats) | {"links"}) - {"screenshot"})
 
         request = ScrapeRequest(
@@ -577,6 +579,7 @@ class WebCrawler:
             crawl_session=self._crawl_session,
             pinned_strategy=pinned_strategy,
             pinned_tier=pinned_tier,
+            capture_screenshot=_wants_screenshot,
         )
         if fetch_result:
             fetch_result["request"] = request
