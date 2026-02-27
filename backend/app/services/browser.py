@@ -2,6 +2,7 @@ import asyncio
 import base64
 import logging
 import random
+import time
 from contextlib import asynccontextmanager
 
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
@@ -808,8 +809,11 @@ class BrowserPool:
         self._initialized = False
         self._loop = None
         self._init_lock: asyncio.Lock | None = None
-        # Cookie jar: domain -> list of cookies (persisted across page contexts)
-        self._cookie_jar: dict[str, list[dict]] = {}
+        # Cookie jar: domain -> (timestamp, cookies)
+        # TTL-based eviction prevents stale cookies from persisting indefinitely.
+        self._cookie_jar: dict[str, tuple[float, list[dict]]] = {}
+        self._cookie_jar_ttl: float = 1800.0  # 30 minutes
+        self._cookie_jar_max_domains: int = 50
 
     def _get_init_lock(self) -> asyncio.Lock:
         """Get or create an asyncio.Lock bound to the current event loop."""
@@ -949,6 +953,42 @@ class BrowserPool:
         self._loop = None
         logger.info("Browser pool shut down")
 
+    async def health_check(self) -> bool:
+        """Verify browser is healthy between tasks. Relaunch if needed.
+
+        - Checks Chromium is still connected
+        - Closes orphaned contexts (leak from crashed tasks)
+        - Returns True if healthy (or successfully recovered)
+        """
+        if not self._initialized or not self._chromium:
+            return False
+
+        if not self._chromium.is_connected():
+            logger.warning("Health check: Chromium disconnected, reinitializing")
+            try:
+                await self.initialize()
+            except Exception as e:
+                logger.error(f"Health check: reinitialization failed: {e}")
+                return False
+            return True
+
+        # Close orphaned contexts — between tasks, no contexts should exist
+        try:
+            orphaned = self._chromium.contexts
+            if orphaned:
+                logger.warning(
+                    f"Health check: closing {len(orphaned)} orphaned browser contexts"
+                )
+                for ctx in orphaned:
+                    try:
+                        await ctx.close()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        return True
+
     def _get_domain(self, url: str) -> str:
         """Extract domain from URL for cookie jar."""
         try:
@@ -959,23 +999,42 @@ class BrowserPool:
             return ""
 
     async def _restore_cookies(self, context: BrowserContext, url: str):
-        """Restore saved cookies for this domain."""
+        """Restore saved cookies for this domain (TTL-checked)."""
         domain = self._get_domain(url)
         if domain in self._cookie_jar:
+            ts, cookies = self._cookie_jar[domain]
+            if time.monotonic() - ts > self._cookie_jar_ttl:
+                del self._cookie_jar[domain]
+                return
             try:
-                await context.add_cookies(self._cookie_jar[domain])
+                await context.add_cookies(cookies)
             except Exception:
                 pass
 
     async def _save_cookies(self, context: BrowserContext, url: str):
-        """Save cookies from this session for future reuse."""
+        """Save cookies from this session for future reuse (with timestamp)."""
         domain = self._get_domain(url)
         try:
             cookies = await context.cookies()
             if cookies:
-                self._cookie_jar[domain] = cookies
+                self._cookie_jar[domain] = (time.monotonic(), cookies)
+                self._evict_stale_cookies()
         except Exception:
             pass
+
+    def _evict_stale_cookies(self):
+        """Remove expired entries and cap jar size."""
+        now = time.monotonic()
+        # Remove expired
+        expired = [d for d, (ts, _) in self._cookie_jar.items()
+                   if now - ts > self._cookie_jar_ttl]
+        for d in expired:
+            del self._cookie_jar[d]
+        # Cap size — evict oldest if over limit
+        if len(self._cookie_jar) > self._cookie_jar_max_domains:
+            by_age = sorted(self._cookie_jar.items(), key=lambda x: x[1][0])
+            for d, _ in by_age[: len(self._cookie_jar) - self._cookie_jar_max_domains]:
+                del self._cookie_jar[d]
 
     def _is_browser_closed_error(self, exc: Exception) -> bool:
         """Check if an exception indicates the browser process has died."""
@@ -1665,9 +1724,12 @@ class CrawlSession:
     async def sync_cookies_from_pool(self, url: str):
         """Import cookies saved by a non-session strategy into this live context."""
         domain = self._pool._get_domain(url)
-        pool_cookies = self._pool._cookie_jar.get(domain)
-        if not pool_cookies:
+        entry = self._pool._cookie_jar.get(domain)
+        if not entry:
             return
+        ts, pool_cookies = entry
+        if time.monotonic() - ts > self._pool._cookie_jar_ttl:
+            return  # Expired
         if self._context:
             try:
                 await self._context.add_cookies(pool_cookies)

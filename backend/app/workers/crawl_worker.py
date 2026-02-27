@@ -20,17 +20,63 @@ _extraction_executor = ThreadPoolExecutor(max_workers=8)
 # Persistent event loop — survives across tasks so the browser pool,
 # HTTP clients, and cookie jar stay warm between crawl jobs.
 _persistent_loop: asyncio.AbstractEventLoop | None = None
+_task_generation: int = 0
+
+
+def _drain_leaked_tasks(loop: asyncio.AbstractEventLoop, pre_tasks: set):
+    """Cancel async tasks leaked by the previous crawl.
+
+    Compares current tasks against the pre-task snapshot to avoid
+    touching Playwright internals or other persistent background tasks.
+    """
+    try:
+        post_tasks = set(asyncio.all_tasks(loop))
+        leaked = {t for t in (post_tasks - pre_tasks) if not t.done()}
+        if leaked:
+            logger.warning(
+                f"Cancelling {len(leaked)} leaked async tasks from previous crawl"
+            )
+            for t in leaked:
+                t.cancel()
+            loop.run_until_complete(
+                asyncio.gather(*leaked, return_exceptions=True)
+            )
+        # Flush any remaining pending callbacks
+        loop.run_until_complete(asyncio.sleep(0))
+    except Exception as e:
+        logger.warning(f"Loop drain failed: {e}")
 
 
 def _run_async(coro):
-    global _persistent_loop
+    global _persistent_loop, _task_generation
+    _task_generation += 1
+    gen = _task_generation
 
     # Reuse the existing loop — browser pool, HTTP clients all stay warm
     if _persistent_loop is not None and not _persistent_loop.is_closed():
         asyncio.set_event_loop(_persistent_loop)
-        return _persistent_loop.run_until_complete(coro)
+        # Snapshot existing tasks (Playwright internals etc.)
+        pre_tasks = set(asyncio.all_tasks(_persistent_loop))
+        logger.info(
+            f"[gen={gen}] Crawl task starting on persistent loop "
+            f"(background_tasks={len(pre_tasks)})"
+        )
+        try:
+            return _persistent_loop.run_until_complete(coro)
+        finally:
+            _drain_leaked_tasks(_persistent_loop, pre_tasks)
+            try:
+                from app.services.browser import browser_pool
+                jar_size = len(browser_pool._cookie_jar)
+                logger.info(
+                    f"[gen={gen}] Crawl task finished. "
+                    f"cookie_jar_domains={jar_size}"
+                )
+            except Exception:
+                pass
 
     # First task in this worker process, or loop died — create fresh
+    logger.info(f"[gen={gen}] Creating new persistent event loop")
     from app.services.scraper import reset_pool_state_sync
     reset_pool_state_sync()
 
@@ -104,6 +150,10 @@ def process_crawl(self, job_id: str, config: dict):
                 job = await db.get(Job, UUID(job_id))
                 if job:
                     proxy_manager = await ProxyManager.from_user(db, job.user_id)
+
+        # Health check: verify browser is alive, close orphaned contexts
+        from app.services.browser import browser_pool
+        await browser_pool.health_check()
 
         crawler = WebCrawler(job_id, request, proxy_manager=proxy_manager)
         await crawler.initialize()
