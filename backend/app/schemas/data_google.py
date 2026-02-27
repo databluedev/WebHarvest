@@ -672,3 +672,4 @@ class GoogleFlightsResponse(BaseModel):
     )
     flights: list[GoogleFlightsListing] = []
     search_url: str | None = Field(None, description="Google Flights search URL used")
+    error: str | None = Field(None, description="Error message if the search failed")

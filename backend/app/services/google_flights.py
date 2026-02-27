@@ -611,19 +611,29 @@ def _parse_flights_from_json(
     # data[2] = best flights, data[3] = other flights
     for section_idx, section_key in enumerate([2, 3]):
         is_best = section_idx == 0
+        label = "best" if is_best else "other"
         section = _safe_get(data, section_key)
         if not isinstance(section, list) or len(section) < 1:
+            logger.debug("Flights section data[%d] (%s): empty or None", section_key, label)
             continue
 
         offer_list = _safe_get(section, 0)
         if not isinstance(offer_list, list):
+            logger.debug("Flights section data[%d][0] (%s): not a list", section_key, label)
             continue
 
+        parsed_count = 0
         for offer in offer_list:
             position += 1
             parsed = _parse_offer(offer, position, is_best, currency)
             if parsed:
                 flights.append(parsed)
+                parsed_count += 1
+
+        logger.debug(
+            "Flights %s section: %d offers, %d parsed",
+            label, len(offer_list), parsed_count,
+        )
 
     # Price trend from data[7] or other indices (not always present)
     price_trend = None
@@ -651,26 +661,72 @@ async def google_flights(
     currency: str | None = None,
     country: str | None = None,
 ) -> GoogleFlightsResponse:
-    """Search Google Flights and return structured flight data.
+    """Search Google Flights and return structured flight data."""
+    from datetime import date as _date
 
-    Args:
-        origin: IATA airport code (e.g. 'MAA', 'JFK')
-        destination: IATA airport code (e.g. 'BLR', 'LAX')
-        departure_date: 'YYYY-MM-DD'
-        return_date: 'YYYY-MM-DD' for round-trip, None for one-way
-        adults: Number of adult passengers (1-9)
-        children: Number of child passengers
-        infants_in_seat: Number of infants with seats
-        infants_on_lap: Number of lap infants
-        seat: 'economy', 'premium_economy', 'business', 'first'
-        max_stops: Maximum stops (None = any)
-        language: Language code
-        currency: Currency code (e.g. 'USD', 'INR')
-        country: Country code for geo-targeting
-    """
     # Normalize IATA codes
     origin = origin.strip().upper()
     destination = destination.strip().upper()
+
+    # Validate IATA codes (must be exactly 3 letters)
+    if not origin.isalpha() or len(origin) != 3:
+        return GoogleFlightsResponse(
+            success=False, origin=origin, destination=destination,
+            departure_date=departure_date, return_date=return_date,
+            trip_type="round_trip" if return_date else "one_way",
+            adults=adults, seat=seat, time_taken=0, flights=[],
+            error=f"Invalid origin airport code: '{origin}'. Must be a 3-letter IATA code (e.g. MAA, JFK).",
+        )
+    if not destination.isalpha() or len(destination) != 3:
+        return GoogleFlightsResponse(
+            success=False, origin=origin, destination=destination,
+            departure_date=departure_date, return_date=return_date,
+            trip_type="round_trip" if return_date else "one_way",
+            adults=adults, seat=seat, time_taken=0, flights=[],
+            error=f"Invalid destination airport code: '{destination}'. Must be a 3-letter IATA code (e.g. BLR, LAX).",
+        )
+
+    # Validate departure date is not in the past
+    try:
+        dep = _date.fromisoformat(departure_date)
+        today = _date.today()
+        if dep < today:
+            return GoogleFlightsResponse(
+                success=False, origin=origin, destination=destination,
+                departure_date=departure_date, return_date=return_date,
+                trip_type="round_trip" if return_date else "one_way",
+                adults=adults, seat=seat, time_taken=0, flights=[],
+                error=f"Departure date {departure_date} is in the past. Use a future date.",
+            )
+    except ValueError:
+        return GoogleFlightsResponse(
+            success=False, origin=origin, destination=destination,
+            departure_date=departure_date, return_date=return_date,
+            trip_type="round_trip" if return_date else "one_way",
+            adults=adults, seat=seat, time_taken=0, flights=[],
+            error=f"Invalid departure date format: '{departure_date}'. Use YYYY-MM-DD.",
+        )
+
+    # Validate return date if provided
+    if return_date:
+        try:
+            ret = _date.fromisoformat(return_date)
+            if ret < dep:
+                return GoogleFlightsResponse(
+                    success=False, origin=origin, destination=destination,
+                    departure_date=departure_date, return_date=return_date,
+                    trip_type="round_trip", adults=adults, seat=seat,
+                    time_taken=0, flights=[],
+                    error=f"Return date {return_date} is before departure date {departure_date}.",
+                )
+        except ValueError:
+            return GoogleFlightsResponse(
+                success=False, origin=origin, destination=destination,
+                departure_date=departure_date, return_date=return_date,
+                trip_type="round_trip", adults=adults, seat=seat,
+                time_taken=0, flights=[],
+                error=f"Invalid return date format: '{return_date}'. Use YYYY-MM-DD.",
+            )
 
     # Cache check
     cache_key = _cache_key(

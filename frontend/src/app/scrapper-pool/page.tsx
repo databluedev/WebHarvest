@@ -226,7 +226,11 @@ export default function ScrapperPoolPage() {
   // Google Flights
   const [flightsOrigin, setFlightsOrigin] = useState("");
   const [flightsDestination, setFlightsDestination] = useState("");
-  const [flightsDeparture, setFlightsDeparture] = useState("");
+  const [flightsDeparture, setFlightsDeparture] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  });
   const [flightsReturn, setFlightsReturn] = useState("");
   const [flightsAdults, setFlightsAdults] = useState(1);
   const [flightsSeat, setFlightsSeat] = useState("economy");
@@ -405,6 +409,9 @@ export default function ScrapperPoolPage() {
         ...(flightsCurrency && { currency: flightsCurrency }),
         ...(flightsMaxStops && { max_stops: Number(flightsMaxStops) }),
       });
+      if (res.error) {
+        setError(res.error);
+      }
       setResult(res);
     } catch (err: any) {
       setError(err.message || "Request failed");
@@ -2386,6 +2393,7 @@ export default function ScrapperPoolPage() {
                         <input
                           type="date"
                           value={flightsDeparture}
+                          min={new Date().toISOString().split("T")[0]}
                           onChange={(e) => setFlightsDeparture(e.target.value)}
                           className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white focus:outline-none focus:border-sky-500/40 transition-colors [color-scheme:dark]"
                         />
@@ -2395,6 +2403,7 @@ export default function ScrapperPoolPage() {
                         <input
                           type="date"
                           value={flightsReturn}
+                          min={flightsDeparture || new Date().toISOString().split("T")[0]}
                           onChange={(e) => setFlightsReturn(e.target.value)}
                           className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white focus:outline-none focus:border-sky-500/40 transition-colors [color-scheme:dark]"
                         />
