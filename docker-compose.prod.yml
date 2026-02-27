@@ -122,7 +122,7 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 3G
+          memory: 4G
 
   celery-worker-search:
     build:
