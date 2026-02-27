@@ -520,6 +520,23 @@ def process_crawl(self, job_id: str, config: dict):
                         async with browser_pool.get_page(
                             target_url=url
                         ) as _ss_page:
+                            # Block heavy resources — only allow CSS + images
+                            # for visual fidelity. Dramatically speeds up
+                            # rendering for large pages (Amazon ~1-2MB HTML).
+                            _BLOCK_TYPES = frozenset((
+                                "script", "font", "media", "websocket",
+                                "manifest", "texttrack", "eventsource",
+                                "xhr", "fetch", "other",
+                            ))
+
+                            async def _abort_heavy(route):
+                                if route.request.resource_type in _BLOCK_TYPES:
+                                    await route.abort()
+                                else:
+                                    await route.continue_()
+
+                            await _ss_page.route("**", _abort_heavy)
+
                             if raw_html:
                                 # Inject <base href> so relative URLs resolve
                                 base_tag = f'<base href="{url}">'
@@ -541,7 +558,7 @@ def process_crawl(self, job_id: str, config: dict):
                                     timeout=10000,
                                 )
                                 # Let CSS / images load briefly
-                                await _ss_page.wait_for_timeout(1500)
+                                await _ss_page.wait_for_timeout(1000)
                             else:
                                 # No cached HTML — navigate fresh
                                 await _ss_page.goto(
@@ -723,7 +740,7 @@ def process_crawl(self, job_id: str, config: dict):
                                     _capture_screenshot(
                                         crawler, url, item, scrape_data
                                     ),
-                                    timeout=15,
+                                    timeout=20,
                                 )
                             except (asyncio.TimeoutError, Exception) as _ss_err:
                                 logger.warning(
