@@ -815,6 +815,60 @@ class ApiClient {
     });
   }
 
+  async googleFlights(params: {
+    origin: string;
+    destination: string;
+    departure_date: string;
+    return_date?: string;
+    adults?: number;
+    children?: number;
+    infants?: number;
+    seat?: string;
+    max_stops?: number;
+    language?: string;
+    currency?: string;
+    country?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      origin: string;
+      destination: string;
+      dates: { departure: string; return?: string };
+      trip_type: string;
+      adults: number;
+      seat: string;
+      time_taken: number;
+      total_results: number;
+      price_trend?: string;
+      flights: Array<{
+        position: number;
+        is_best: boolean;
+        airline: string;
+        flight_number: string;
+        origin: string;
+        destination: string;
+        departure_time: string;
+        arrival_time: string;
+        arrival_time_ahead?: string;
+        duration: string;
+        duration_minutes: number;
+        stops: number;
+        stops_text: string;
+        layover_airports: string[];
+        price: string;
+        price_value: number;
+        currency_symbol: string;
+        aircraft?: string;
+        delay?: string;
+        emissions?: string;
+      }>;
+      search_url: string;
+    }>("/v1/data/google/flights", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
   async googleMaps(params: {
     query?: string;
     coordinates?: string;

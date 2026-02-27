@@ -11,6 +11,7 @@ import {
   Image,
   Package,
   Linkedin,
+  Plane,
   Menu,
   Lock,
   Play,
@@ -20,6 +21,8 @@ import {
   ExternalLink,
   Copy,
   Check,
+  Clock,
+  ArrowRight,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -98,6 +101,16 @@ const SCRAPER_APIS: ScraperApi[] = [
     category: "google",
   },
   {
+    id: "google-flights",
+    name: "Google Flights",
+    endpoint: "/v1/data/google/flights",
+    description: "Flight search with prices, airlines, routes, stops, and aircraft details",
+    icon: Plane,
+    accent: "sky",
+    status: "active",
+    category: "google",
+  },
+  {
     id: "amazon-product",
     name: "Amazon Product",
     endpoint: "/v1/data/amazon/product",
@@ -120,7 +133,7 @@ const SCRAPER_APIS: ScraperApi[] = [
 ];
 
 const API_CATEGORIES: Array<{ key: string; label: string; sublabel: string }> = [
-  { key: "google", label: "Google", sublabel: "Search, Shopping, Maps, News, Jobs & Images" },
+  { key: "google", label: "Google", sublabel: "Search, Shopping, Maps, News, Jobs, Images & Flights" },
   { key: "other", label: "More Platforms", sublabel: "Coming Soon" },
 ];
 
@@ -131,6 +144,7 @@ const ACCENT_MAP: Record<string, { text: string; border: string; bg: string }> =
   violet: { text: "text-violet-400", border: "border-violet-500/20", bg: "bg-violet-500/10" },
   pink: { text: "text-pink-400", border: "border-pink-500/20", bg: "bg-pink-500/10" },
   rose: { text: "text-rose-400", border: "border-rose-500/20", bg: "bg-rose-500/10" },
+  sky: { text: "text-sky-400", border: "border-sky-500/20", bg: "bg-sky-500/10" },
 };
 
 const TICKER_ITEMS = [
@@ -208,6 +222,16 @@ export default function ScrapperPoolPage() {
   const [imagesType, setImagesType] = useState("");
   const [imagesAspect, setImagesAspect] = useState("");
   const [imagesSafe, setImagesSafe] = useState(false);
+
+  // Google Flights
+  const [flightsOrigin, setFlightsOrigin] = useState("");
+  const [flightsDestination, setFlightsDestination] = useState("");
+  const [flightsDeparture, setFlightsDeparture] = useState("");
+  const [flightsReturn, setFlightsReturn] = useState("");
+  const [flightsAdults, setFlightsAdults] = useState(1);
+  const [flightsSeat, setFlightsSeat] = useState("economy");
+  const [flightsCurrency, setFlightsCurrency] = useState("");
+  const [flightsMaxStops, setFlightsMaxStops] = useState("");
 
   const handleCategorySwitch = (key: string) => {
     if (key === activeCategory) return;
@@ -356,6 +380,30 @@ export default function ScrapperPoolPage() {
         ...(imagesSize && { size: imagesSize }),
         ...(imagesType && { type: imagesType }),
         ...(imagesAspect && { aspect_ratio: imagesAspect }),
+      });
+      setResult(res);
+    } catch (err: any) {
+      setError(err.message || "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleFlights = async () => {
+    if (!flightsOrigin.trim() || !flightsDestination.trim() || !flightsDeparture.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api.googleFlights({
+        origin: flightsOrigin.trim().toUpperCase(),
+        destination: flightsDestination.trim().toUpperCase(),
+        departure_date: flightsDeparture,
+        ...(flightsReturn && { return_date: flightsReturn }),
+        adults: flightsAdults,
+        seat: flightsSeat,
+        ...(flightsCurrency && { currency: flightsCurrency }),
+        ...(flightsMaxStops && { max_stops: Number(flightsMaxStops) }),
       });
       setResult(res);
     } catch (err: any) {
@@ -2254,6 +2302,316 @@ export default function ScrapperPoolPage() {
                                 <a href={img.image_url} target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/50 flex-shrink-0 mt-0.5">
                                   <ExternalLink className="h-3.5 w-3.5" />
                                 </a>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <details className="border border-white/[0.06]">
+                          <summary className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono cursor-pointer hover:text-white/50 transition-colors">
+                            Raw JSON Response
+                          </summary>
+                          <pre className="px-4 pb-4 text-[11px] text-white/50 font-mono overflow-x-auto max-h-[400px] overflow-y-auto leading-relaxed">
+                            {JSON.stringify(result, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── TRYOUT PANEL: Google Flights ── */}
+            {activePanel === "google-flights" && (
+              <div ref={panelRef} className="mt-[1px] border border-white/[0.08] bg-[#0a0a0a]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 border border-sky-500/20 grid place-items-center">
+                      <Plane className="h-4 w-4 text-sky-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-[14px] font-bold uppercase tracking-[0.05em] font-mono">Google Flights API</h3>
+                      <code className="text-[11px] text-sky-400/60 font-mono">POST /v1/data/google/flights</code>
+                    </div>
+                  </div>
+                  <button onClick={() => setActivePanel(null)} className="h-8 w-8 grid place-items-center text-white/30 hover:text-white transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+                  {/* Left: Input form */}
+                  <div className="p-6 space-y-5">
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono mb-4">Request Parameters</div>
+
+                    {/* Origin & Destination */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Origin *</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={flightsOrigin}
+                            onChange={(e) => setFlightsOrigin(e.target.value.toUpperCase().slice(0, 3))}
+                            onKeyDown={(e) => e.key === "Enter" && handleGoogleFlights()}
+                            placeholder="MAA"
+                            maxLength={3}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-sky-500/40 transition-colors uppercase"
+                          />
+                          <Plane className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Destination *</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={flightsDestination}
+                            onChange={(e) => setFlightsDestination(e.target.value.toUpperCase().slice(0, 3))}
+                            onKeyDown={(e) => e.key === "Enter" && handleGoogleFlights()}
+                            placeholder="BLR"
+                            maxLength={3}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-sky-500/40 transition-colors uppercase"
+                          />
+                          <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Departure & Return dates */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Departure Date *</label>
+                        <input
+                          type="date"
+                          value={flightsDeparture}
+                          onChange={(e) => setFlightsDeparture(e.target.value)}
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white focus:outline-none focus:border-sky-500/40 transition-colors [color-scheme:dark]"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Return Date</label>
+                        <input
+                          type="date"
+                          value={flightsReturn}
+                          onChange={(e) => setFlightsReturn(e.target.value)}
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white focus:outline-none focus:border-sky-500/40 transition-colors [color-scheme:dark]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Adults & Cabin Class */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Adults</label>
+                        <div className="relative">
+                          <select
+                            value={flightsAdults}
+                            onChange={(e) => setFlightsAdults(Number(e.target.value))}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-sky-500/40 transition-colors"
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Cabin Class</label>
+                        <div className="relative">
+                          <select
+                            value={flightsSeat}
+                            onChange={(e) => setFlightsSeat(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-sky-500/40 transition-colors"
+                          >
+                            <option value="economy">Economy</option>
+                            <option value="premium_economy">Premium Economy</option>
+                            <option value="business">Business</option>
+                            <option value="first">First</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Max Stops & Currency */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Max Stops</label>
+                        <div className="relative">
+                          <select
+                            value={flightsMaxStops}
+                            onChange={(e) => setFlightsMaxStops(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-sky-500/40 transition-colors"
+                          >
+                            <option value="">Any</option>
+                            <option value="0">Nonstop only</option>
+                            <option value="1">Max 1 stop</option>
+                            <option value="2">Max 2 stops</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Currency</label>
+                        <div className="relative">
+                          <select
+                            value={flightsCurrency}
+                            onChange={(e) => setFlightsCurrency(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-sky-500/40 transition-colors"
+                          >
+                            <option value="">Default</option>
+                            <option value="USD">USD ($)</option>
+                            <option value="EUR">EUR (€)</option>
+                            <option value="GBP">GBP (£)</option>
+                            <option value="INR">INR (₹)</option>
+                            <option value="JPY">JPY (¥)</option>
+                            <option value="AUD">AUD (A$)</option>
+                            <option value="CAD">CAD (C$)</option>
+                            <option value="SGD">SGD (S$)</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleGoogleFlights}
+                      disabled={loading || !flightsOrigin.trim() || !flightsDestination.trim() || !flightsDeparture}
+                      className="w-full border border-sky-500/40 bg-sky-500/10 text-sky-400 py-3 text-[12px] uppercase tracking-[0.2em] font-mono hover:bg-sky-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Searching Flights...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          Search Flights
+                        </>
+                      )}
+                    </button>
+
+                    {error && (
+                      <div className="border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-400 font-mono">
+                        {error}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Response */}
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono">Flight Results</div>
+                      {result && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-white/30 font-mono">
+                            {result.total_results || result.flights?.length || 0} flights &middot; {result.time_taken?.toFixed(2)}s
+                          </span>
+                          <button onClick={handleCopyResult} className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-white/30 hover:text-white/60 font-mono transition-colors">
+                            {copied ? <Check className="h-3 w-3 text-sky-400" /> : <Copy className="h-3 w-3" />}
+                            {copied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {!result && !loading && !error && (
+                      <div className="h-[400px] border border-dashed border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Plane className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                          <p className="text-[12px] text-white/20 font-mono">Enter origin, destination & date to search flights</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {loading && (
+                      <div className="h-[400px] border border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Loader2 className="h-6 w-6 text-sky-400 animate-spin mx-auto mb-3" />
+                          <p className="text-[12px] text-white/30 font-mono">Fetching flights from Google...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {result && (
+                      <div className="space-y-4">
+                        {result.flights?.length === 0 && (
+                          <div className="text-center py-8 border border-white/[0.06] bg-[#050505]">
+                            <Plane className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                            <p className="text-[13px] text-white/40 font-mono">No flights found for this route</p>
+                          </div>
+                        )}
+
+                        <div className="max-h-[600px] overflow-y-auto space-y-[1px] scrollbar-thin">
+                          {result.flights?.map((flight: any, i: number) => (
+                            <div key={i} className={`bg-[#050505] border p-4 hover:border-white/[0.08] transition-colors ${flight.is_best ? "border-sky-500/20" : "border-white/[0.04]"}`}>
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                  {/* Airline & flight number */}
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-[10px] text-white/20 font-mono">#{flight.position}</span>
+                                    {flight.is_best && (
+                                      <span className="text-[9px] uppercase tracking-wider text-sky-400 bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 font-mono">
+                                        Best
+                                      </span>
+                                    )}
+                                    <span className="text-[12px] text-white/70 font-mono font-bold">{flight.airline}</span>
+                                    {flight.flight_number && (
+                                      <span className="text-[10px] text-white/30 font-mono">{flight.flight_number}</span>
+                                    )}
+                                  </div>
+
+                                  {/* Route: times & duration */}
+                                  <div className="flex items-center gap-3 mb-1.5">
+                                    <span className="text-[14px] font-bold font-mono text-white">{flight.departure_time}</span>
+                                    <div className="flex items-center gap-1.5 text-white/20">
+                                      <div className="w-8 h-[1px] bg-white/20" />
+                                      <Clock className="h-3 w-3" />
+                                      <span className="text-[10px] font-mono">{flight.duration}</span>
+                                      <div className="w-8 h-[1px] bg-white/20" />
+                                    </div>
+                                    <span className="text-[14px] font-bold font-mono text-white">
+                                      {flight.arrival_time}
+                                      {flight.arrival_time_ahead && (
+                                        <span className="text-[10px] text-sky-400 ml-1">{flight.arrival_time_ahead}</span>
+                                      )}
+                                    </span>
+                                  </div>
+
+                                  {/* Origin → Destination + stops */}
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[11px] text-white/40 font-mono">
+                                      {flight.origin} <ArrowRight className="inline h-3 w-3" /> {flight.destination}
+                                    </span>
+                                    <span className={`text-[10px] font-mono ${flight.stops === 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                                      {flight.stops_text}
+                                    </span>
+                                    {flight.aircraft && (
+                                      <span className="text-[10px] text-white/20 font-mono">{flight.aircraft}</span>
+                                    )}
+                                    {flight.layover_airports?.length > 0 && (
+                                      <span className="text-[10px] text-white/25 font-mono">via {flight.layover_airports.join(", ")}</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Price */}
+                                <div className="text-right flex-shrink-0">
+                                  {flight.price_value ? (
+                                    <div className="text-[16px] font-bold font-mono text-sky-400">
+                                      {flight.price}
+                                    </div>
+                                  ) : (
+                                    <div className="text-[12px] text-white/20 font-mono">—</div>
+                                  )}
+                                  {flight.emissions && (
+                                    <div className="text-[9px] text-white/20 font-mono mt-1">{flight.emissions}</div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           ))}
