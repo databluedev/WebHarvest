@@ -488,75 +488,79 @@ def process_crawl(self, job_id: str, config: dict):
                 extract_done.set()
 
             async def _capture_screenshot(crawler, url, item, scrape_data):
-                """Capture viewport screenshot using an independent browser page.
+                """Capture viewport screenshot bypassing the browser pool semaphore.
 
-                Uses browser_pool only (not crawl_session) to avoid conflicts
-                with the producer which uses crawl_session for fetching.
+                Creates a lightweight browser context directly on the Chromium
+                instance.  This avoids semaphore contention (race strategies
+                and CrawlSession can exhaust the pool) while still producing
+                a realistic screenshot with CSS, images, and JS execution.
 
-                Fast path: loads the already-fetched raw HTML via set_content()
-                with a <base href> tag so relative CSS/images resolve correctly.
-                This avoids an extra network round-trip and bot-detection risk.
-
-                Fallback: page.goto() if no raw HTML is available (e.g. the
-                scrape_data path where fetch_result isn't present).
-
-                Retries once on transient browser errors (pool exhaustion,
-                mid-reinitialisation).
+                Uses set_content with <base href> injection so the already-fetched
+                HTML renders with proper resource resolution.
                 """
                 import re as _re
                 from app.services.browser import browser_pool
 
+                await browser_pool.initialize()
+                chromium = browser_pool._chromium
+                if not chromium or not chromium.is_connected():
+                    logger.warning(f"Screenshot skipped for {url}: no Chromium browser")
+                    return None
+
                 # Grab raw HTML from the fetch phase if available
-                raw_html_orig = None
+                raw_html = None
                 if "fetch_result" in item:
-                    raw_html_orig = item["fetch_result"].get("raw_html")
+                    raw_html = item["fetch_result"].get("raw_html")
 
-                last_err = None
-                for _attempt in range(2):
-                    try:
-                        # Copy so base-tag injection doesn't stack on retry
-                        raw_html = raw_html_orig
+                context = None
+                try:
+                    context = await chromium.new_context(
+                        viewport={"width": 1280, "height": 720},
+                        ignore_https_errors=True,
+                    )
+                    page = await context.new_page()
 
-                        async with browser_pool.get_page(
-                            target_url=url
-                        ) as _ss_page:
-                            # Block ALL external resources — this is a
-                            # fallback screenshot from cached HTML.  Blocking
-                            # everything makes set_content near-instant even
-                            # for 1-2MB pages (Amazon).  Inline styles still
-                            # render so the layout is preserved.
-                            await _ss_page.route(
-                                "**", lambda route: route.abort()
+                    if raw_html:
+                        # Inject <base href> so relative URLs resolve
+                        base_tag = f'<base href="{url}">'
+                        if _re.search(r"<head[^>]*>", raw_html, _re.IGNORECASE):
+                            raw_html = _re.sub(
+                                r"(<head[^>]*>)",
+                                rf"\1{base_tag}",
+                                raw_html,
+                                count=1,
+                                flags=_re.IGNORECASE,
                             )
+                        else:
+                            raw_html = base_tag + raw_html
+                        await page.set_content(
+                            raw_html,
+                            wait_until="domcontentloaded",
+                            timeout=12000,
+                        )
+                        # Let CSS / images / JS settle
+                        await page.wait_for_timeout(2000)
+                    else:
+                        await page.goto(
+                            url,
+                            wait_until="domcontentloaded",
+                            timeout=15000,
+                        )
+                        await page.wait_for_timeout(1000)
 
-                            if raw_html:
-                                await _ss_page.set_content(
-                                    raw_html,
-                                    wait_until="domcontentloaded",
-                                    timeout=8000,
-                                )
-                                # Brief settle for inline rendering
-                                await _ss_page.wait_for_timeout(300)
-                            else:
-                                # No cached HTML — navigate fresh
-                                await _ss_page.goto(
-                                    url,
-                                    wait_until="domcontentloaded",
-                                    timeout=15000,
-                                )
-                                await _ss_page.wait_for_timeout(500)
-
-                            _ss_bytes = await _ss_page.screenshot(
-                                type="png", full_page=False
-                            )
-                            return base64.b64encode(_ss_bytes).decode()
-                    except Exception as e:
-                        last_err = e
-                        if _attempt == 0:
-                            await asyncio.sleep(0.5)
-
-                logger.warning(f"Screenshot capture failed for {url}: {last_err}")
-                return None
+                    _ss_bytes = await page.screenshot(
+                        type="png", full_page=False
+                    )
+                    return base64.b64encode(_ss_bytes).decode()
+                except Exception as e:
+                    logger.warning(f"Screenshot capture failed for {url}: {e}")
+                    return None
+                finally:
+                    if context:
+                        try:
+                            await context.close()
+                        except Exception:
+                            pass
 
             async def extract_consumer():
                 """Extract content from fetched pages, save to DB."""

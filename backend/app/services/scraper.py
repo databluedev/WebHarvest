@@ -217,6 +217,7 @@ async def _fetch_via_stealth_engine(
     request: "ScrapeRequest",
     use_firefox: bool = False,
     proxy: dict | None = None,
+    capture_screenshot: bool = False,
 ) -> tuple[str, int, str | None, list[str], dict[str, str]]:
     """Fetch a URL via the stealth-engine microservice.
 
@@ -234,7 +235,7 @@ async def _fetch_via_stealth_engine(
         "timeout": request.timeout,
         "wait_after_load": getattr(request, "wait_for", 0) or getattr(request, "wait_after_load", 0),
         "use_firefox": use_firefox,
-        "screenshot": "screenshot" in getattr(request, "formats", []),
+        "screenshot": "screenshot" in getattr(request, "formats", []) or capture_screenshot,
         "mobile": getattr(request, "mobile", False),
     }
 
@@ -3563,7 +3564,8 @@ async def scrape_url_fetch_only(
             elif _is_stealth_pinned and settings.STEALTH_ENGINE_URL:
                 use_ff = pinned_strategy == "stealth_firefox"
                 result = await _fetch_via_stealth_engine(
-                    url, request, use_firefox=use_ff, proxy=proxy_playwright
+                    url, request, use_firefox=use_ff, proxy=proxy_playwright,
+                    capture_screenshot=capture_screenshot,
                 )
                 html = result[0]
                 if html and not _looks_blocked(html):
@@ -3729,18 +3731,18 @@ async def scrape_url_fetch_only(
                 if _has_stealth_engine_fetch:
                     browser_coros.append((
                         "stealth_chromium",
-                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright, capture_screenshot=capture_screenshot),
                     ))
                     browser_coros.append((
                         "stealth_firefox",
-                        _fetch_via_stealth_engine(url, request, use_firefox=True, proxy=proxy_playwright),
+                        _fetch_via_stealth_engine(url, request, use_firefox=True, proxy=proxy_playwright, capture_screenshot=capture_screenshot),
                     ))
                 t2_timeout = 35
             else:
                 if _has_stealth_engine_fetch:
                     browser_coros.append((
                         "stealth_chromium",
-                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright, capture_screenshot=capture_screenshot),
                     ))
                 t2_timeout = 20
         else:
@@ -3760,11 +3762,11 @@ async def scrape_url_fetch_only(
                 if _has_stealth_engine_fetch:
                     browser_coros.append((
                         "stealth_chromium",
-                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright, capture_screenshot=capture_screenshot),
                     ))
                     browser_coros.append((
                         "stealth_firefox",
-                        _fetch_via_stealth_engine(url, request, use_firefox=True, proxy=proxy_playwright),
+                        _fetch_via_stealth_engine(url, request, use_firefox=True, proxy=proxy_playwright, capture_screenshot=capture_screenshot),
                     ))
                 # Race Tier 2 AND Tier 3 concurrently for massive speed win
                 if starting_tier <= 3:
@@ -3793,7 +3795,7 @@ async def scrape_url_fetch_only(
                 if _has_stealth_engine_fetch:
                     browser_coros.append((
                         "stealth_chromium",
-                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright),
+                        _fetch_via_stealth_engine(url, request, use_firefox=False, proxy=proxy_playwright, capture_screenshot=capture_screenshot),
                     ))
                 browser_coros.append(
                     (
