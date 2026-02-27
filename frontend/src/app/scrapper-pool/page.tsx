@@ -2555,9 +2555,22 @@ export default function ScrapperPoolPage() {
                           </div>
                         )}
 
+                        {result.search_url && (
+                          <a href={result.search_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-sky-400/60 hover:text-sky-400 font-mono transition-colors mb-2">
+                            <ExternalLink className="h-3 w-3" />
+                            View on Google Flights
+                          </a>
+                        )}
+
                         <div className="max-h-[600px] overflow-y-auto space-y-[1px] scrollbar-thin">
                           {result.flights?.map((flight: any, i: number) => (
-                            <div key={i} className={`bg-[#050505] border p-4 hover:border-white/[0.08] transition-colors ${flight.is_best ? "border-sky-500/20" : "border-white/[0.04]"}`}>
+                            <a
+                              key={i}
+                              href={result.search_url || `https://www.google.com/travel/flights?q=${encodeURIComponent(`${flight.origin} to ${flight.destination}`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`block bg-[#050505] border p-4 hover:border-white/[0.12] hover:bg-white/[0.02] transition-colors cursor-pointer ${flight.is_best ? "border-sky-500/20" : "border-white/[0.04]"}`}
+                            >
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1 min-w-0">
                                   {/* Airline & flight number */}
@@ -2622,7 +2635,7 @@ export default function ScrapperPoolPage() {
                                   )}
                                 </div>
                               </div>
-                            </div>
+                            </a>
                           ))}
                         </div>
 
