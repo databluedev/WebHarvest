@@ -2594,7 +2594,11 @@ async def _fetch_with_browser_stealth(
         # Also skip entirely in light mode (stealth=False)
         if hard_site and stealth:
             domain = browser_pool._get_domain(url)
-            has_cookies = domain in browser_pool._cookie_jar
+            _jar_entry = browser_pool._cookie_jar.get(domain)
+            has_cookies = (
+                _jar_entry is not None
+                and (time.monotonic() - _jar_entry[0]) < browser_pool._cookie_jar_ttl
+            )
             homepage = _get_homepage(url)
             if homepage and not has_cookies:
                 try:
