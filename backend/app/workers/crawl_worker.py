@@ -180,6 +180,12 @@ def process_crawl(self, job_id: str, config: dict):
                     # Fast path: use CrawlSession browser directly
                     _wu_page = await crawler._crawl_session.new_page()
                     try:
+                        # Block heavy resources to save memory (images, fonts, media)
+                        await _wu_page.route("**/*", lambda route: (
+                            route.abort()
+                            if route.request.resource_type in ("image", "media", "font", "stylesheet")
+                            else route.continue_()
+                        ))
                         await _wu_page.goto(
                             request.url,
                             wait_until="domcontentloaded",
