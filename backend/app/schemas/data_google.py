@@ -673,3 +673,86 @@ class GoogleFlightsResponse(BaseModel):
     flights: list[GoogleFlightsListing] = []
     search_url: str | None = Field(None, description="Google Flights search URL used")
     error: str | None = Field(None, description="Error message if the search failed")
+
+
+# ===================================================================
+# Google Finance — reverse-engineered AF_initDataCallback
+# ===================================================================
+
+
+class GoogleFinanceRequest(BaseModel):
+    query: str | None = Field(
+        None, max_length=100,
+        description="Stock ticker to look up (e.g. 'AAPL:NASDAQ', 'BTC-USD'). "
+        "Omit for market overview.",
+    )
+    language: str = Field("en", description="Language code (hl parameter)")
+    country: str | None = Field(
+        None, description="Country code for geo-targeting (gl parameter)",
+    )
+
+
+class GoogleFinancePriceMovement(BaseModel):
+    model_config = {"exclude_none": True}
+
+    percentage: str = Field(..., description="Percentage change (e.g. '-0.99%', '+3.76%')")
+    value: str = Field(..., description="Absolute change (e.g. '-$491.00', '+$2.45')")
+    movement: str = Field(..., description="Direction: 'up' or 'down'")
+
+
+class GoogleFinanceStock(BaseModel):
+    model_config = {"exclude_none": True}
+
+    stock: str = Field(..., description="Ticker:Exchange (e.g. 'AAPL:NASDAQ')")
+    link: str = Field(..., description="Google Finance quote URL")
+    name: str = Field(..., description="Company/index name")
+    price: str = Field(..., description="Current price (e.g. '$270.87')")
+    price_movement: GoogleFinancePriceMovement | None = None
+    currency: str | None = Field(None, description="Currency code (e.g. 'USD', 'INR')")
+    previous_close: str | None = Field(None, description="Previous close price")
+
+
+class GoogleFinanceNewsArticle(BaseModel):
+    model_config = {"exclude_none": True}
+
+    title: str
+    url: str
+    source: str | None = None
+    thumbnail: str | None = None
+    snippet: str | None = None
+    published_timestamp: int | None = Field(None, description="Unix timestamp")
+
+
+class GoogleFinanceMarketResponse(BaseModel):
+    model_config = {"exclude_none": True}
+
+    success: bool = True
+    time_taken: float = Field(..., description="API response time in seconds")
+    markets: dict[str, list[GoogleFinanceStock]] = Field(
+        default_factory=dict,
+        description="Market sections: US, Europe, Asia, Currencies, Crypto, Futures",
+    )
+    market_trends: dict[str, list[GoogleFinanceStock]] | None = Field(
+        None,
+        description="Trending: most_active, gainers, losers",
+    )
+    news: list[GoogleFinanceNewsArticle] | None = None
+    error: str | None = None
+
+
+class GoogleFinanceQuoteResponse(BaseModel):
+    model_config = {"exclude_none": True}
+
+    success: bool = True
+    time_taken: float = Field(..., description="API response time in seconds")
+    stock: str = Field(..., description="Ticker:Exchange")
+    name: str | None = None
+    price: str | None = Field(None, description="Current price")
+    price_movement: GoogleFinancePriceMovement | None = None
+    currency: str | None = None
+    previous_close: str | None = None
+    after_hours_price: str | None = Field(None, description="After-hours/pre-market price")
+    after_hours_movement: GoogleFinancePriceMovement | None = None
+    similar_stocks: list[GoogleFinanceStock] | None = None
+    news: list[GoogleFinanceNewsArticle] | None = None
+    error: str | None = None

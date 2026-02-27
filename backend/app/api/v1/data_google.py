@@ -8,6 +8,7 @@ Endpoints:
   POST /v1/data/google/jobs     — Google Careers job listings (structured JSON)
   POST /v1/data/google/images   — Google Images with filters (structured JSON)
   POST /v1/data/google/flights  — Google Flights search (structured JSON)
+  POST /v1/data/google/finance  — Google Finance market overview & quotes (structured JSON)
 """
 
 import logging
@@ -20,6 +21,9 @@ from app.core.exceptions import BadRequestError, RateLimitError
 from app.core.rate_limiter import check_rate_limit_full
 from app.models.user import User
 from app.schemas.data_google import (
+    GoogleFinanceMarketResponse,
+    GoogleFinanceQuoteResponse,
+    GoogleFinanceRequest,
     GoogleFlightsRequest,
     GoogleFlightsResponse,
     GoogleImagesRequest,
@@ -35,6 +39,7 @@ from app.schemas.data_google import (
     GoogleShoppingRequest,
     GoogleShoppingResponse,
 )
+from app.services.google_finance import google_finance_market, google_finance_quote
 from app.services.google_flights import google_flights
 from app.services.google_images import google_images
 from app.services.google_jobs import google_jobs
@@ -379,5 +384,51 @@ async def search_google_flights(
         currency=request.currency,
         country=request.country,
     )
+
+    return result
+
+
+@router.post(
+    "/finance",
+    response_model=GoogleFinanceMarketResponse | GoogleFinanceQuoteResponse,
+    response_model_exclude_none=True,
+    summary="Google Finance API",
+    description=(
+        "Get Google Finance market overview or individual stock quotes. "
+        "Omit 'query' for market overview (indexes, futures, crypto, currencies, "
+        "gainers, losers, most active, news). "
+        "Set 'query' to a ticker (e.g. 'AAPL:NASDAQ', 'BTC-USD') for a stock quote "
+        "with price, after-hours data, similar stocks, and news. "
+        "HTTP-only, no browser needed. Results are cached for 2 minutes."
+    ),
+    response_description="Structured Google Finance data",
+)
+async def search_google_finance(
+    request: GoogleFinanceRequest,
+    response: Response,
+    user: User = Depends(get_current_user),
+):
+    """Get Google Finance market overview or stock quote."""
+    # Rate limiting
+    rl = await check_rate_limit_full(
+        f"rate:data:{user.id}", settings.RATE_LIMIT_DATA_API
+    )
+    response.headers["X-RateLimit-Limit"] = str(rl.limit)
+    response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
+    response.headers["X-RateLimit-Reset"] = str(rl.reset)
+    if not rl.allowed:
+        raise RateLimitError("Data API rate limit exceeded. Try again in a minute.")
+
+    if request.query:
+        result = await google_finance_quote(
+            query=request.query,
+            language=request.language,
+            country=request.country,
+        )
+    else:
+        result = await google_finance_market(
+            language=request.language,
+            country=request.country,
+        )
 
     return result

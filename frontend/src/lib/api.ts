@@ -870,6 +870,68 @@ class ApiClient {
     });
   }
 
+  async googleFinance(params: {
+    query?: string;
+    language?: string;
+    country?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      time_taken: number;
+      // Market overview fields
+      markets?: Record<
+        string,
+        Array<{
+          stock: string;
+          link: string;
+          name: string;
+          price: string;
+          price_movement?: { percentage: string; value: string; movement: string };
+          currency?: string;
+        }>
+      >;
+      market_trends?: Record<
+        string,
+        Array<{
+          stock: string;
+          link: string;
+          name: string;
+          price: string;
+          price_movement?: { percentage: string; value: string; movement: string };
+        }>
+      >;
+      // Quote fields
+      stock?: string;
+      name?: string;
+      price?: string;
+      price_movement?: { percentage: string; value: string; movement: string };
+      currency?: string;
+      previous_close?: string;
+      after_hours_price?: string;
+      after_hours_movement?: { percentage: string; value: string; movement: string };
+      similar_stocks?: Array<{
+        stock: string;
+        link: string;
+        name: string;
+        price: string;
+        price_movement?: { percentage: string; value: string; movement: string };
+      }>;
+      // Shared
+      news?: Array<{
+        title: string;
+        url: string;
+        source?: string;
+        thumbnail?: string;
+        snippet?: string;
+        published_timestamp?: number;
+      }>;
+      error?: string;
+    }>("/v1/data/google/finance", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
   async googleMaps(params: {
     query?: string;
     coordinates?: string;

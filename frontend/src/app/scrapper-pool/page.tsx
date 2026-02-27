@@ -12,6 +12,7 @@ import {
   Package,
   Linkedin,
   Plane,
+  TrendingUp,
   Menu,
   Lock,
   Play,
@@ -111,6 +112,16 @@ const SCRAPER_APIS: ScraperApi[] = [
     category: "google",
   },
   {
+    id: "google-finance",
+    name: "Google Finance",
+    endpoint: "/v1/data/google/finance",
+    description: "Market overview, stock quotes, price movements, and financial news",
+    icon: TrendingUp,
+    accent: "lime",
+    status: "active",
+    category: "google",
+  },
+  {
     id: "amazon-product",
     name: "Amazon Product",
     endpoint: "/v1/data/amazon/product",
@@ -133,7 +144,7 @@ const SCRAPER_APIS: ScraperApi[] = [
 ];
 
 const API_CATEGORIES: Array<{ key: string; label: string; sublabel: string }> = [
-  { key: "google", label: "Google", sublabel: "Search, Shopping, Maps, News, Jobs, Images & Flights" },
+  { key: "google", label: "Google", sublabel: "Search, Shopping, Maps, News, Jobs, Images, Flights & Finance" },
   { key: "other", label: "More Platforms", sublabel: "Coming Soon" },
 ];
 
@@ -145,6 +156,7 @@ const ACCENT_MAP: Record<string, { text: string; border: string; bg: string }> =
   pink: { text: "text-pink-400", border: "border-pink-500/20", bg: "bg-pink-500/10" },
   rose: { text: "text-rose-400", border: "border-rose-500/20", bg: "bg-rose-500/10" },
   sky: { text: "text-sky-400", border: "border-sky-500/20", bg: "bg-sky-500/10" },
+  lime: { text: "text-lime-400", border: "border-lime-500/20", bg: "bg-lime-500/10" },
 };
 
 const TICKER_ITEMS = [
@@ -236,6 +248,11 @@ export default function ScrapperPoolPage() {
   const [flightsSeat, setFlightsSeat] = useState("economy");
   const [flightsCurrency, setFlightsCurrency] = useState("");
   const [flightsMaxStops, setFlightsMaxStops] = useState("");
+
+  // Google Finance
+  const [financeQuery, setFinanceQuery] = useState("");
+  const [financeLanguage, setFinanceLanguage] = useState("");
+  const [financeCountry, setFinanceCountry] = useState("");
 
   const handleCategorySwitch = (key: string) => {
     if (key === activeCategory) return;
@@ -408,6 +425,27 @@ export default function ScrapperPoolPage() {
         seat: flightsSeat,
         ...(flightsCurrency && { currency: flightsCurrency }),
         ...(flightsMaxStops && { max_stops: Number(flightsMaxStops) }),
+      });
+      if (res.error) {
+        setError(res.error);
+      }
+      setResult(res);
+    } catch (err: any) {
+      setError(err.message || "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleFinance = async () => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api.googleFinance({
+        ...(financeQuery.trim() && { query: financeQuery.trim() }),
+        ...(financeLanguage && { language: financeLanguage }),
+        ...(financeCountry && { country: financeCountry }),
       });
       if (res.error) {
         setError(res.error);
@@ -2638,6 +2676,317 @@ export default function ScrapperPoolPage() {
                             </a>
                           ))}
                         </div>
+
+                        <details className="border border-white/[0.06]">
+                          <summary className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono cursor-pointer hover:text-white/50 transition-colors">
+                            Raw JSON Response
+                          </summary>
+                          <pre className="px-4 pb-4 text-[11px] text-white/50 font-mono overflow-x-auto max-h-[400px] overflow-y-auto leading-relaxed">
+                            {JSON.stringify(result, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── TRYOUT PANEL: Google Finance ── */}
+            {activePanel === "google-finance" && (
+              <div ref={panelRef} className="mt-[1px] border border-white/[0.08] bg-[#0a0a0a]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 border border-lime-500/20 grid place-items-center">
+                      <TrendingUp className="h-4 w-4 text-lime-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-[14px] font-bold uppercase tracking-[0.05em] font-mono">Google Finance API</h3>
+                      <code className="text-[11px] text-lime-400/60 font-mono">POST /v1/data/google/finance</code>
+                    </div>
+                  </div>
+                  <button onClick={() => setActivePanel(null)} className="h-8 w-8 grid place-items-center text-white/30 hover:text-white transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+                  {/* Left: Input form */}
+                  <div className="p-6 space-y-5">
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono mb-4">Request Parameters</div>
+
+                    {/* Query */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Ticker / Query</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={financeQuery}
+                          onChange={(e) => setFinanceQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleGoogleFinance()}
+                          placeholder="AAPL:NASDAQ, BTC-USD, or leave empty for market overview"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-lime-500/40 transition-colors"
+                        />
+                        <TrendingUp className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                      </div>
+                      <p className="text-[10px] text-white/20 font-mono mt-1.5">Leave empty for market overview with all indexes, crypto, futures & trends</p>
+                    </div>
+
+                    {/* Language */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Language</label>
+                      <div className="relative">
+                        <select
+                          value={financeLanguage}
+                          onChange={(e) => setFinanceLanguage(e.target.value)}
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-lime-500/40 transition-colors"
+                        >
+                          <option value="">Default (en)</option>
+                          <option value="en">English</option>
+                          <option value="es">Spanish</option>
+                          <option value="fr">French</option>
+                          <option value="de">German</option>
+                          <option value="ja">Japanese</option>
+                          <option value="hi">Hindi</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {/* Country */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Country</label>
+                      <div className="relative">
+                        <select
+                          value={financeCountry}
+                          onChange={(e) => setFinanceCountry(e.target.value)}
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-lime-500/40 transition-colors"
+                        >
+                          <option value="">Default</option>
+                          <option value="US">United States</option>
+                          <option value="GB">United Kingdom</option>
+                          <option value="IN">India</option>
+                          <option value="DE">Germany</option>
+                          <option value="FR">France</option>
+                          <option value="JP">Japan</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleGoogleFinance}
+                      disabled={loading}
+                      className="w-full border border-lime-500/40 bg-lime-500/10 text-lime-400 py-3 text-[12px] uppercase tracking-[0.2em] font-mono hover:bg-lime-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Fetching Finance Data...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          {financeQuery.trim() ? "Get Quote" : "Get Market Overview"}
+                        </>
+                      )}
+                    </button>
+
+                    {error && (
+                      <div className="border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-400 font-mono">
+                        {error}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Response */}
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono">Response</div>
+                      {result && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-white/30 font-mono">
+                            {result.time_taken?.toFixed(2)}s
+                          </span>
+                          <button onClick={handleCopyResult} className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-white/30 hover:text-white/60 font-mono transition-colors">
+                            {copied ? <Check className="h-3 w-3 text-lime-400" /> : <Copy className="h-3 w-3" />}
+                            {copied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {!result && !loading && !error && (
+                      <div className="h-[400px] border border-dashed border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <TrendingUp className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                          <p className="text-[12px] text-white/20 font-mono">Enter a ticker or click to get market overview</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {loading && (
+                      <div className="h-[400px] border border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Loader2 className="h-6 w-6 text-lime-400 animate-spin mx-auto mb-3" />
+                          <p className="text-[12px] text-white/30 font-mono">Fetching from Google Finance...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {result && (
+                      <div className="space-y-4">
+                        {/* Quote summary card */}
+                        {result.stock && (
+                          <div className="border border-white/[0.06] p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-[14px] font-bold font-mono text-white">{result.name || result.stock}</div>
+                                <div className="text-[11px] text-white/40 font-mono">{result.stock}</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-[18px] font-bold font-mono text-white">{result.price}</div>
+                                {result.price_movement && (
+                                  <div className={`text-[12px] font-mono ${result.price_movement.movement === "up" ? "text-emerald-400" : "text-red-400"}`}>
+                                    {result.price_movement.value} ({result.price_movement.percentage})
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {result.previous_close && (
+                              <div className="text-[11px] text-white/30 font-mono">Prev close: {result.previous_close}</div>
+                            )}
+                            {result.after_hours_price && (
+                              <div className="text-[11px] text-white/30 font-mono">
+                                After hours: {result.after_hours_price}
+                                {result.after_hours_movement && (
+                                  <span className={result.after_hours_movement.movement === "up" ? "text-emerald-400" : "text-red-400"}>
+                                    {" "}{result.after_hours_movement.value} ({result.after_hours_movement.percentage})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Market sections summary */}
+                        {result.markets && (
+                          <div className="space-y-3">
+                            {Object.entries(result.markets).map(([section, stocks]) => (
+                              <details key={section} className="border border-white/[0.06]">
+                                <summary className="px-4 py-3 text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono cursor-pointer hover:text-white/60 transition-colors flex items-center justify-between">
+                                  <span>{section}</span>
+                                  <span className="text-[10px] text-white/20">{(stocks as any[]).length} stocks</span>
+                                </summary>
+                                <div className="px-4 pb-3 space-y-1">
+                                  {(stocks as any[]).map((s: any, i: number) => (
+                                    <div key={i} className="flex items-center justify-between py-1 border-b border-white/[0.03] last:border-0">
+                                      <div>
+                                        <span className="text-[11px] font-mono text-lime-400/80">{s.stock}</span>
+                                        <span className="text-[10px] text-white/30 font-mono ml-2">{s.name}</span>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-[11px] font-mono text-white/60">{s.price}</span>
+                                        {s.price_movement && (
+                                          <span className={`text-[10px] font-mono ${s.price_movement.movement === "up" ? "text-emerald-400" : "text-red-400"}`}>
+                                            {s.price_movement.percentage}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Similar stocks */}
+                        {result.similar_stocks && result.similar_stocks.length > 0 && (
+                          <details className="border border-white/[0.06]">
+                            <summary className="px-4 py-3 text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono cursor-pointer hover:text-white/60 transition-colors flex items-center justify-between">
+                              <span>Similar Stocks</span>
+                              <span className="text-[10px] text-white/20">{result.similar_stocks.length}</span>
+                            </summary>
+                            <div className="px-4 pb-3 space-y-1">
+                              {result.similar_stocks.map((s: any, i: number) => (
+                                <div key={i} className="flex items-center justify-between py-1 border-b border-white/[0.03] last:border-0">
+                                  <div>
+                                    <span className="text-[11px] font-mono text-lime-400/80">{s.stock}</span>
+                                    <span className="text-[10px] text-white/30 font-mono ml-2">{s.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[11px] font-mono text-white/60">{s.price}</span>
+                                    {s.price_movement && (
+                                      <span className={`text-[10px] font-mono ${s.price_movement.movement === "up" ? "text-emerald-400" : "text-red-400"}`}>
+                                        {s.price_movement.percentage}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+
+                        {/* News */}
+                        {result.news && result.news.length > 0 && (
+                          <details className="border border-white/[0.06]">
+                            <summary className="px-4 py-3 text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono cursor-pointer hover:text-white/60 transition-colors flex items-center justify-between">
+                              <span>News</span>
+                              <span className="text-[10px] text-white/20">{result.news.length} articles</span>
+                            </summary>
+                            <div className="px-4 pb-3 space-y-2">
+                              {result.news.map((article: any, i: number) => (
+                                <a key={i} href={article.url} target="_blank" rel="noopener noreferrer" className="block py-2 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] transition-colors -mx-1 px-1">
+                                  <div className="flex items-start gap-3">
+                                    {article.thumbnail && (
+                                      <img src={article.thumbnail} alt="" className="w-12 h-12 object-cover flex-shrink-0 border border-white/[0.06]" />
+                                    )}
+                                    <div>
+                                      <div className="text-[11px] font-mono text-white/70 leading-relaxed">{article.title}</div>
+                                      {article.source && (
+                                        <div className="text-[10px] text-white/30 font-mono mt-0.5">{article.source}</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </a>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+
+                        {/* Market trends */}
+                        {result.market_trends && (
+                          <div className="space-y-3">
+                            {Object.entries(result.market_trends).map(([label, stocks]) => (
+                              <details key={label} className="border border-white/[0.06]">
+                                <summary className="px-4 py-3 text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono cursor-pointer hover:text-white/60 transition-colors flex items-center justify-between">
+                                  <span>{label}</span>
+                                  <span className="text-[10px] text-white/20">{(stocks as any[]).length} stocks</span>
+                                </summary>
+                                <div className="px-4 pb-3 space-y-1">
+                                  {(stocks as any[]).map((s: any, i: number) => (
+                                    <div key={i} className="flex items-center justify-between py-1 border-b border-white/[0.03] last:border-0">
+                                      <div>
+                                        <span className="text-[11px] font-mono text-lime-400/80">{s.stock}</span>
+                                        <span className="text-[10px] text-white/30 font-mono ml-2">{s.name}</span>
+                                      </div>
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-[11px] font-mono text-white/60">{s.price}</span>
+                                        {s.price_movement && (
+                                          <span className={`text-[10px] font-mono ${s.price_movement.movement === "up" ? "text-emerald-400" : "text-red-400"}`}>
+                                            {s.price_movement.percentage}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            ))}
+                          </div>
+                        )}
 
                         <details className="border border-white/[0.06]">
                           <summary className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono cursor-pointer hover:text-white/50 transition-colors">
