@@ -161,63 +161,43 @@ def process_crawl(self, job_id: str, config: dict):
 
             # =============================================================
             # Session warm-up: establish cookies before BFS.
-            # Hard sites (Amazon, etc.) reject requests probabilistically.
-            # Retry the seed URL with the full scrape pipeline (all tiers
-            # including advanced_prewarm) until we get a valid response,
-            # then transfer cookies into crawl_session for fast subsequent
-            # fetches. The successful result is used as page 1 directly.
+            # Single attempt — no retries, no backoff. If it fails or
+            # returns blocked content, the BFS consumer handles the seed
+            # URL as a normal page (with tier cascade + strategy pinning).
             # =============================================================
             _warmup_result = None
-            _warmup_max = 3
-            for _warmup_attempt in range(_warmup_max):
-                try:
+            try:
+                logger.warning(f"Session warm-up for {request.url}")
+                _warmup_scrape = await asyncio.wait_for(
+                    crawler.scrape_page(request.url),
+                    timeout=60,
+                )
+                _warmup_data = _warmup_scrape["scrape_data"]
+                _warmup_md = (_warmup_data.markdown or "").strip()
+                _warmup_words = len(_warmup_md.split())
+                _warmup_html = _warmup_data.html or ""
+
+                from app.services.scraper import _looks_blocked
+                _wu_blocked = _looks_blocked(_warmup_html)
+                if _wu_blocked:
                     logger.warning(
-                        f"Session warm-up {_warmup_attempt + 1}/{_warmup_max} "
-                        f"for {request.url}"
+                        f"Warm-up returned blocked content "
+                        f"({_warmup_words} words, {len(_warmup_html)} chars HTML) "
+                        f"— skipping, BFS consumer will handle seed URL"
                     )
-                    _warmup_scrape = await asyncio.wait_for(
-                        crawler.scrape_page(request.url),
-                        timeout=120,
-                    )
-                    _warmup_data = _warmup_scrape["scrape_data"]
-                    _warmup_md = (_warmup_data.markdown or "").strip()
-                    _warmup_words = len(_warmup_md.split())
-                    _warmup_html = _warmup_data.html or ""
-
-                    # Validate: reject blocked / garbage pages that
-                    # scrape_url returns as "best available" fallback.
-                    from app.services.scraper import _looks_blocked
-                    _wu_blocked = _looks_blocked(_warmup_html)
-                    if _wu_blocked:
-                        logger.warning(
-                            f"Session warm-up attempt {_warmup_attempt + 1} "
-                            f"returned blocked content ({_warmup_words} words, "
-                            f"{len(_warmup_html)} chars HTML)"
-                        )
-                    elif _warmup_words < 50:
-                        logger.warning(
-                            f"Session warm-up attempt {_warmup_attempt + 1} got "
-                            f"thin content ({_warmup_words} words)"
-                        )
-                    else:
-                        logger.warning(
-                            f"Session warm-up succeeded ({_warmup_words} words) "
-                            f"on attempt {_warmup_attempt + 1}"
-                        )
-                        _warmup_result = _warmup_scrape
-                        break
-                except Exception as e:
+                elif _warmup_words < 50:
                     logger.warning(
-                        f"Session warm-up attempt {_warmup_attempt + 1} failed: {e}"
+                        f"Warm-up got thin content ({_warmup_words} words) "
+                        f"— skipping"
                     )
-
-                # Free memory from failed/successful warm-up attempt
-                gc.collect()
-
-                if _warmup_attempt < _warmup_max - 1:
-                    _backoff = (2 ** _warmup_attempt) * 5  # 5s, 10s
-                    logger.warning(f"Warm-up backoff: {_backoff}s")
-                    await asyncio.sleep(_backoff)
+                else:
+                    logger.warning(
+                        f"Warm-up succeeded ({_warmup_words} words)"
+                    )
+                    _warmup_result = _warmup_scrape
+            except Exception as e:
+                logger.warning(f"Warm-up failed: {e}")
+            gc.collect()
 
             # Pinned strategy — set by warm-up or by first successful fetch
             _pinned_strategy: str | None = None

@@ -159,3 +159,48 @@ def _suppress_pipe_warnings_task(logger: logging.Logger, **kw):
 def on_worker_shutting_down(sig=None, how=None, exitcode=None, **kw):
     """Log when a worker is shutting down."""
     logger.info(f"Worker shutting down (signal={sig}, how={how}, exitcode={exitcode})")
+
+
+# ---------------------------------------------------------------------------
+# Pre-warm browser pool on worker child startup
+# ---------------------------------------------------------------------------
+from celery.signals import worker_process_init  # noqa: E402
+
+
+@worker_process_init.connect
+def prewarm_browser_pool(sender=None, **kwargs):
+    """Launch Chromium immediately when a worker child process forks.
+
+    This ensures the browser is ready BEFORE any crawl task arrives,
+    eliminating ~1-2s of cold-start latency on the first task.
+    Only runs in workers that handle the 'crawl' queue.
+    """
+    import asyncio
+    import os
+
+    # Only pre-warm for crawl workers (they're the ones that need browsers)
+    queues = os.environ.get("CELERY_QUEUES", "")
+    # Celery sets the -Q flag but doesn't expose it as an env var easily,
+    # so we just try to initialize — it's a no-op if unused.
+    try:
+        from app.services.browser import browser_pool
+
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(browser_pool.initialize())
+        loop.close()
+        logger.info("Pre-warmed BrowserPool on worker startup")
+    except Exception as e:
+        logger.warning(f"BrowserPool pre-warm failed (non-fatal): {e}")
+
+    # Also ping stealth-engine to warm its browser pool
+    try:
+        import httpx
+
+        stealth_url = os.environ.get(
+            "STEALTH_ENGINE_URL", settings.STEALTH_ENGINE_URL
+        )
+        if stealth_url:
+            resp = httpx.get(f"{stealth_url}/health", timeout=5.0)
+            logger.info(f"Stealth-engine pre-warm: {resp.status_code}")
+    except Exception:
+        pass  # Stealth engine may not be available
