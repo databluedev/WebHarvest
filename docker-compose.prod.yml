@@ -107,6 +107,8 @@ services:
       - BUILTIN_PROXY_LIST_URL=${BUILTIN_PROXY_LIST_URL:-}
       - SENTRY_DSN=${SENTRY_DSN:-}
       - SENTRY_ENVIRONMENT=production
+      - CHROMIUM_POOL_SIZE=1
+      - FIREFOX_POOL_SIZE=0
     command: celery -A app.workers.celery_app worker -l warning -c 1 -Q crawl
     restart: unless-stopped
     stop_grace_period: 30s
@@ -116,7 +118,7 @@ services:
       timeout: 10s
       retries: 3
     deploy:
-      replicas: 1
+      replicas: 3
       resources:
         limits:
           cpus: "2.0"
