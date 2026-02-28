@@ -14,12 +14,15 @@ Endpoints:
 import logging
 
 from fastapi import APIRouter, Depends, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.config import settings
+from app.core.database import get_db
 from app.core.exceptions import BadRequestError, RateLimitError
 from app.core.rate_limiter import check_rate_limit_full
 from app.models.user import User
+from app.services.data_persistence import save_data_query
 from app.schemas.data_google import (
     GoogleFinanceMarketResponse,
     GoogleFinanceQuoteResponse,
@@ -68,6 +71,7 @@ async def search_google(
     request: GoogleSearchRequest,
     response: Response,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Search Google and return structured SERP data."""
     # Rate limiting
@@ -90,6 +94,20 @@ async def search_google(
         time_range=request.time_range,
     )
 
+    result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else result.__dict__
+    await save_data_query(
+        db,
+        user_id=user.id,
+        platform="google",
+        operation="search",
+        query_params=request.model_dump(),
+        result=result_dict,
+        result_count=len(result_dict.get("organic_results", [])),
+        time_taken=result_dict.get("time_taken"),
+        status="success" if result_dict.get("success") else "error",
+        error_message=result_dict.get("error"),
+    )
+
     return result
 
 
@@ -110,6 +128,7 @@ async def search_google_shopping(
     request: GoogleShoppingRequest,
     response: Response,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Search Google Shopping with filters and return structured product data."""
     # Rate limiting
@@ -130,6 +149,20 @@ async def search_google_shopping(
         country=request.country,
         sort_by=request.sort_by,
         min_rating=request.min_rating,
+    )
+
+    result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else result.__dict__
+    await save_data_query(
+        db,
+        user_id=user.id,
+        platform="google",
+        operation="shopping",
+        query_params=request.model_dump(),
+        result=result_dict,
+        result_count=len(result_dict.get("products", [])),
+        time_taken=result_dict.get("time_taken"),
+        status="success" if result_dict.get("success") else "error",
+        error_message=result_dict.get("error"),
     )
 
     return result
@@ -153,6 +186,7 @@ async def search_google_maps(
     request: GoogleMapsRequest,
     response: Response,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Search Google Maps or get place details."""
     # Validate: at least one search/detail parameter is required
@@ -193,6 +227,20 @@ async def search_google_maps(
         reviews_sort=request.reviews_sort,
     )
 
+    result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else result.__dict__
+    await save_data_query(
+        db,
+        user_id=user.id,
+        platform="google",
+        operation="maps",
+        query_params=request.model_dump(),
+        result=result_dict,
+        result_count=len(result_dict.get("places", [])),
+        time_taken=result_dict.get("time_taken"),
+        status="success" if result_dict.get("success") else "error",
+        error_message=result_dict.get("error"),
+    )
+
     return result
 
 
@@ -214,6 +262,7 @@ async def search_google_news(
     request: GoogleNewsRequest,
     response: Response,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Search Google News and return structured article data."""
     # Rate limiting
@@ -233,6 +282,20 @@ async def search_google_news(
         country=request.country,
         time_range=request.time_range,
         sort_by=request.sort_by,
+    )
+
+    result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else result.__dict__
+    await save_data_query(
+        db,
+        user_id=user.id,
+        platform="google",
+        operation="news",
+        query_params=request.model_dump(),
+        result=result_dict,
+        result_count=len(result_dict.get("articles", [])),
+        time_taken=result_dict.get("time_taken"),
+        status="success" if result_dict.get("success") else "error",
+        error_message=result_dict.get("error"),
     )
 
     return result
@@ -256,6 +319,7 @@ async def search_google_jobs(
     request: GoogleJobsRequest,
     response: Response,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Search Google Careers and return structured job listing data."""
     # Rate limiting
@@ -281,6 +345,20 @@ async def search_google_jobs(
         sort_by=request.sort_by,
     )
 
+    result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else result.__dict__
+    await save_data_query(
+        db,
+        user_id=user.id,
+        platform="google",
+        operation="jobs",
+        query_params=request.model_dump(),
+        result=result_dict,
+        result_count=len(result_dict.get("jobs", [])),
+        time_taken=result_dict.get("time_taken"),
+        status="success" if result_dict.get("success") else "error",
+        error_message=result_dict.get("error"),
+    )
+
     return result
 
 
@@ -303,6 +381,7 @@ async def search_google_images(
     request: GoogleImagesRequest,
     response: Response,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Search Google Images and return structured image data."""
     # Rate limiting
@@ -329,6 +408,20 @@ async def search_google_images(
         licence=request.licence,
     )
 
+    result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else result.__dict__
+    await save_data_query(
+        db,
+        user_id=user.id,
+        platform="google",
+        operation="images",
+        query_params=request.model_dump(),
+        result=result_dict,
+        result_count=len(result_dict.get("images", [])),
+        time_taken=result_dict.get("time_taken"),
+        status="success" if result_dict.get("success") else "error",
+        error_message=result_dict.get("error"),
+    )
+
     return result
 
 
@@ -350,6 +443,7 @@ async def search_google_flights(
     request: GoogleFlightsRequest,
     response: Response,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Search Google Flights and return structured flight data."""
     # Validate passenger count
@@ -385,6 +479,20 @@ async def search_google_flights(
         country=request.country,
     )
 
+    result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else result.__dict__
+    await save_data_query(
+        db,
+        user_id=user.id,
+        platform="google",
+        operation="flights",
+        query_params=request.model_dump(),
+        result=result_dict,
+        result_count=len(result_dict.get("flights", [])),
+        time_taken=result_dict.get("time_taken"),
+        status="success" if result_dict.get("success") else "error",
+        error_message=result_dict.get("error"),
+    )
+
     return result
 
 
@@ -407,6 +515,7 @@ async def search_google_finance(
     request: GoogleFinanceRequest,
     response: Response,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get Google Finance market overview or stock quote."""
     # Rate limiting
@@ -430,5 +539,19 @@ async def search_google_finance(
             language=request.language,
             country=request.country,
         )
+
+    result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else result.__dict__
+    await save_data_query(
+        db,
+        user_id=user.id,
+        platform="google",
+        operation="finance",
+        query_params=request.model_dump(),
+        result=result_dict,
+        result_count=1,
+        time_taken=result_dict.get("time_taken"),
+        status="success" if result_dict.get("success") else "error",
+        error_message=result_dict.get("error"),
+    )
 
     return result

@@ -10,6 +10,7 @@ from app.models.monitor import Monitor, MonitorCheck
 from app.models.usage_quota import UsageQuota
 from app.models.password_reset_token import PasswordResetToken
 from app.models.email_verification_token import EmailVerificationToken
+from app.models.data_query import DataQuery
 
 __all__ = [
     "User",
@@ -25,4 +26,5 @@ __all__ = [
     "UsageQuota",
     "PasswordResetToken",
     "EmailVerificationToken",
+    "DataQuery",
 ]
