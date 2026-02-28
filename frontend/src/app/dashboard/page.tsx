@@ -239,6 +239,10 @@ export default function DashboardPage() {
   const [recentJobs, setRecentJobs] = useState<Job[]>([]);
   const [activeJobs, setActiveJobs] = useState<Job[]>([]);
   const [quota, setQuota] = useState<QuotaData | null>(null);
+  const [dataQueries, setDataQueries] = useState<Array<{
+    id: string; platform: string; operation: string; query_summary: string;
+    result_count: number; time_taken: number | null; status: string; created_at: string | null;
+  }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -256,12 +260,13 @@ export default function DashboardPage() {
     setError("");
 
     try {
-      const [statsRes, domainsRes, historyRes, activeRes, quotaRes] = await Promise.all([
+      const [statsRes, domainsRes, historyRes, activeRes, quotaRes, dataQueriesRes] = await Promise.all([
         api.getUsageStats(),
         api.getTopDomains(),
         api.getUsageHistory({ per_page: 15, sort_by: "created_at", sort_dir: "desc" }),
         api.getUsageHistory({ per_page: 10, status: "running", sort_by: "created_at", sort_dir: "desc" }),
         api.getQuota().catch(() => null),
+        api.getDataHistory({ limit: 10 }).catch(() => null),
       ]);
 
       setStats(statsRes as UsageStats);
@@ -277,6 +282,7 @@ export default function DashboardPage() {
       setActiveJobs((activeRaw?.jobs ?? []).filter((j: Job) => j.status === "running" || j.status === "pending"));
 
       if (quotaRes) setQuota(quotaRes as QuotaData);
+      if (dataQueriesRes) setDataQueries((dataQueriesRes as any)?.queries ?? []);
     } catch (err: any) {
       setError(err.message || "Failed to load dashboard data");
     } finally {
@@ -1004,6 +1010,69 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+
+            {/* Recent Data Queries */}
+            {dataQueries.length > 0 && (
+              <div className="border border-border bg-card/50 p-6 mt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Database className="h-5 w-5 text-violet-400" />
+                    <h2 className="text-lg font-bold text-foreground font-mono">Recent Data Queries</h2>
+                    <span className="text-xs font-mono text-muted-foreground ml-1">(Scrapper Pool)</span>
+                  </div>
+                  <Link
+                    href="/scrapper-pool"
+                    className="text-sm font-mono text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                  >
+                    View all <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left">
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Platform</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Operation</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Query</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono text-right">Results</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono text-right">Time</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono text-right">When</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dataQueries.map((q) => (
+                        <tr
+                          key={q.id}
+                          className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors"
+                          onClick={() => router.push(`/scrapper-pool?view=${q.id}`)}
+                        >
+                          <td className="py-2.5 pr-3">
+                            <span className="capitalize text-foreground font-mono">{q.platform}</span>
+                          </td>
+                          <td className="py-2.5 pr-3">
+                            <span className="capitalize text-foreground font-mono">{q.operation}</span>
+                          </td>
+                          <td className="py-2.5 pr-3 max-w-[300px]">
+                            <span className="text-muted-foreground truncate block font-mono">
+                              {q.query_summary || "\u2014"}
+                            </span>
+                          </td>
+                          <td className="py-2.5 pr-3 text-right tabular-nums text-foreground font-mono">
+                            {q.result_count}
+                          </td>
+                          <td className="py-2.5 pr-3 text-right tabular-nums text-foreground font-mono">
+                            {q.time_taken != null ? `${q.time_taken.toFixed(1)}s` : "\u2014"}
+                          </td>
+                          <td className="py-2.5 text-right text-muted-foreground whitespace-nowrap font-mono">
+                            {q.created_at ? timeAgo(q.created_at) : "\u2014"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

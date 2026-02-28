@@ -40,3 +40,6 @@ class User(Base):
     proxy_configs = relationship(
         "ProxyConfig", back_populates="user", cascade="all, delete-orphan"
     )
+    data_queries = relationship(
+        "DataQuery", back_populates="user", cascade="all, delete-orphan"
+    )

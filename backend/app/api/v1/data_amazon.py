@@ -7,12 +7,15 @@ Endpoints:
 import logging
 
 from fastapi import APIRouter, Depends, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.config import settings
+from app.core.database import get_db
 from app.core.exceptions import RateLimitError
 from app.core.rate_limiter import check_rate_limit_full
 from app.models.user import User
+from app.services.data_persistence import save_data_query
 from app.schemas.data_amazon import (
     AmazonProductsRequest,
     AmazonProductsResponse,
@@ -41,6 +44,7 @@ async def search_amazon_products(
     request: AmazonProductsRequest,
     response: Response,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Search Amazon and return structured product data."""
     # Rate limiting
@@ -63,6 +67,20 @@ async def search_amazon_products(
         max_price=request.max_price,
         prime_only=request.prime_only,
         language=request.language,
+    )
+
+    result_dict = result if isinstance(result, dict) else result.model_dump() if hasattr(result, "model_dump") else result.__dict__
+    await save_data_query(
+        db,
+        user_id=user.id,
+        platform="amazon",
+        operation="products",
+        query_params=request.model_dump(),
+        result=result_dict,
+        result_count=len(result_dict.get("products", [])),
+        time_taken=result_dict.get("time_taken"),
+        status="success" if result_dict.get("success") else "error",
+        error_message=result_dict.get("error"),
     )
 
     return result

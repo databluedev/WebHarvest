@@ -588,9 +588,13 @@ export default function ScrapperPoolPage() {
                   <span className="text-[12px] text-muted-foreground font-mono uppercase tracking-[0.1em]">Active</span>
                   <span className="text-[20px] font-bold font-mono text-emerald-400">{SCRAPER_APIS.filter((a) => a.status === "active").length}</span>
                 </div>
-                <div className="px-6 py-4 flex items-center justify-between">
+                <div className="px-6 py-4 border-b border-border/30 flex items-center justify-between">
                   <span className="text-[12px] text-muted-foreground font-mono uppercase tracking-[0.1em]">Coming Soon</span>
                   <span className="text-[20px] font-bold font-mono text-amber-400">{SCRAPER_APIS.filter((a) => a.status === "coming-soon").length}</span>
+                </div>
+                <div className="px-6 py-4 flex items-center justify-between">
+                  <span className="text-[12px] text-muted-foreground font-mono uppercase tracking-[0.1em]">History</span>
+                  <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-emerald-400/30 text-emerald-400">Auto-saved</span>
                 </div>
               </div>
             </div>

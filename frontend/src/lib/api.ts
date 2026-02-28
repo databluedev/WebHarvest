@@ -979,6 +979,71 @@ class ApiClient {
     });
   }
 
+  // ── Scrapper Pool: Data History ─────────────────────────
+  async getDataHistory(params: {
+    platform?: string;
+    operation?: string;
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    const query = new URLSearchParams();
+    if (params.platform) query.set("platform", params.platform);
+    if (params.operation) query.set("operation", params.operation);
+    if (params.limit) query.set("limit", String(params.limit));
+    if (params.offset) query.set("offset", String(params.offset));
+    const qs = query.toString();
+    return this.request<{
+      success: boolean;
+      queries: Array<{
+        id: string;
+        platform: string;
+        operation: string;
+        query_summary: string;
+        result_count: number;
+        time_taken: number | null;
+        status: string;
+        created_at: string | null;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/v1/data/history${qs ? `?${qs}` : ""}`);
+  }
+
+  async getDataQueryStats() {
+    return this.request<{
+      success: boolean;
+      total_queries: number;
+      by_platform: Record<string, number>;
+      by_operation: Record<string, number>;
+    }>("/v1/data/history/stats");
+  }
+
+  async getDataQuery(queryId: string) {
+    return this.request<{
+      success: boolean;
+      query: {
+        id: string;
+        platform: string;
+        operation: string;
+        query_params: any;
+        result: any;
+        result_count: number;
+        time_taken: number | null;
+        status: string;
+        error_message: string | null;
+        created_at: string | null;
+      };
+    }>(`/v1/data/history/${queryId}`);
+  }
+
+  async deleteDataQuery(queryId: string) {
+    return this.request<{ success: boolean; message: string }>(
+      `/v1/data/history/${queryId}`,
+      { method: "DELETE" }
+    );
+  }
+
   async googleMaps(params: {
     query?: string;
     coordinates?: string;

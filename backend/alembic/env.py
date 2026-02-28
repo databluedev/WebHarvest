@@ -18,6 +18,7 @@ from app.models import (  # noqa: F401
     ProxyConfig,
     PasswordResetToken,
     EmailVerificationToken,
+    DataQuery,
 )
 
 config = context.config
