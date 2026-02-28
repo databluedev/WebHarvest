@@ -16,6 +16,7 @@ from app.api.v1 import (
     monitor,
     webhook,
     jobs,
+    data_amazon,
     data_google,
 )
 
@@ -36,4 +37,5 @@ api_router.include_router(monitor.router, prefix="/monitors", tags=["Monitors"])
 api_router.include_router(webhook.router, prefix="/webhooks", tags=["Webhooks"])
 api_router.include_router(jobs.router, prefix="/jobs", tags=["Jobs"])
 api_router.include_router(admin.router, prefix="/admin", tags=["Admin"])
+api_router.include_router(data_amazon.router, prefix="/data/amazon", tags=["Data: Amazon"])
 api_router.include_router(data_google.router, prefix="/data/google", tags=["Data: Google"])
