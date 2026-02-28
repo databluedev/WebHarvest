@@ -491,76 +491,98 @@ def process_crawl(self, job_id: str, config: dict):
                 """Capture viewport screenshot bypassing the browser pool semaphore.
 
                 Creates a lightweight browser context directly on the Chromium
-                instance.  This avoids semaphore contention (race strategies
-                and CrawlSession can exhaust the pool) while still producing
-                a realistic screenshot with CSS, images, and JS execution.
+                instance.  Retries once after a browser crash (forces relaunch).
 
-                Uses set_content with <base href> injection so the already-fetched
-                HTML renders with proper resource resolution.
+                HTML is capped at 512 KB to prevent OOM crashes — only the
+                above-the-fold content matters for a 1280x720 viewport.
                 """
                 import re as _re
                 from app.services.browser import browser_pool
 
-                await browser_pool.initialize()
-                chromium = browser_pool._chromium
-                if not chromium or not chromium.is_connected():
-                    logger.warning(f"Screenshot skipped for {url}: no Chromium browser")
-                    return None
-
                 # Grab raw HTML from the fetch phase if available
-                raw_html = None
+                raw_html_orig = None
                 if "fetch_result" in item:
-                    raw_html = item["fetch_result"].get("raw_html")
+                    raw_html_orig = item["fetch_result"].get("raw_html")
 
-                context = None
-                try:
-                    context = await chromium.new_context(
-                        viewport={"width": 1280, "height": 720},
-                        ignore_https_errors=True,
-                    )
-                    page = await context.new_page()
+                # Cap HTML size to prevent browser OOM (viewport is 1280x720,
+                # only above-the-fold content matters for screenshot).
+                _MAX_HTML = 512_000
+                if raw_html_orig and len(raw_html_orig) > _MAX_HTML:
+                    raw_html_orig = raw_html_orig[:_MAX_HTML] + "</body></html>"
 
-                    if raw_html:
-                        # Inject <base href> so relative URLs resolve
-                        base_tag = f'<base href="{url}">'
-                        if _re.search(r"<head[^>]*>", raw_html, _re.IGNORECASE):
-                            raw_html = _re.sub(
-                                r"(<head[^>]*>)",
-                                rf"\1{base_tag}",
+                for _attempt in range(2):
+                    # Ensure browser is alive (reinitializes if crashed)
+                    await browser_pool.initialize()
+                    chromium = browser_pool._chromium
+                    if not chromium or not chromium.is_connected():
+                        logger.warning(f"Screenshot skipped for {url}: no Chromium browser")
+                        return None
+
+                    context = None
+                    try:
+                        context = await chromium.new_context(
+                            viewport={"width": 1280, "height": 720},
+                            ignore_https_errors=True,
+                        )
+                        page = await context.new_page()
+
+                        if raw_html_orig:
+                            raw_html = raw_html_orig
+                            # Inject <base href> so relative URLs resolve
+                            base_tag = f'<base href="{url}">'
+                            if _re.search(r"<head[^>]*>", raw_html, _re.IGNORECASE):
+                                raw_html = _re.sub(
+                                    r"(<head[^>]*>)",
+                                    rf"\1{base_tag}",
+                                    raw_html,
+                                    count=1,
+                                    flags=_re.IGNORECASE,
+                                )
+                            else:
+                                raw_html = base_tag + raw_html
+                            await page.set_content(
                                 raw_html,
-                                count=1,
-                                flags=_re.IGNORECASE,
+                                wait_until="domcontentloaded",
+                                timeout=12000,
                             )
+                            # Let CSS / images / JS settle
+                            await page.wait_for_timeout(2000)
                         else:
-                            raw_html = base_tag + raw_html
-                        await page.set_content(
-                            raw_html,
-                            wait_until="domcontentloaded",
-                            timeout=12000,
-                        )
-                        # Let CSS / images / JS settle
-                        await page.wait_for_timeout(2000)
-                    else:
-                        await page.goto(
-                            url,
-                            wait_until="domcontentloaded",
-                            timeout=15000,
-                        )
-                        await page.wait_for_timeout(1000)
+                            await page.goto(
+                                url,
+                                wait_until="domcontentloaded",
+                                timeout=15000,
+                            )
+                            await page.wait_for_timeout(1000)
 
-                    _ss_bytes = await page.screenshot(
-                        type="png", full_page=False
-                    )
-                    return base64.b64encode(_ss_bytes).decode()
-                except Exception as e:
-                    logger.warning(f"Screenshot capture failed for {url}: {e}")
-                    return None
-                finally:
-                    if context:
-                        try:
-                            await context.close()
-                        except Exception:
-                            pass
+                        _ss_bytes = await page.screenshot(
+                            type="png", full_page=False
+                        )
+                        return base64.b64encode(_ss_bytes).decode()
+                    except Exception as e:
+                        logger.warning(
+                            f"Screenshot attempt {_attempt + 1} failed for {url}: {e}"
+                        )
+                        if context:
+                            try:
+                                await context.close()
+                            except Exception:
+                                pass
+                            context = None
+                        if _attempt == 0:
+                            # Browser likely crashed — force relaunch before retry
+                            try:
+                                await browser_pool._relaunch_browser(use_firefox=False)
+                            except Exception:
+                                pass
+                            continue
+                        return None
+                    finally:
+                        if context:
+                            try:
+                                await context.close()
+                            except Exception:
+                                pass
 
             async def extract_consumer():
                 """Extract content from fetched pages, save to DB."""
