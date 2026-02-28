@@ -128,7 +128,7 @@ const SCRAPER_APIS: ScraperApi[] = [
     description: "Product search with pricing, ratings, reviews, badges, and ASIN data",
     icon: Package,
     accent: "orange",
-    status: "active",
+    status: "coming-soon",
     category: "other",
   },
   {
