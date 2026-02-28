@@ -138,7 +138,22 @@ def _is_valid_search_page(html: str) -> bool:
     return True
 
 
-async def _fetch_via_curl_cffi(url: str, domain: str) -> str | None:
+async def _get_proxy_url() -> str | None:
+    """Get a proxy URL from the builtin proxy pool."""
+    try:
+        from app.services.proxy import get_builtin_proxy_manager, ProxyManager
+
+        pm = await get_builtin_proxy_manager()
+        if pm and pm.has_proxies:
+            proxy = await pm.get_random_weighted()
+            if proxy:
+                return ProxyManager.to_httpx(proxy)
+    except Exception as e:
+        logger.debug("Could not get proxy: %s", e)
+    return None
+
+
+async def _fetch_via_curl_cffi(url: str, domain: str, proxy_url: str | None = None) -> str | None:
     """Fetch with curl_cffi — required for Amazon's TLS fingerprinting."""
     try:
         from curl_cffi.requests import AsyncSession
@@ -147,47 +162,99 @@ async def _fetch_via_curl_cffi(url: str, domain: str) -> str | None:
         headers["Referer"] = f"https://www.{domain}/"
 
         async with AsyncSession(impersonate="chrome124") as session:
-            resp = await session.get(
-                url,
-                headers=headers,
-                timeout=20,
-                allow_redirects=True,
-            )
+            kwargs: dict = {
+                "headers": headers,
+                "timeout": 20,
+                "allow_redirects": True,
+            }
+            if proxy_url:
+                kwargs["proxy"] = proxy_url
+
+            resp = await session.get(url, **kwargs)
             if resp.status_code == 200 and _is_valid_search_page(resp.text):
                 return resp.text
-            logger.warning("Amazon curl_cffi returned %d", resp.status_code)
+            logger.warning(
+                "Amazon curl_cffi returned %d%s",
+                resp.status_code,
+                " (via proxy)" if proxy_url else "",
+            )
     except Exception as e:
         logger.warning("curl_cffi Amazon fetch failed: %s", e)
     return None
 
 
-async def _fetch_via_httpx(url: str, domain: str) -> str | None:
+async def _fetch_via_httpx(url: str, domain: str, proxy_url: str | None = None) -> str | None:
     """Fetch with httpx — fallback."""
     try:
         headers = {**_AMAZON_HEADERS}
         headers["Referer"] = f"https://www.{domain}/"
 
-        async with httpx.AsyncClient(
-            timeout=20,
-            follow_redirects=True,
-            headers=headers,
-        ) as client:
+        kwargs: dict = {
+            "timeout": 20,
+            "follow_redirects": True,
+            "headers": headers,
+        }
+        if proxy_url:
+            kwargs["proxy"] = proxy_url
+
+        async with httpx.AsyncClient(**kwargs) as client:
             resp = await client.get(url)
             if resp.status_code == 200 and _is_valid_search_page(resp.text):
                 return resp.text
-            logger.warning("Amazon httpx returned %d", resp.status_code)
+            logger.warning(
+                "Amazon httpx returned %d%s",
+                resp.status_code,
+                " (via proxy)" if proxy_url else "",
+            )
     except Exception as e:
         logger.warning("httpx Amazon fetch failed: %s", e)
     return None
 
 
+async def _fetch_via_nodriver(url: str) -> str | None:
+    """Fetch with nodriver — real browser, bypasses bot detection."""
+    try:
+        from app.services.nodriver_helper import fetch_page_nodriver
+
+        result = await fetch_page_nodriver(
+            url,
+            wait_selector='div[data-component-type="s-search-result"]',
+            wait_selector_fallback=".s-search-results",
+            wait_time=4,
+        )
+        html = result[0] if isinstance(result, tuple) else result
+        if html and _is_valid_search_page(html):
+            return html
+    except Exception as e:
+        logger.warning("nodriver Amazon fetch failed: %s", e)
+    return None
+
+
 async def _fetch_html(url: str, domain: str) -> str | None:
-    """Try fetch strategies: curl_cffi → httpx."""
+    """Try fetch strategies: direct → proxy → nodriver."""
+    # 1. Direct (no proxy) — works from residential IPs
     html = await _fetch_via_curl_cffi(url, domain)
     if html:
         return html
 
     html = await _fetch_via_httpx(url, domain)
+    if html:
+        return html
+
+    # 2. Retry with proxy if available (Amazon blocks datacenter IPs)
+    proxy_url = await _get_proxy_url()
+    if proxy_url:
+        logger.info("Retrying Amazon fetch with proxy")
+        html = await _fetch_via_curl_cffi(url, domain, proxy_url=proxy_url)
+        if html:
+            return html
+
+        html = await _fetch_via_httpx(url, domain, proxy_url=proxy_url)
+        if html:
+            return html
+
+    # 3. nodriver (real browser) — last resort, bypasses bot detection
+    html = await _fetch_via_nodriver(url)
     if html:
         return html
 
