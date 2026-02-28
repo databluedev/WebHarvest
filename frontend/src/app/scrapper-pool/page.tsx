@@ -3105,7 +3105,7 @@ export default function ScrapperPoolPage() {
                             className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-orange-500/40 transition-colors"
                           >
                             {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
-                              <option key={n} value={n}>{n} {n === 1 ? "page" : "pages"} (~{n * 48} results)</option>
+                              <option key={n} value={n}>{n}</option>
                             ))}
                           </select>
                           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />

@@ -1,8 +1,11 @@
 """Amazon Products scraper — HTTP-only with DOM parsing.
 
-Strategy chain:
-1. curl_cffi with Chrome TLS impersonation (required — Amazon 503s plain requests)
+Strategy chain (per page, with retry):
+1. curl_cffi with Chrome TLS impersonation (works from residential IPs)
 2. httpx fallback
+3. Proxy variants of curl_cffi / httpx (if BUILTIN_PROXY_URL configured)
+4. Stealth engine (Patchright — if STEALTH_ENGINE_URL configured)
+5. nodriver (real browser via NoDriverPool)
 
 Product data is parsed from the search results DOM using BeautifulSoup.
 Amazon returns ~48 products per page, max 20 pages (~960 products).
@@ -13,6 +16,7 @@ Results are cached in Redis for 5 minutes.
 import asyncio
 import hashlib
 import logging
+import random
 import re
 import time
 from urllib.parse import quote_plus
@@ -211,7 +215,45 @@ async def _fetch_via_httpx(url: str, domain: str, proxy_url: str | None = None) 
     return None
 
 
-async def _fetch_via_nodriver(url: str) -> str | None:
+async def _fetch_via_stealth_engine(url: str, domain: str) -> str | None:
+    """Fetch via stealth engine sidecar (Patchright + fingerprint spoofing)."""
+    try:
+        from app.config import settings as app_settings
+
+        stealth_url = app_settings.STEALTH_ENGINE_URL
+        if not stealth_url:
+            return None
+
+        payload = {
+            "url": url,
+            "timeout": 25000,
+            "wait_after_load": 3000,
+            "use_firefox": False,
+            "screenshot": False,
+            "mobile": False,
+            "headers": {
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": f"https://www.{domain}/",
+            },
+        }
+
+        async with httpx.AsyncClient(timeout=35) as client:
+            resp = await client.post(f"{stealth_url}/scrape", json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                html = data.get("html", "")
+                if html and _is_valid_search_page(html):
+                    logger.info("Stealth engine succeeded for Amazon")
+                    return html
+                logger.warning("Stealth engine: invalid page (CAPTCHA or empty)")
+            else:
+                logger.warning("Stealth engine returned %d", resp.status_code)
+    except Exception as e:
+        logger.warning("Stealth engine Amazon fetch failed: %s", e)
+    return None
+
+
+async def _fetch_via_nodriver(url: str, wait_time: float = 5) -> str | None:
     """Fetch with nodriver — real browser, bypasses bot detection."""
     try:
         from app.services.nodriver_helper import fetch_page_nodriver
@@ -220,18 +262,26 @@ async def _fetch_via_nodriver(url: str) -> str | None:
             url,
             wait_selector='div[data-component-type="s-search-result"]',
             wait_selector_fallback=".s-search-results",
-            wait_time=4,
+            wait_time=wait_time,
         )
         html = result[0] if isinstance(result, tuple) else result
         if html and _is_valid_search_page(html):
             return html
+        logger.warning(
+            "nodriver fetch: %d chars, valid=%s",
+            len(html) if html else 0,
+            bool(html and _is_valid_search_page(html)) if html else False,
+        )
     except Exception as e:
         logger.warning("nodriver Amazon fetch failed: %s", e)
     return None
 
 
 async def _fetch_html(url: str, domain: str) -> str | None:
-    """Try fetch strategies: direct → proxy → nodriver."""
+    """Try fetch strategies with fallback chain.
+
+    Order: direct HTTP → proxy HTTP → stealth engine → nodriver (with retry).
+    """
     # 1. Direct (no proxy) — works from residential IPs
     html = await _fetch_via_curl_cffi(url, domain)
     if html:
@@ -253,8 +303,19 @@ async def _fetch_html(url: str, domain: str) -> str | None:
         if html:
             return html
 
-    # 3. nodriver (real browser) — last resort, bypasses bot detection
-    html = await _fetch_via_nodriver(url)
+    # 3. Stealth engine (Patchright with full fingerprint spoofing)
+    html = await _fetch_via_stealth_engine(url, domain)
+    if html:
+        return html
+
+    # 4. nodriver (real browser) — try twice with different wait times
+    html = await _fetch_via_nodriver(url, wait_time=5)
+    if html:
+        return html
+
+    # Retry nodriver with longer wait (Amazon sometimes loads late)
+    await asyncio.sleep(random.uniform(1, 3))
+    html = await _fetch_via_nodriver(url, wait_time=8)
     if html:
         return html
 
@@ -534,7 +595,8 @@ async def amazon_products(
     pages_fetched = 0
     total_results_text: str | None = None
     first_url: str | None = None
-    consecutive_empty = 0
+    consecutive_fetch_fails = 0  # Fetch completely failed (503/CAPTCHA)
+    consecutive_empty_results = 0  # Fetch succeeded but 0 new products
 
     current_page = page
     while current_page <= 20 and pages_fetched < max_pages:
@@ -552,13 +614,23 @@ async def amazon_products(
 
         html = await _fetch_html(url, domain)
         if not html:
-            logger.warning("Amazon page %d fetch failed", current_page)
-            consecutive_empty += 1
-            if consecutive_empty >= 2:
+            consecutive_fetch_fails += 1
+            logger.warning(
+                "Amazon page %d fetch failed (%d consecutive)",
+                current_page,
+                consecutive_fetch_fails,
+            )
+            # Be more lenient with fetch failures — Amazon bot detection is
+            # transient, so keep trying for a few more pages before giving up
+            if consecutive_fetch_fails >= 3:
+                logger.info("Stopping: %d consecutive fetch failures", consecutive_fetch_fails)
                 break
             current_page += 1
+            # Longer delay after failure to let bot detection cool down
+            await asyncio.sleep(random.uniform(3, 6))
             continue
 
+        consecutive_fetch_fails = 0
         pages_fetched += 1
 
         # Parse total results from first page
@@ -579,12 +651,12 @@ async def amazon_products(
                 new_count += 1
 
         if new_count == 0:
-            consecutive_empty += 1
-            if consecutive_empty >= 2:
-                logger.info("Stopping: %d consecutive pages with no new products", consecutive_empty)
+            consecutive_empty_results += 1
+            if consecutive_empty_results >= 2:
+                logger.info("Stopping: %d consecutive pages with no new products", consecutive_empty_results)
                 break
         else:
-            consecutive_empty = 0
+            consecutive_empty_results = 0
 
         # Check if we have enough results
         if num_results > 0 and len(all_products) >= num_results:
@@ -593,9 +665,9 @@ async def amazon_products(
 
         current_page += 1
 
-        # Delay between pages to avoid bot detection
+        # Randomized delay between pages to avoid bot detection
         if current_page <= 20 and pages_fetched < max_pages:
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(random.uniform(2, 4.5))
 
     # Re-number positions sequentially
     for i, product in enumerate(all_products):
