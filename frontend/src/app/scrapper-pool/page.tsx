@@ -257,11 +257,9 @@ export default function ScrapperPoolPage() {
 
   // Amazon Products
   const [amazonQuery, setAmazonQuery] = useState("");
-  const [amazonNumResults, setAmazonNumResults] = useState(48);
+  const [amazonPages, setAmazonPages] = useState(1);
   const [amazonDomain, setAmazonDomain] = useState("amazon.in");
   const [amazonSortBy, setAmazonSortBy] = useState("");
-  const [amazonMinPrice, setAmazonMinPrice] = useState("");
-  const [amazonMaxPrice, setAmazonMaxPrice] = useState("");
   const [amazonPrimeOnly, setAmazonPrimeOnly] = useState(false);
 
   const handleCategorySwitch = (key: string) => {
@@ -476,11 +474,9 @@ export default function ScrapperPoolPage() {
     try {
       const res = await api.amazonProducts({
         query: amazonQuery.trim(),
-        num_results: amazonNumResults,
+        num_results: amazonPages * 48,
         domain: amazonDomain,
         ...(amazonSortBy && { sort_by: amazonSortBy }),
-        ...(amazonMinPrice && { min_price: Number(amazonMinPrice) }),
-        ...(amazonMaxPrice && { max_price: Number(amazonMaxPrice) }),
         prime_only: amazonPrimeOnly || undefined,
       });
       if (res.error) {
@@ -3078,7 +3074,7 @@ export default function ScrapperPoolPage() {
                       </div>
                     </div>
 
-                    {/* Domain + Num Results */}
+                    {/* Domain + Pages */}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Domain</label>
@@ -3101,16 +3097,19 @@ export default function ScrapperPoolPage() {
                         </div>
                       </div>
                       <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Max Results</label>
-                        <input
-                          type="number"
-                          value={amazonNumResults}
-                          onChange={(e) => setAmazonNumResults(Number(e.target.value))}
-                          min={0}
-                          max={960}
-                          placeholder="0 = all"
-                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/40 transition-colors"
-                        />
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Pages</label>
+                        <div className="relative">
+                          <select
+                            value={amazonPages}
+                            onChange={(e) => setAmazonPages(Number(e.target.value))}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-orange-500/40 transition-colors"
+                          >
+                            {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                              <option key={n} value={n}>{n} {n === 1 ? "page" : "pages"} (~{n * 48} results)</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
                       </div>
                     </div>
 
@@ -3130,32 +3129,6 @@ export default function ScrapperPoolPage() {
                           <option value="newest">Newest Arrivals</option>
                         </select>
                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
-                      </div>
-                    </div>
-
-                    {/* Price Range */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Min Price</label>
-                        <input
-                          type="number"
-                          value={amazonMinPrice}
-                          onChange={(e) => setAmazonMinPrice(e.target.value)}
-                          min={0}
-                          placeholder="No min"
-                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/40 transition-colors"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Max Price</label>
-                        <input
-                          type="number"
-                          value={amazonMaxPrice}
-                          onChange={(e) => setAmazonMaxPrice(e.target.value)}
-                          min={0}
-                          placeholder="No max"
-                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/40 transition-colors"
-                        />
                       </div>
                     </div>
 
