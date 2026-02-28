@@ -171,12 +171,12 @@ export default function LandingPage() {
   const ctaLabel = user ? "Open Playground" : "Deploy Now";
 
   return (
-    <div className="min-h-screen bg-[#050505] text-[#f0f0f0] overflow-x-hidden">
+    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
 
       {/* ═══ NAV ═══ */}
-      <nav className="fixed top-0 left-0 right-0 z-50 px-6 backdrop-blur-xl bg-[#050505]/80 border-b border-[#1a1a1a]">
+      <nav className="fixed top-0 left-0 right-0 z-50 px-6 backdrop-blur-xl bg-background/80 border-b border-border">
         <div className="max-w-[1280px] mx-auto flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-2.5 no-underline text-[#f0f0f0]">
+          <Link href="/" className="flex items-center gap-2.5 no-underline text-foreground">
             <Logo />
             <span className="font-display font-extrabold text-lg tracking-[2px]">WEBHARVEST</span>
           </Link>
@@ -184,7 +184,7 @@ export default function LandingPage() {
             {[["Features", "#features"], ["How It Works", "#how"], ["Pricing", "#pricing"], ["GitHub", "https://github.com/Takezo49/WebHarvest"]].map(([label, href]) => (
               <li key={label}>
                 <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
-                  className="font-mono text-xs tracking-[1px] uppercase text-[#777] hover:text-emerald-500 transition-colors no-underline">
+                  className="font-mono text-xs tracking-[1px] uppercase text-muted-foreground hover:text-emerald-500 transition-colors no-underline">
                   {label}
                 </a>
               </li>
@@ -192,7 +192,7 @@ export default function LandingPage() {
           </ul>
           {authChecked && (
             <Link href={ctaHref}
-              className="font-mono text-xs tracking-[1px] uppercase px-5 py-2 border border-emerald-500 text-emerald-500 hover:bg-emerald-500 hover:text-[#050505] hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all no-underline">
+              className="font-mono text-xs tracking-[1px] uppercase px-5 py-2 border border-emerald-500 text-emerald-500 hover:bg-emerald-500 hover:text-background hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all no-underline">
               {ctaLabel} →
             </Link>
           )}
@@ -223,7 +223,7 @@ export default function LandingPage() {
               </Reveal>
 
               <Reveal delay={160}>
-                <p className="text-[17px] leading-[1.7] text-[#777] max-w-[480px] mb-10">
+                <p className="text-[17px] leading-[1.7] text-muted-foreground max-w-[480px] mb-10">
                   The open-source web scraping platform. Deploy on your infrastructure, scrape at scale with a 5-tier anti-bot pipeline, and extract structured data with AI.
                 </p>
               </Reveal>
@@ -231,18 +231,18 @@ export default function LandingPage() {
               <Reveal delay={240}>
                 <div className="flex flex-wrap gap-4 mb-10">
                   <Link href={ctaHref}
-                    className="font-mono text-[13px] font-semibold tracking-[1px] uppercase px-8 py-3.5 bg-emerald-500 text-[#050505] hover:shadow-[0_0_40px_rgba(16,185,129,0.15)] hover:-translate-y-0.5 transition-all no-underline inline-flex items-center gap-2">
+                    className="font-mono text-[13px] font-semibold tracking-[1px] uppercase px-8 py-3.5 bg-emerald-500 text-background hover:shadow-[0_0_40px_rgba(16,185,129,0.15)] hover:-translate-y-0.5 transition-all no-underline inline-flex items-center gap-2">
                     {ctaLabel} →
                   </Link>
                   <a href="https://github.com/Takezo49/WebHarvest" target="_blank" rel="noopener noreferrer"
-                    className="font-mono text-[13px] font-medium tracking-[1px] uppercase px-8 py-3.5 border border-[#2a2a2a] text-[#777] hover:border-[#777] hover:text-[#f0f0f0] transition-all no-underline inline-flex items-center gap-2">
+                    className="font-mono text-[13px] font-medium tracking-[1px] uppercase px-8 py-3.5 border border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground transition-all no-underline inline-flex items-center gap-2">
                     <GitHubIcon /> View on GitHub
                   </a>
                 </div>
               </Reveal>
 
               <Reveal delay={320}>
-                <div className="flex items-center gap-5 text-[13px] text-[#444]">
+                <div className="flex items-center gap-5 text-[13px] text-muted-foreground/50">
                   <div className="flex gap-0.5 text-amber-500 text-sm">{"★★★★★"}</div>
                   <span>Trusted by 2,400+ developers</span>
                 </div>
@@ -252,7 +252,7 @@ export default function LandingPage() {
             {/* Hero card */}
             <Reveal delay={160}>
               <div className="animate-landing-float">
-                <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-6 relative overflow-hidden">
+                <div className="bg-card border border-border p-6 relative overflow-hidden">
                   {/* Top gradient line */}
                   <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500 to-amber-500" />
 
@@ -265,24 +265,24 @@ export default function LandingPage() {
                     {[
                       { label: "Pages/min", value: "847", cls: "text-emerald-500" },
                       { label: "Success", value: "98.4%", cls: "text-amber-500" },
-                      { label: "Avg Resp", value: "1.2s", cls: "text-[#f0f0f0]" },
+                      { label: "Avg Resp", value: "1.2s", cls: "text-foreground" },
                     ].map((s) => (
-                      <div key={s.label} className="bg-[#111] border border-[#1a1a1a] p-3.5">
-                        <div className="font-mono text-[10px] tracking-[1px] text-[#444] uppercase mb-1.5">{s.label}</div>
+                      <div key={s.label} className="bg-muted border border-border p-3.5">
+                        <div className="font-mono text-[10px] tracking-[1px] text-muted-foreground/50 uppercase mb-1.5">{s.label}</div>
                         <div className={cn("font-mono text-[22px] font-bold", s.cls)}>{s.value}</div>
                       </div>
                     ))}
                   </div>
 
                   {/* Terminal */}
-                  <div className="bg-[#111] border border-[#1a1a1a] p-4">
+                  <div className="bg-muted border border-border p-4">
                     <div className="flex items-center gap-1.5 mb-3">
                       <span className="w-2 h-2 rounded-full bg-red-500" />
                       <span className="w-2 h-2 rounded-full bg-yellow-500" />
                       <span className="w-2 h-2 rounded-full bg-green-500" />
                     </div>
-                    <pre className="font-mono text-[11px] leading-[1.6] text-[#777] overflow-x-auto whitespace-pre">
-                      <span className="text-[#444]"># Scrape any URL in one call</span>{"\n"}
+                    <pre className="font-mono text-[11px] leading-[1.6] text-muted-foreground overflow-x-auto whitespace-pre">
+                      <span className="text-muted-foreground/50"># Scrape any URL in one call</span>{"\n"}
                       curl <span className="text-amber-500">-X POST</span> http://localhost:8000/v1/scrape \{"\n"}
                       {"  "}<span className="text-amber-500">-H</span> <span className="text-amber-500">&quot;Authorization: Bearer wh_...&quot;</span> \{"\n"}
                       {"  "}<span className="text-amber-500">-d</span> {`'{"url": "https://example.com",`}{"\n"}
@@ -297,10 +297,10 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ TICKER ═══ */}
-      <div className="border-t border-b border-[#1a1a1a] py-3 overflow-hidden whitespace-nowrap bg-[#0a0a0a]">
+      <div className="border-t border-b border-border py-3 overflow-hidden whitespace-nowrap bg-card">
         <div className="inline-flex animate-ticker">
           {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
-            <span key={i} className="font-mono text-xs tracking-[1px] px-8 text-[#444]">
+            <span key={i} className="font-mono text-xs tracking-[1px] px-8 text-muted-foreground/50">
               {item.label} <span className={cn("font-semibold", item.color)}>{item.value}</span>
             </span>
           ))}
@@ -313,19 +313,19 @@ export default function LandingPage() {
           <div className="text-center mb-16">
             <Reveal><span className="font-mono text-[11px] tracking-[3px] uppercase text-emerald-500 block mb-4">Architecture</span></Reveal>
             <Reveal delay={80}><h2 className="font-display text-[clamp(32px,4vw,48px)] font-extrabold tracking-[-1px] mb-4">Built for Scale</h2></Reveal>
-            <Reveal delay={160}><p className="text-base text-[#777] max-w-[560px] mx-auto leading-[1.7]">A production-grade scraping engine with every layer designed to bypass, extract, and deliver.</p></Reveal>
+            <Reveal delay={160}><p className="text-base text-muted-foreground max-w-[560px] mx-auto leading-[1.7]">A production-grade scraping engine with every layer designed to bypass, extract, and deliver.</p></Reveal>
           </div>
 
           <div className="landing-feature-grid">
             {FEATURES.map((f, i) => (
               <Reveal key={f.title} delay={i * 60}>
-                <div className="bg-[#0a0a0a] p-10 group transition-all duration-300 hover:bg-[#111] h-full">
-                  <div className="w-11 h-11 border border-[#2a2a2a] flex items-center justify-center mb-6 text-xl text-[#777] transition-all duration-300 group-hover:text-emerald-500 group-hover:border-emerald-500 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+                <div className="bg-card p-10 group transition-all duration-300 hover:bg-muted h-full">
+                  <div className="w-11 h-11 border border-border flex items-center justify-center mb-6 text-xl text-muted-foreground transition-all duration-300 group-hover:text-emerald-500 group-hover:border-emerald-500 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]">
                     {f.icon}
                   </div>
                   <h3 className="font-display text-lg font-bold mb-3">{f.title}</h3>
-                  <p className="text-sm text-[#777] leading-[1.7]">{f.desc}</p>
-                  <div className="font-mono text-[10px] tracking-[1px] text-[#444] mt-4 uppercase">{f.tag}</div>
+                  <p className="text-sm text-muted-foreground leading-[1.7]">{f.desc}</p>
+                  <div className="font-mono text-[10px] tracking-[1px] text-muted-foreground/50 mt-4 uppercase">{f.tag}</div>
                 </div>
               </Reveal>
             ))}
@@ -334,23 +334,23 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ HOW IT WORKS ═══ */}
-      <section className="py-28 bg-[#0a0a0a] border-t border-b border-[#1a1a1a]" id="how">
+      <section className="py-28 bg-card border-t border-b border-border" id="how">
         <div className="max-w-[1280px] mx-auto px-6">
           <div className="text-center mb-16">
             <Reveal><span className="font-mono text-[11px] tracking-[3px] uppercase text-emerald-500 block mb-4">Process</span></Reveal>
             <Reveal delay={80}><h2 className="font-display text-[clamp(32px,4vw,48px)] font-extrabold tracking-[-1px] mb-4">Three Commands to Data</h2></Reveal>
-            <Reveal delay={160}><p className="text-base text-[#777] max-w-[560px] mx-auto leading-[1.7]">From zero to scraping in under two minutes. No managed service, no per-page pricing.</p></Reveal>
+            <Reveal delay={160}><p className="text-base text-muted-foreground max-w-[560px] mx-auto leading-[1.7]">From zero to scraping in under two minutes. No managed service, no per-page pricing.</p></Reveal>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
             {STEPS.map((step, i) => (
               <Reveal key={step.num} delay={i * 100}>
-                <div className="border border-[#1a1a1a] bg-[#0a0a0a] p-10 relative overflow-hidden group h-full">
+                <div className="border border-border bg-card p-10 relative overflow-hidden group h-full">
                   <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-400" />
-                  <div className="font-mono text-5xl font-bold text-[#2a2a2a] leading-none mb-6">{step.num}</div>
+                  <div className="font-mono text-5xl font-bold text-border leading-none mb-6">{step.num}</div>
                   <h3 className="font-display text-[22px] font-bold mb-4">{step.title}</h3>
-                  <p className="text-sm text-[#777] leading-[1.7] mb-6">{step.desc}</p>
-                  <pre className="bg-[#050505] border border-[#1a1a1a] p-4 font-mono text-[11px] leading-[1.7] text-[#444] overflow-x-auto whitespace-pre">
+                  <p className="text-sm text-muted-foreground leading-[1.7] mb-6">{step.desc}</p>
+                  <pre className="bg-background border border-border p-4 font-mono text-[11px] leading-[1.7] text-muted-foreground/50 overflow-x-auto whitespace-pre">
                     {step.code}
                   </pre>
                 </div>
@@ -361,22 +361,22 @@ export default function LandingPage() {
       </section>
 
       {/* ═══ CODE EXAMPLE ═══ */}
-      <section className="py-28 bg-[#0a0a0a] border-b border-[#1a1a1a]">
+      <section className="py-28 bg-card border-b border-border">
         <div className="max-w-[1280px] mx-auto px-6">
           <div className="text-center mb-16">
             <Reveal><span className="font-mono text-[11px] tracking-[3px] uppercase text-emerald-500 block mb-4">API</span></Reveal>
             <Reveal delay={80}><h2 className="font-display text-[clamp(32px,4vw,48px)] font-extrabold tracking-[-1px] mb-4">Developer-First API</h2></Reveal>
-            <Reveal delay={160}><p className="text-base text-[#777] max-w-[560px] mx-auto leading-[1.7]">Clean REST endpoints for every operation. Scrape, crawl, map, and extract with a single POST request.</p></Reveal>
+            <Reveal delay={160}><p className="text-base text-muted-foreground max-w-[560px] mx-auto leading-[1.7]">Clean REST endpoints for every operation. Scrape, crawl, map, and extract with a single POST request.</p></Reveal>
           </div>
 
           <Reveal delay={160}>
-            <div className="grid lg:grid-cols-2 border border-[#1a1a1a]">
+            <div className="grid lg:grid-cols-2 border border-border">
               {/* Request panel */}
-              <div className="border-b lg:border-b-0 lg:border-r border-[#1a1a1a]">
-                <div className="font-mono text-[11px] tracking-[1px] uppercase px-5 py-3 border-b border-[#1a1a1a] text-[#444] flex items-center gap-2">
+              <div className="border-b lg:border-b-0 lg:border-r border-border">
+                <div className="font-mono text-[11px] tracking-[1px] uppercase px-5 py-3 border-b border-border text-muted-foreground/50 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Request
                 </div>
-                <pre className="font-mono text-xs leading-[1.8] p-5 overflow-x-auto text-[#777] whitespace-pre"
+                <pre className="font-mono text-xs leading-[1.8] p-5 overflow-x-auto text-muted-foreground whitespace-pre"
                   dangerouslySetInnerHTML={{ __html: `<span class="text-emerald-500">import</span> requests
 
 response = requests.post(
@@ -394,17 +394,17 @@ response = requests.post(
         }
     }
 )
-<span class="text-[#444]"># Returns crawl job ID for async polling</span>
+<span class="text-muted-foreground/50"># Returns crawl job ID for async polling</span>
 job = response.json()
-<span class="text-emerald-500">print</span>(job[<span class="text-amber-500">"id"</span>])  <span class="text-[#444]"># "9e6c8b0b-..."</span>` }}
+<span class="text-emerald-500">print</span>(job[<span class="text-amber-500">"id"</span>])  <span class="text-muted-foreground/50"># "9e6c8b0b-..."</span>` }}
                 />
               </div>
               {/* Response panel */}
               <div>
-                <div className="font-mono text-[11px] tracking-[1px] uppercase px-5 py-3 border-b border-[#1a1a1a] text-[#444] flex items-center gap-2">
+                <div className="font-mono text-[11px] tracking-[1px] uppercase px-5 py-3 border-b border-border text-muted-foreground/50 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Response
                 </div>
-                <pre className="font-mono text-xs leading-[1.8] p-5 overflow-x-auto text-[#777] whitespace-pre"
+                <pre className="font-mono text-xs leading-[1.8] p-5 overflow-x-auto text-muted-foreground whitespace-pre"
                   dangerouslySetInnerHTML={{ __html: `{
   <span class="text-pink-400">"success"</span>: <span class="text-emerald-500">true</span>,
   <span class="text-pink-400">"id"</span>: <span class="text-amber-500">"9e6c8b0b-bbd6-4b79..."</span>,
@@ -420,7 +420,7 @@ job = response.json()
         <span class="text-pink-400">"sourceURL"</span>: <span class="text-amber-500">"https://docs.example.com/start"</span>
       }
     },
-    <span class="text-[#444]">// ... 86 more pages</span>
+    <span class="text-muted-foreground/50">// ... 86 more pages</span>
   ]
 }` }}
                 />
@@ -436,17 +436,17 @@ job = response.json()
           <div className="text-center mb-16">
             <Reveal><span className="font-mono text-[11px] tracking-[3px] uppercase text-emerald-500 block mb-4">Everything Included</span></Reveal>
             <Reveal delay={80}><h2 className="font-display text-[clamp(32px,4vw,48px)] font-extrabold tracking-[-1px] mb-4">Why WebHarvest?</h2></Reveal>
-            <Reveal delay={160}><p className="text-base text-[#777] max-w-[560px] mx-auto leading-[1.7]">Full control over your scraping infrastructure. No vendor lock-in, no per-page costs, no limits.</p></Reveal>
+            <Reveal delay={160}><p className="text-base text-muted-foreground max-w-[560px] mx-auto leading-[1.7]">Full control over your scraping infrastructure. No vendor lock-in, no per-page costs, no limits.</p></Reveal>
           </div>
 
           <Reveal delay={160}>
             <div className="max-w-[700px] mx-auto">
               {CAPABILITIES_LIST.map((cap, i) => (
-                <div key={cap.feature} className="flex items-center gap-4 py-4 border-b border-[#1a1a1a]">
+                <div key={cap.feature} className="flex items-center gap-4 py-4 border-b border-border">
                   <span className="text-emerald-500 font-mono text-sm font-semibold shrink-0">✓</span>
                   <div className="flex-1">
                     <span className="font-display font-bold text-[15px]">{cap.feature}</span>
-                    <span className="text-[#777] text-sm ml-3">{cap.detail}</span>
+                    <span className="text-muted-foreground text-sm ml-3">{cap.detail}</span>
                   </div>
                 </div>
               ))}
@@ -456,19 +456,19 @@ job = response.json()
       </section>
 
       {/* ═══ SOCIAL PROOF ═══ */}
-      <section className="py-28 bg-[#0a0a0a] border-t border-b border-[#1a1a1a]">
+      <section className="py-28 bg-card border-t border-b border-border">
         <div className="max-w-[1280px] mx-auto px-6">
           <Reveal>
-            <div className="flex flex-col sm:flex-row justify-center gap-16 mb-16 py-10 border-t border-b border-[#1a1a1a]">
+            <div className="flex flex-col sm:flex-row justify-center gap-16 mb-16 py-10 border-t border-b border-border">
               {[
                 { value: "2,400+", label: "GitHub Stars", cls: "text-emerald-500" },
-                { value: "180+", label: "Contributors", cls: "text-[#f0f0f0]" },
+                { value: "180+", label: "Contributors", cls: "text-foreground" },
                 { value: "50M+", label: "Pages Scraped", cls: "text-amber-500" },
-                { value: "12K+", label: "Deployments", cls: "text-[#f0f0f0]" },
+                { value: "12K+", label: "Deployments", cls: "text-foreground" },
               ].map((s) => (
                 <div key={s.label} className="text-center">
                   <div className={cn("font-display text-[42px] font-extrabold mb-1", s.cls)}>{s.value}</div>
-                  <div className="font-mono text-[11px] tracking-[2px] uppercase text-[#444]">{s.label}</div>
+                  <div className="font-mono text-[11px] tracking-[2px] uppercase text-muted-foreground/50">{s.label}</div>
                 </div>
               ))}
             </div>
@@ -477,16 +477,16 @@ job = response.json()
           <div className="grid md:grid-cols-3 gap-6">
             {TESTIMONIALS.map((t, i) => (
               <Reveal key={t.name} delay={i * 100}>
-                <div className="border border-[#1a1a1a] p-8 bg-[#0a0a0a] relative h-full">
-                  <span className="absolute top-5 right-6 font-display text-5xl text-[#2a2a2a] leading-none">&ldquo;</span>
-                  <p className="text-sm text-[#777] leading-[1.8] italic mb-6">{t.quote}</p>
+                <div className="border border-border p-8 bg-card relative h-full">
+                  <span className="absolute top-5 right-6 font-display text-5xl text-border leading-none">&ldquo;</span>
+                  <p className="text-sm text-muted-foreground leading-[1.8] italic mb-6">{t.quote}</p>
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-[#111] border border-[#1a1a1a] flex items-center justify-center font-mono text-xs font-semibold text-emerald-500">
+                    <div className="w-9 h-9 rounded-full bg-muted border border-border flex items-center justify-center font-mono text-xs font-semibold text-emerald-500">
                       {t.initials}
                     </div>
                     <div>
                       <div className="text-[13px] font-semibold">{t.name}</div>
-                      <div className="font-mono text-[11px] text-[#444]">{t.role}</div>
+                      <div className="font-mono text-[11px] text-muted-foreground/50">{t.role}</div>
                     </div>
                   </div>
                 </div>
@@ -502,46 +502,46 @@ job = response.json()
           <div className="text-center mb-16">
             <Reveal><span className="font-mono text-[11px] tracking-[3px] uppercase text-emerald-500 block mb-4">Pricing</span></Reveal>
             <Reveal delay={80}><h2 className="font-display text-[clamp(32px,4vw,48px)] font-extrabold tracking-[-1px] mb-4">Radically Simple</h2></Reveal>
-            <Reveal delay={160}><p className="text-base text-[#777] max-w-[560px] mx-auto leading-[1.7]">No per-page pricing. No rate limits you don&apos;t set yourself. Your servers, your rules.</p></Reveal>
+            <Reveal delay={160}><p className="text-base text-muted-foreground max-w-[560px] mx-auto leading-[1.7]">No per-page pricing. No rate limits you don&apos;t set yourself. Your servers, your rules.</p></Reveal>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6 max-w-[800px] mx-auto">
             <Reveal>
-              <div className="border border-emerald-900 p-12 bg-gradient-to-b from-emerald-500/[0.03] to-[#0a0a0a] relative h-full">
+              <div className="border border-emerald-900 p-12 bg-gradient-to-b from-emerald-500/[0.03] to-card relative h-full">
                 <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-500" />
-                <div className="font-mono text-[11px] tracking-[2px] uppercase text-[#444] mb-2">Self-Hosted</div>
+                <div className="font-mono text-[11px] tracking-[2px] uppercase text-muted-foreground/50 mb-2">Self-Hosted</div>
                 <div className="font-display text-[28px] font-extrabold mb-2">Open Source</div>
-                <div className="font-mono text-4xl font-bold mb-2">$0 <span className="text-sm text-[#444] font-normal">/ forever</span></div>
-                <p className="text-sm text-[#777] mb-8 leading-[1.6]">Deploy on your own infrastructure. Full access to every feature, no limits.</p>
+                <div className="font-mono text-4xl font-bold mb-2">$0 <span className="text-sm text-muted-foreground/50 font-normal">/ forever</span></div>
+                <p className="text-sm text-muted-foreground mb-8 leading-[1.6]">Deploy on your own infrastructure. Full access to every feature, no limits.</p>
                 <ul className="list-none mb-8">
                   {["Unlimited scraping & crawling", "All 5 scraping tiers", "AI extraction (bring your LLM key)", "Webhooks, monitors, schedules", "Dashboard UI included", "Docker Compose one-liner deploy", "Community support via GitHub"].map((item) => (
-                    <li key={item} className="text-[13px] text-[#777] py-2 border-b border-[#1a1a1a] flex items-center gap-2.5">
+                    <li key={item} className="text-[13px] text-muted-foreground py-2 border-b border-border flex items-center gap-2.5">
                       <span className="font-mono text-xs text-emerald-500">→</span> {item}
                     </li>
                   ))}
                 </ul>
                 <Link href={ctaHref}
-                  className="block text-center font-mono text-xs tracking-[1px] uppercase py-3.5 bg-emerald-500 text-[#050505] hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all no-underline">
+                  className="block text-center font-mono text-xs tracking-[1px] uppercase py-3.5 bg-emerald-500 text-background hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all no-underline">
                   {ctaLabel} →
                 </Link>
               </div>
             </Reveal>
 
             <Reveal delay={100}>
-              <div className="border border-[#1a1a1a] p-12 bg-[#0a0a0a] h-full">
-                <div className="font-mono text-[11px] tracking-[2px] uppercase text-[#444] mb-2">Managed</div>
+              <div className="border border-border p-12 bg-card h-full">
+                <div className="font-mono text-[11px] tracking-[2px] uppercase text-muted-foreground/50 mb-2">Managed</div>
                 <div className="font-display text-[28px] font-extrabold mb-2">Cloud</div>
-                <div className="font-mono text-4xl font-bold text-[#777] mb-2">Soon <span className="text-sm text-[#444] font-normal">/ coming Q2</span></div>
-                <p className="text-sm text-[#777] mb-8 leading-[1.6]">Managed hosting with zero ops. Same engine, we handle the infrastructure.</p>
+                <div className="font-mono text-4xl font-bold text-muted-foreground mb-2">Soon <span className="text-sm text-muted-foreground/50 font-normal">/ coming Q2</span></div>
+                <p className="text-sm text-muted-foreground mb-8 leading-[1.6]">Managed hosting with zero ops. Same engine, we handle the infrastructure.</p>
                 <ul className="list-none mb-8">
                   {["Everything in self-hosted", "Managed infrastructure", "Auto-scaling workers", "Global proxy network", "99.9% SLA", "Priority support", "SOC 2 compliance"].map((item) => (
-                    <li key={item} className="text-[13px] text-[#777] py-2 border-b border-[#1a1a1a] flex items-center gap-2.5">
+                    <li key={item} className="text-[13px] text-muted-foreground py-2 border-b border-border flex items-center gap-2.5">
                       <span className="font-mono text-xs text-emerald-500">→</span> {item}
                     </li>
                   ))}
                 </ul>
                 <button disabled
-                  className="w-full text-center font-mono text-xs tracking-[1px] uppercase py-3.5 border border-[#1a1a1a] text-[#777] cursor-not-allowed opacity-60">
+                  className="w-full text-center font-mono text-xs tracking-[1px] uppercase py-3.5 border border-border text-muted-foreground cursor-not-allowed opacity-60">
                   Join Waitlist
                 </button>
               </div>
@@ -559,14 +559,14 @@ job = response.json()
               Start Harvesting<br /><span className="text-emerald-500">in Two Minutes.</span>
             </h2>
           </Reveal>
-          <Reveal delay={160}><p className="text-base text-[#777] max-w-[560px] mx-auto leading-[1.7] mb-10">One command. Full stack. No credit card, no vendor lock-in.</p></Reveal>
+          <Reveal delay={160}><p className="text-base text-muted-foreground max-w-[560px] mx-auto leading-[1.7] mb-10">One command. Full stack. No credit card, no vendor lock-in.</p></Reveal>
           <Reveal delay={240}>
-            <div className="inline-block bg-[#111] border border-[#1a1a1a] px-8 py-4 font-mono text-sm mb-8">
+            <div className="inline-block bg-muted border border-border px-8 py-4 font-mono text-sm mb-8">
               <span className="text-emerald-500">$</span>{" "}
-              <span className="text-[#777]">docker compose up -d</span>
+              <span className="text-muted-foreground">docker compose up -d</span>
               <button
                 onClick={() => navigator.clipboard.writeText("docker compose up -d")}
-                className="ml-4 text-[#444] hover:text-[#777] transition-colors bg-transparent border-none cursor-pointer"
+                className="ml-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors bg-transparent border-none cursor-pointer"
                 title="Copy"
               >
                 ⎘
@@ -576,11 +576,11 @@ job = response.json()
           <Reveal delay={320}>
             <div className="flex flex-wrap gap-4 justify-center">
               <Link href={ctaHref}
-                className="font-mono text-[13px] font-semibold tracking-[1px] uppercase px-8 py-3.5 bg-emerald-500 text-[#050505] hover:shadow-[0_0_40px_rgba(16,185,129,0.15)] hover:-translate-y-0.5 transition-all no-underline inline-flex items-center gap-2">
+                className="font-mono text-[13px] font-semibold tracking-[1px] uppercase px-8 py-3.5 bg-emerald-500 text-background hover:shadow-[0_0_40px_rgba(16,185,129,0.15)] hover:-translate-y-0.5 transition-all no-underline inline-flex items-center gap-2">
                 {ctaLabel} →
               </Link>
               <a href="https://github.com/Takezo49/WebHarvest" target="_blank" rel="noopener noreferrer"
-                className="font-mono text-[13px] font-medium tracking-[1px] uppercase px-8 py-3.5 border border-[#2a2a2a] text-[#777] hover:border-[#777] hover:text-[#f0f0f0] transition-all no-underline inline-flex items-center gap-2">
+                className="font-mono text-[13px] font-medium tracking-[1px] uppercase px-8 py-3.5 border border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground transition-all no-underline inline-flex items-center gap-2">
                 Read the Docs
               </a>
             </div>
@@ -589,15 +589,15 @@ job = response.json()
       </section>
 
       {/* ═══ FOOTER ═══ */}
-      <footer className="border-t border-[#1a1a1a] pt-16 pb-8">
+      <footer className="border-t border-border pt-16 pb-8">
         <div className="max-w-[1280px] mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-12 mb-12">
             <div className="col-span-2 md:col-span-1">
-              <Link href="/" className="inline-flex items-center gap-2 mb-4 no-underline text-[#f0f0f0]">
+              <Link href="/" className="inline-flex items-center gap-2 mb-4 no-underline text-foreground">
                 <Logo size={24} />
                 <span className="font-display font-extrabold text-base tracking-[2px]">WEBHARVEST</span>
               </Link>
-              <p className="text-sm text-[#444] leading-[1.7] max-w-[300px]">
+              <p className="text-sm text-muted-foreground/50 leading-[1.7] max-w-[300px]">
                 Open-source web scraping platform. Self-hosted, anti-bot pipeline, built for scale.
               </p>
             </div>
@@ -607,10 +607,10 @@ job = response.json()
               { title: "Community", links: [["GitHub", "https://github.com/Takezo49/WebHarvest"], ["Discord", "#"], ["Twitter", "#"], ["Contributing", "#"]] },
             ].map((col) => (
               <div key={col.title}>
-                <h4 className="font-mono text-[11px] tracking-[2px] uppercase text-[#444] mb-5">{col.title}</h4>
+                <h4 className="font-mono text-[11px] tracking-[2px] uppercase text-muted-foreground/50 mb-5">{col.title}</h4>
                 {col.links.map(([text, href]) => (
                   <a key={text} href={href} target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
-                    className="block text-sm text-[#777] py-1 hover:text-emerald-500 transition-colors no-underline">
+                    className="block text-sm text-muted-foreground py-1 hover:text-emerald-500 transition-colors no-underline">
                     {text}
                   </a>
                 ))}
@@ -618,11 +618,11 @@ job = response.json()
             ))}
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-between items-center pt-6 border-t border-[#1a1a1a] gap-4">
-            <span className="font-mono text-[11px] text-[#444]">&copy; {new Date().getFullYear()} WebHarvest. MIT License.</span>
+          <div className="flex flex-col sm:flex-row justify-between items-center pt-6 border-t border-border gap-4">
+            <span className="font-mono text-[11px] text-muted-foreground/50">&copy; {new Date().getFullYear()} WebHarvest. MIT License.</span>
             <div className="flex gap-3">
               {["FastAPI", "Next.js", "Celery", "PostgreSQL"].map((badge) => (
-                <span key={badge} className="font-mono text-[10px] tracking-[1px] px-2.5 py-1 border border-[#1a1a1a] text-[#444]">
+                <span key={badge} className="font-mono text-[10px] tracking-[1px] px-2.5 py-1 border border-border text-muted-foreground/50">
                   {badge}
                 </span>
               ))}

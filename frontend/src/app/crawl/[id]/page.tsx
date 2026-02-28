@@ -107,13 +107,13 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
     : 0;
 
   return (
-    <div className="border border-white/10 bg-white/[0.02] overflow-hidden">
+    <div className="border border-border bg-card/50 overflow-hidden">
       {/* Header - always visible */}
       <div
-        className="flex items-center gap-3 p-4 cursor-pointer hover:bg-white/[0.03] transition-colors"
+        className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
-        <span className="text-xs text-white/30 font-mono w-6 shrink-0 text-right">
+        <span className="text-xs text-muted-foreground font-mono w-6 shrink-0 text-right">
           {index + 1}
         </span>
         <div className="min-w-0 flex-1">
@@ -130,24 +130,24 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
             </a>
           </div>
           {page.metadata?.title && (
-            <p className="text-xs text-white/40 mt-0.5 truncate">
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
               {page.metadata.title}
             </p>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {hasScreenshot && (
-            <span className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2 py-0.5 text-[11px] font-mono text-white/50">
+            <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] font-mono text-muted-foreground">
               <Camera className="h-3 w-3" />
             </span>
           )}
           {wordCount > 0 && (
-            <span className="inline-flex items-center rounded-md border border-white/20 px-2 py-0.5 text-[11px] font-mono text-white/50">
+            <span className="inline-flex items-center rounded-md border border-border px-2 py-0.5 text-[11px] font-mono text-muted-foreground">
               {wordCount.toLocaleString()} words
             </span>
           )}
           {readingTime > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2 py-0.5 text-[11px] font-mono text-white/50">
+            <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] font-mono text-muted-foreground">
               <Clock className="h-3 w-3" />
               {readingTime}m
             </span>
@@ -158,63 +158,63 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                 ? "border-emerald-500/30 text-emerald-400"
                 : page.metadata?.status_code >= 400
                 ? "border-red-500/30 text-red-400"
-                : "border-white/20 text-white/50"
+                : "border-border text-muted-foreground"
             }`}
           >
             {page.metadata?.status_code || "?"}
           </span>
           {expanded ? (
-            <ChevronUp className="h-4 w-4 text-white/40" />
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-white/40" />
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
       </div>
 
       {/* Expanded content */}
       {expanded && (
-        <div className="border-t border-white/10">
+        <div className="border-t border-border">
           {/* Summary bar */}
           {(page.metadata || page.structured_data) && (
-            <div className="px-4 py-3 border-b border-white/10 bg-white/[0.02] space-y-2">
+            <div className="px-4 py-3 border-b border-border bg-card/50 space-y-2">
               {(page.structured_data?.open_graph?.description || page.structured_data?.meta_tags?.description) && (
-                <p className="text-xs text-white/50 line-clamp-2">
+                <p className="text-xs text-muted-foreground line-clamp-2">
                   {page.structured_data?.open_graph?.description || page.structured_data?.meta_tags?.description}
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
                 {page.metadata?.language && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                     {page.metadata.language}
                   </span>
                 )}
                 {page.metadata?.canonical_url && page.metadata.canonical_url !== page.url && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40 truncate max-w-xs">
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground truncate max-w-xs">
                     canonical: {page.metadata.canonical_url}
                   </span>
                 )}
                 {page.structured_data?.open_graph?.type && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                     og:{page.structured_data.open_graph.type}
                   </span>
                 )}
                 {page.structured_data?.twitter_card?.card && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                     twitter:{page.structured_data.twitter_card.card}
                   </span>
                 )}
                 {page.structured_data?.json_ld?.length > 0 && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                     {page.structured_data.json_ld.length} JSON-LD
                   </span>
                 )}
                 {page.images?.length > 0 && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                     {page.images.length} images
                   </span>
                 )}
                 {(page.links_detail?.total || page.links?.length) > 0 && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                  <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                     {page.links_detail?.total || page.links?.length} links
                   </span>
                 )}
@@ -222,7 +222,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
             </div>
           )}
           {/* Tab bar */}
-          <div className="flex gap-1 p-2 border-b border-white/10 bg-white/[0.02] overflow-x-auto">
+          <div className="flex gap-1 p-2 border-b border-border bg-card/50 overflow-x-auto">
             {availableTabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -232,7 +232,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                     activeTab === tab.id
                       ? "border-violet-500 text-violet-400 bg-violet-500/[0.03]"
-                      : "text-white/40 hover:text-white/70"
+                      : "text-muted-foreground hover:text-foreground/70"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -245,7 +245,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
           {/* Tab content */}
           <div className="p-4">
             {activeTab === "markdown" && hasMarkdown && (
-              <pre className="max-h-96 overflow-auto text-xs text-white/70 whitespace-pre-wrap font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-4">
+              <pre className="max-h-96 overflow-auto text-xs text-foreground/70 whitespace-pre-wrap font-mono bg-background border border-border rounded-md p-4">
                 {page.markdown}
               </pre>
             )}
@@ -253,11 +253,11 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
             {activeTab === "html" && hasHtml && (
               <div>
                 {htmlData ? (
-                  <pre className="max-h-96 overflow-auto text-xs text-white/70 whitespace-pre-wrap font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-4">
+                  <pre className="max-h-96 overflow-auto text-xs text-foreground/70 whitespace-pre-wrap font-mono bg-background border border-border rounded-md p-4">
                     {htmlData}
                   </pre>
                 ) : (
-                  <div className="flex items-center gap-2 py-8 text-white/40 justify-center">
+                  <div className="flex items-center gap-2 py-8 text-muted-foreground justify-center">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="text-sm">Loading HTML...</span>
                   </div>
@@ -271,18 +271,18 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                   <img
                     src={`data:image/jpeg;base64,${screenshotData}`}
                     alt={`Screenshot of ${page.url}`}
-                    className="max-w-full rounded-md border border-white/10 shadow-lg"
+                    className="max-w-full rounded-md border border-border shadow-lg"
                     style={{ maxHeight: "600px" }}
                   />
                 ) : screenshotLoading ? (
-                  <div className="flex items-center gap-2 py-8 text-white/40">
+                  <div className="flex items-center gap-2 py-8 text-muted-foreground">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     <span className="text-sm">Loading screenshot...</span>
                   </div>
                 ) : (
                   <button
                     onClick={() => loadDetail("screenshot")}
-                    className="flex items-center gap-2 px-5 py-3 text-sm font-mono border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/[0.03] transition-all"
+                    className="flex items-center gap-2 px-5 py-3 text-sm font-mono border border-border text-muted-foreground hover:text-foreground/80 hover:bg-muted/30 transition-all"
                   >
                     <Camera className="h-4 w-4" /> Load Screenshot
                   </button>
@@ -295,22 +295,22 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                 {page.links_detail && (
                   <div className="flex gap-4 text-sm">
                     <div className="flex items-center gap-1.5">
-                      <Link2 className="h-4 w-4 text-white/40" />
-                      <span className="font-medium text-white">{page.links_detail.total}</span>
-                      <span className="text-white/40">total</span>
+                      <Link2 className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-foreground">{page.links_detail.total}</span>
+                      <span className="text-muted-foreground">total</span>
                     </div>
                     {page.links_detail.internal && (
                       <div className="flex items-center gap-1.5">
                         <ArrowDownLeft className="h-4 w-4 text-blue-400" />
-                        <span className="font-medium text-white">{page.links_detail.internal.count}</span>
-                        <span className="text-white/40">internal</span>
+                        <span className="font-medium text-foreground">{page.links_detail.internal.count}</span>
+                        <span className="text-muted-foreground">internal</span>
                       </div>
                     )}
                     {page.links_detail.external && (
                       <div className="flex items-center gap-1.5">
                         <ArrowUpRight className="h-4 w-4 text-orange-400" />
-                        <span className="font-medium text-white">{page.links_detail.external.count}</span>
-                        <span className="text-white/40">external</span>
+                        <span className="font-medium text-foreground">{page.links_detail.external.count}</span>
+                        <span className="text-muted-foreground">external</span>
                       </div>
                     )}
                   </div>
@@ -318,7 +318,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
 
                 {page.links_detail?.internal?.links?.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Internal Links</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Internal Links</h4>
                     <div className="space-y-1 max-h-64 overflow-auto">
                       {page.links_detail.internal.links.map((link: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
@@ -332,7 +332,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                             {link.url}
                           </a>
                           {link.text && (
-                            <span className="text-white/40 truncate shrink-0 max-w-48">
+                            <span className="text-muted-foreground truncate shrink-0 max-w-48">
                               &quot;{link.text}&quot;
                             </span>
                           )}
@@ -344,7 +344,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
 
                 {page.links_detail?.external?.links?.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">External Links</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">External Links</h4>
                     <div className="space-y-1 max-h-64 overflow-auto">
                       {page.links_detail.external.links.map((link: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
@@ -358,7 +358,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                             {link.url}
                           </a>
                           {link.text && (
-                            <span className="text-white/40 truncate shrink-0 max-w-48">
+                            <span className="text-muted-foreground truncate shrink-0 max-w-48">
                               &quot;{link.text}&quot;
                             </span>
                           )}
@@ -392,23 +392,23 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
               <div className="space-y-4">
                 {page.structured_data.json_ld && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2 flex items-center gap-1.5">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
                       <Braces className="h-3.5 w-3.5" />
                       JSON-LD (Schema.org)
                     </h4>
-                    <pre className="max-h-64 overflow-auto text-xs font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-3 text-white/70">
+                    <pre className="max-h-64 overflow-auto text-xs font-mono bg-background border border-border rounded-md p-3 text-foreground/70">
                       {JSON.stringify(page.structured_data.json_ld, null, 2)}
                     </pre>
                   </div>
                 )}
                 {page.structured_data.open_graph && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">OpenGraph</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">OpenGraph</h4>
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(page.structured_data.open_graph).map(([key, val]) => (
                         <div key={key} className="text-xs">
-                          <span className="text-white/40">og:{key}:</span>{" "}
-                          <span className="font-mono text-white/70">{String(val)}</span>
+                          <span className="text-muted-foreground">og:{key}:</span>{" "}
+                          <span className="font-mono text-foreground/70">{String(val)}</span>
                         </div>
                       ))}
                     </div>
@@ -416,12 +416,12 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                 )}
                 {page.structured_data.twitter_card && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Twitter Card</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Twitter Card</h4>
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(page.structured_data.twitter_card).map(([key, val]) => (
                         <div key={key} className="text-xs">
-                          <span className="text-white/40">twitter:{key}:</span>{" "}
-                          <span className="font-mono text-white/70">{String(val)}</span>
+                          <span className="text-muted-foreground">twitter:{key}:</span>{" "}
+                          <span className="font-mono text-foreground/70">{String(val)}</span>
                         </div>
                       ))}
                     </div>
@@ -429,11 +429,11 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                 )}
                 {page.structured_data.meta_tags && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Meta Tags</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Meta Tags</h4>
                     <div className="space-y-1 max-h-48 overflow-auto">
                       {Object.entries(page.structured_data.meta_tags).map(([key, val]) => (
                         <div key={key} className="text-xs font-mono">
-                          <span className="text-white/40">{key}:</span> <span className="text-white/70">{String(val)}</span>
+                          <span className="text-muted-foreground">{key}:</span> <span className="text-foreground/70">{String(val)}</span>
                         </div>
                       ))}
                     </div>
@@ -446,7 +446,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
             {activeTab === "images" && hasImages && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {page.images.map((img: any, i: number) => (
-                  <div key={i} className="border border-white/10 bg-[#0a0a0a] overflow-hidden">
+                  <div key={i} className="border border-border bg-background overflow-hidden">
                     <div className="aspect-video flex items-center justify-center">
                       <img
                         src={img.src}
@@ -458,11 +458,11 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
                       />
                     </div>
                     <div className="p-2">
-                      <p className="text-xs text-white/40 truncate" title={img.src}>
+                      <p className="text-xs text-muted-foreground truncate" title={img.src}>
                         {img.src.split("/").pop()}
                       </p>
                       {img.alt && (
-                        <p className="text-xs text-white/70 truncate mt-0.5">{img.alt}</p>
+                        <p className="text-xs text-foreground/70 truncate mt-0.5">{img.alt}</p>
                       )}
                     </div>
                   </div>
@@ -471,7 +471,7 @@ const PageResultCard = memo(function PageResultCard({ page, index, jobId }: { pa
             )}
 
             {activeTab === "extract" && hasExtract && (
-              <pre className="max-h-96 overflow-auto text-xs text-white/70 whitespace-pre-wrap font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-4">
+              <pre className="max-h-96 overflow-auto text-xs text-foreground/70 whitespace-pre-wrap font-mono bg-background border border-border rounded-md p-4">
                 {JSON.stringify(page.extract, null, 2)}
               </pre>
             )}
@@ -639,13 +639,13 @@ export default function CrawlStatusPage() {
       <div className="max-w-[1200px] mx-auto px-6 md:px-10 py-10">
         <div className="mb-6 flex items-center gap-4">
           <Link href="/crawl">
-            <button className="border border-white/20 p-2 text-white/50 hover:text-white hover:border-white/40 transition-colors">
+            <button className="border border-border p-2 text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors">
               <ArrowLeft className="h-4 w-4" />
             </button>
           </Link>
           <div>
             <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-violet">Crawl Results</h1>
-            <p className="text-[13px] text-white/40 font-mono">{jobId}</p>
+            <p className="text-[13px] text-muted-foreground font-mono">{jobId}</p>
           </div>
         </div>
 
@@ -657,15 +657,15 @@ export default function CrawlStatusPage() {
 
         {!status && !error && (
           <div className="flex flex-col items-center justify-center py-24">
-            <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-4" />
-            <p className="text-sm text-white/40">Loading crawl status...</p>
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+            <p className="text-sm text-muted-foreground">Loading crawl status...</p>
           </div>
         )}
 
         {status && (
           <>
             {/* Status Card */}
-            <div className="border border-white/10 bg-white/[0.02] mb-6 relative overflow-hidden">
+            <div className="border border-border bg-card/50 mb-6 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-violet-500 to-pink-500" />
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
@@ -702,7 +702,7 @@ export default function CrawlStatusPage() {
                 {/* Progress */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-white/50 text-[12px] font-mono">
+                    <span className="text-muted-foreground text-[12px] font-mono">
                       {status.completed_pages} page{status.completed_pages !== 1 ? "s" : ""}{" "}
                       scraped
                       {isRunning && status.total_pages > 0 && (
@@ -710,11 +710,11 @@ export default function CrawlStatusPage() {
                       )}
                     </span>
                     {isRunning && progressPercent > 0 && (
-                      <span className="text-white/50 text-[12px] font-mono">{progressPercent}%</span>
+                      <span className="text-muted-foreground text-[12px] font-mono">{progressPercent}%</span>
                     )}
                   </div>
                   {(isRunning || status.completed_pages > 0) && (
-                    <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                    <div className="w-full h-2 bg-foreground/[0.06] rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
                           isRunning
@@ -735,7 +735,7 @@ export default function CrawlStatusPage() {
 
                 {/* Stats row */}
                 {totalResults > 0 && (
-                  <div className="flex gap-6 mt-4 pt-4 border-t border-white/10 text-[12px] text-white/50 font-mono">
+                  <div className="flex gap-6 mt-4 pt-4 border-t border-border text-[12px] text-muted-foreground font-mono">
                     <div className="flex items-center gap-1.5">
                       <FileText className="h-3.5 w-3.5" />
                       <span>{totalResults} pages</span>
@@ -767,12 +767,12 @@ export default function CrawlStatusPage() {
             {allData.length > 0 && (
               <div className="mb-4 flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
                     placeholder="Filter by URL..."
                     value={searchFilter}
                     onChange={(e) => setSearchFilter(e.target.value)}
-                    className="w-full h-9 pl-9 pr-3 rounded-md bg-transparent border border-white/10 text-white font-mono text-sm placeholder:text-white/30 outline-none focus:border-white/30 transition-colors"
+                    className="w-full h-9 pl-9 pr-3 rounded-md bg-transparent border border-border text-foreground font-mono text-sm placeholder:text-muted-foreground/50 outline-none focus:border-foreground/30 transition-colors"
                   />
                 </div>
                 <div className="flex gap-1">
@@ -782,8 +782,8 @@ export default function CrawlStatusPage() {
                       onClick={() => setStatusFilter(f)}
                       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                         statusFilter === f
-                          ? "bg-white text-black"
-                          : "bg-white/[0.03] text-white/40 hover:text-white/70"
+                          ? "bg-foreground text-background"
+                          : "bg-muted/30 text-muted-foreground hover:text-foreground/70"
                       }`}
                     >
                       {f === "all" ? "All" : f === "success" ? "Success" : "Errors"}
@@ -793,7 +793,7 @@ export default function CrawlStatusPage() {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="h-9 rounded-md bg-[#0a0a0a] border border-white/10 text-white font-mono px-3 text-xs outline-none"
+                  className="h-9 rounded-md bg-background border border-border text-foreground font-mono px-3 text-xs outline-none"
                 >
                   <option value="index">Sort: Original</option>
                   <option value="url">Sort: URL</option>
@@ -804,8 +804,8 @@ export default function CrawlStatusPage() {
                     onClick={() => setViewMode("cards")}
                     className={`p-1.5 rounded-md transition-colors ${
                       viewMode === "cards"
-                        ? "bg-white text-black"
-                        : "text-white/40 hover:text-white"
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                     title="Card view"
                   >
@@ -815,15 +815,15 @@ export default function CrawlStatusPage() {
                     onClick={() => setViewMode("table")}
                     className={`p-1.5 rounded-md transition-colors ${
                       viewMode === "table"
-                        ? "bg-white text-black"
-                        : "text-white/40 hover:text-white"
+                        ? "bg-foreground text-background"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                     title="Table view"
                   >
                     <Table2 className="h-4 w-4" />
                   </button>
                 </div>
-                <span className="text-xs text-white/40 font-mono">
+                <span className="text-xs text-muted-foreground font-mono">
                   {filteredData.length} of {totalResults} pages
                   {allData.length < totalResults && ` (${allData.length} loaded)`}
                 </span>
@@ -833,7 +833,7 @@ export default function CrawlStatusPage() {
             {/* Results List */}
             {allData.length > 0 ? (
               <div className="space-y-3">
-                <h2 className="text-lg font-semibold flex items-center gap-2 mb-3 text-white font-mono uppercase">
+                <h2 className="text-lg font-semibold flex items-center gap-2 mb-3 text-foreground font-mono uppercase">
                   <Globe className="h-5 w-5" />
                   Crawled Pages
                 </h2>
@@ -858,34 +858,34 @@ export default function CrawlStatusPage() {
                           setTsvCopied(true);
                           setTimeout(() => setTsvCopied(false), 2000);
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-white/30 hover:text-white transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                       >
                         {tsvCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                         {tsvCopied ? "Copied!" : "Copy Table"}
                       </button>
                     </div>
-                    <div className="rounded-md border border-white/10 overflow-auto">
+                    <div className="rounded-md border border-border overflow-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono w-10">#</th>
+                          <tr className="border-b border-border/60 bg-card/50">
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-mono w-10">#</th>
                             <th
-                              className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono cursor-pointer hover:text-white"
+                              className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-mono cursor-pointer hover:text-foreground"
                               onClick={() => setSortBy(sortBy === "url" ? "index" : "url")}
                             >
                               URL {sortBy === "url" && "↑"}
                             </th>
-                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono">Title</th>
-                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono w-20">Status</th>
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-mono">Title</th>
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-mono w-20">Status</th>
                             <th
-                              className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-white/40 font-mono cursor-pointer hover:text-white w-20"
+                              className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-muted-foreground font-mono cursor-pointer hover:text-foreground w-20"
                               onClick={() => setSortBy(sortBy === "words" ? "index" : "words")}
                             >
                               Words {sortBy === "words" && "↓"}
                             </th>
-                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-white/40 font-mono w-16">Time</th>
-                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-white/40 font-mono w-16">Links</th>
-                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-white/40 font-mono w-16">Images</th>
+                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-muted-foreground font-mono w-16">Time</th>
+                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-muted-foreground font-mono w-16">Links</th>
+                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-muted-foreground font-mono w-16">Images</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -898,8 +898,8 @@ export default function CrawlStatusPage() {
                             const linksCount = page.links_detail?.total || page.links?.length || 0;
                             const imagesCount = page.images?.length || 0;
                             return (
-                              <tr key={page._index} className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.03] transition-colors">
-                                <td className="px-3 py-2 text-xs text-white/40 font-mono">{page._index + 1}</td>
+                              <tr key={page._index} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
+                                <td className="px-3 py-2 text-xs text-muted-foreground font-mono">{page._index + 1}</td>
                                 <td className="px-3 py-2 max-w-xs">
                                   <a
                                     href={page.url}
@@ -910,7 +910,7 @@ export default function CrawlStatusPage() {
                                     {page.url}
                                   </a>
                                 </td>
-                                <td className="px-3 py-2 text-xs text-white/40 truncate max-w-[200px]">
+                                <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[200px]">
                                   {page.metadata?.title || "\u2014"}
                                 </td>
                                 <td className="px-3 py-2">
@@ -921,23 +921,23 @@ export default function CrawlStatusPage() {
                                           ? "border-emerald-500/30 text-emerald-400"
                                           : statusCode >= 400
                                           ? "border-red-500/30 text-red-400"
-                                          : "border-white/20 text-white/50"
+                                          : "border-border text-muted-foreground"
                                       }`}
                                     >
                                       {statusCode}
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 text-xs text-white/40 text-right font-mono">
+                                <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
                                   {wordCount > 0 ? wordCount.toLocaleString() : "\u2014"}
                                 </td>
-                                <td className="px-3 py-2 text-xs text-white/40 text-right">
+                                <td className="px-3 py-2 text-xs text-muted-foreground text-right">
                                   {readingTime > 0 ? `${readingTime}m` : "\u2014"}
                                 </td>
-                                <td className="px-3 py-2 text-xs text-white/40 text-right font-mono">
+                                <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
                                   {linksCount > 0 ? linksCount : "\u2014"}
                                 </td>
-                                <td className="px-3 py-2 text-xs text-white/40 text-right font-mono">
+                                <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
                                   {imagesCount > 0 ? imagesCount : "\u2014"}
                                 </td>
                               </tr>
@@ -960,7 +960,7 @@ export default function CrawlStatusPage() {
                     <button
                       onClick={loadMore}
                       disabled={loadingMore}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm border border-white/20 text-white/50 hover:text-white disabled:opacity-50 transition-colors"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm border border-border text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
                     >
                       {loadingMore ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -974,18 +974,18 @@ export default function CrawlStatusPage() {
               </div>
             ) : isRunning ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-4" />
-                <p className="text-sm text-white/40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+                <p className="text-sm text-muted-foreground">
                   Discovering and scraping pages...
                 </p>
-                <p className="text-xs text-white/40 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Each page gets: markdown, HTML, screenshot, links, structured data, and more
                 </p>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Globe className="h-12 w-12 text-white/40 mb-4" />
-                <p className="text-sm text-white/40">No pages were crawled.</p>
+                <Globe className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-sm text-muted-foreground">No pages were crawled.</p>
               </div>
             )}
           </>

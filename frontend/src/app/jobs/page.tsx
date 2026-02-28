@@ -57,7 +57,7 @@ function getTypeColorClasses(type: string): string {
     case "crawl": return "border-violet-500/30 text-violet-400 bg-violet-500/10";
     case "search": return "border-amber-500/30 text-amber-400 bg-amber-500/10";
     case "map": return "border-pink-500/30 text-pink-400 bg-pink-500/10";
-    default: return "border-white/20 text-white/50 bg-white/[0.03]";
+    default: return "border-border text-muted-foreground bg-muted/30";
   }
 }
 
@@ -72,7 +72,7 @@ function getStatusClasses(status: string): string {
     case "pending":
     case "cancelled":
     default:
-      return "border-white/20 text-white/50 bg-white/[0.03]";
+      return "border-border text-muted-foreground bg-muted/30";
   }
 }
 
@@ -272,10 +272,10 @@ export default function JobsPage() {
   };
 
   const SortIcon = ({ column }: { column: string }) => {
-    if (sortBy !== column) return <ArrowUpDown className="h-3 w-3 ml-1 text-white/30" />;
+    if (sortBy !== column) return <ArrowUpDown className="h-3 w-3 ml-1 text-muted-foreground" />;
     return sortDir === "asc"
-      ? <ArrowUp className="h-3 w-3 ml-1 text-white" />
-      : <ArrowDown className="h-3 w-3 ml-1 text-white" />;
+      ? <ArrowUp className="h-3 w-3 ml-1 text-foreground" />
+      : <ArrowDown className="h-3 w-3 ml-1 text-foreground" />;
   };
 
   return (
@@ -286,28 +286,28 @@ export default function JobsPage() {
           <h1 className="text-[36px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-blue">
             Job History
           </h1>
-          <p className="text-white/50 font-mono text-[14px] mt-1">
+          <p className="text-muted-foreground font-mono text-[14px] mt-1">
             View all your past scrape, crawl, search, and map jobs
           </p>
         </div>
 
         {/* Filters */}
-        <div className="border border-white/10 bg-white/[0.02] p-5 mb-6">
+        <div className="border border-border bg-card/50 p-5 mb-6">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 placeholder="Search by URL or query..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                className="h-10 w-full bg-transparent border border-white/10 pl-9 pr-3 text-[14px] font-mono text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+                className="h-10 w-full bg-transparent border border-border pl-9 pr-3 text-[14px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
               />
             </div>
             <select
               value={typeFilter}
               onChange={handleTypeChange}
-              className="h-10 bg-[#0a0a0a] border border-white/10 px-3 text-[13px] font-mono text-white focus:outline-none focus:border-white/30"
+              className="h-10 bg-background border border-border px-3 text-[13px] font-mono text-foreground focus:outline-none focus:border-foreground/30"
             >
               {JOB_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>
@@ -318,7 +318,7 @@ export default function JobsPage() {
             <select
               value={statusFilter}
               onChange={handleStatusChange}
-              className="h-10 bg-[#0a0a0a] border border-white/10 px-3 text-[13px] font-mono text-white focus:outline-none focus:border-white/30"
+              className="h-10 bg-background border border-border px-3 text-[13px] font-mono text-foreground focus:outline-none focus:border-foreground/30"
             >
               {JOB_STATUSES.map((s) => (
                 <option key={s.value} value={s.value}>
@@ -328,7 +328,7 @@ export default function JobsPage() {
             </select>
             <button
               onClick={handleSearch}
-              className="border border-white/20 px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-white hover:bg-white hover:text-black transition-all flex items-center gap-2"
+              className="border border-border px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-foreground hover:bg-foreground hover:text-background transition-all flex items-center gap-2"
             >
               <Search className="h-4 w-4" />
               Search
@@ -354,13 +354,13 @@ export default function JobsPage() {
         )}
 
         {/* Jobs Table */}
-        <div className="border border-white/10 bg-white/[0.02] relative overflow-hidden">
+        <div className="border border-border bg-card/50 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 via-violet-500 to-pink-500" />
           {/* Table header bar */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
-            <span className="text-[16px] font-mono font-bold text-white">Jobs</span>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <span className="text-[16px] font-mono font-bold text-foreground">Jobs</span>
             {!loading && (
-              <span className="text-[13px] font-mono text-white/50">
+              <span className="text-[13px] font-mono text-muted-foreground">
                 {total} total job{total !== 1 ? "s" : ""}
               </span>
             )}
@@ -369,14 +369,14 @@ export default function JobsPage() {
           <div className="px-5 pb-5">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-3" />
-                <p className="text-[13px] font-mono text-white/40">Loading jobs...</p>
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-3" />
+                <p className="text-[13px] font-mono text-muted-foreground">Loading jobs...</p>
               </div>
             ) : jobs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <History className="h-12 w-12 text-white/40 mb-4" />
-                <p className="text-[16px] font-mono font-bold text-white">No jobs found</p>
-                <p className="text-[13px] font-mono text-white/50 mt-1">
+                <History className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-[16px] font-mono font-bold text-foreground">No jobs found</p>
+                <p className="text-[13px] font-mono text-muted-foreground mt-1">
                   {searchQuery || typeFilter !== "all" || statusFilter !== "all"
                     ? "Try adjusting your filters or search query."
                     : "Start a scrape, crawl, or search to see your job history here."}
@@ -387,9 +387,9 @@ export default function JobsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-[13px] font-mono">
                     <thead>
-                      <tr className="border-b border-white/[0.06]">
+                      <tr className="border-b border-border">
                         <th className="py-3 px-3 w-8">
-                          <button onClick={toggleSelectAll} className="text-white/30 hover:text-white">
+                          <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
                             {selectedJobs.size === jobs.length && jobs.length > 0 ? (
                               <CheckSquare className="h-4 w-4" />
                             ) : (
@@ -397,33 +397,33 @@ export default function JobsPage() {
                             )}
                           </button>
                         </th>
-                        <th className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono">Type</th>
-                        <th className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono">URL / Query</th>
+                        <th className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-mono">Type</th>
+                        <th className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-mono">URL / Query</th>
                         <th
-                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono cursor-pointer hover:text-white/60 select-none"
+                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-mono cursor-pointer hover:text-foreground/60 select-none"
                           onClick={() => handleSort("status")}
                         >
                           <span className="flex items-center">Status<SortIcon column="status" /></span>
                         </th>
                         <th
-                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono cursor-pointer hover:text-white/60 select-none"
+                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-mono cursor-pointer hover:text-foreground/60 select-none"
                           onClick={() => handleSort("total_pages")}
                         >
                           <span className="flex items-center">Pages<SortIcon column="total_pages" /></span>
                         </th>
                         <th
-                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono cursor-pointer hover:text-white/60 select-none"
+                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-mono cursor-pointer hover:text-foreground/60 select-none"
                           onClick={() => handleSort("duration_seconds")}
                         >
                           <span className="flex items-center">Duration<SortIcon column="duration_seconds" /></span>
                         </th>
                         <th
-                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono cursor-pointer hover:text-white/60 select-none"
+                          className="text-left py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-mono cursor-pointer hover:text-foreground/60 select-none"
                           onClick={() => handleSort("created_at")}
                         >
                           <span className="flex items-center">Created<SortIcon column="created_at" /></span>
                         </th>
-                        <th className="text-right py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-white/40 font-mono"></th>
+                        <th className="text-right py-3 px-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-mono"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -431,10 +431,10 @@ export default function JobsPage() {
                         <tr
                           key={job.id}
                           onClick={() => handleRowClick(job)}
-                          className="border-b border-white/[0.06] hover:bg-white/[0.03] cursor-pointer transition-colors"
+                          className="border-b border-border hover:bg-muted/30 cursor-pointer transition-colors"
                         >
                           <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                            <button onClick={() => toggleSelectJob(job.id)} className="text-white/30 hover:text-white">
+                            <button onClick={() => toggleSelectJob(job.id)} className="text-muted-foreground hover:text-foreground">
                               {selectedJobs.has(job.id) ? (
                                 <CheckSquare className="h-4 w-4" />
                               ) : (
@@ -448,7 +448,7 @@ export default function JobsPage() {
                             </span>
                           </td>
                           <td className="py-3 px-3 max-w-[300px]">
-                            <span className="truncate block text-white font-mono" title={getJobUrl(job) || "-"}>
+                            <span className="truncate block text-foreground font-mono" title={getJobUrl(job) || "-"}>
                               {getJobUrl(job) || "-"}
                             </span>
                           </td>
@@ -457,22 +457,22 @@ export default function JobsPage() {
                               {job.status}
                             </span>
                           </td>
-                          <td className="py-3 px-3 tabular-nums text-white font-mono">
+                          <td className="py-3 px-3 tabular-nums text-foreground font-mono">
                             {job.completed_pages !== null && job.total_pages !== null
                               ? `${job.completed_pages} / ${job.total_pages}`
                               : job.total_pages !== null
                               ? job.total_pages
                               : "-"}
                           </td>
-                          <td className="py-3 px-3 tabular-nums text-white font-mono">
+                          <td className="py-3 px-3 tabular-nums text-foreground font-mono">
                             {formatDuration(job.duration_seconds)}
                           </td>
-                          <td className="py-3 px-3 whitespace-nowrap text-white/50 font-mono">
+                          <td className="py-3 px-3 whitespace-nowrap text-muted-foreground font-mono">
                             {formatDate(job.created_at ?? "")}
                           </td>
                           <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                             <button
-                              className="inline-flex items-center justify-center h-8 w-8 text-white/30 hover:text-white transition-colors"
+                              className="inline-flex items-center justify-center h-8 w-8 text-muted-foreground hover:text-foreground transition-colors"
                               onClick={() => router.push(getRerunPath(job))}
                               title="Rerun"
                             >
@@ -482,7 +482,7 @@ export default function JobsPage() {
                               className={`inline-flex items-center justify-center h-8 w-8 transition-colors ${
                                 deleteConfirm === job.id
                                   ? "text-red-400 bg-red-500/10"
-                                  : "text-white/30 hover:text-red-400"
+                                  : "text-muted-foreground hover:text-red-400"
                               }`}
                               onClick={() => handleDelete(job.id)}
                               disabled={deleting === job.id}
@@ -503,15 +503,15 @@ export default function JobsPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/[0.06]">
-                    <p className="text-[13px] font-mono text-white/50">
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+                    <p className="text-[13px] font-mono text-muted-foreground">
                       Page {page} of {totalPages}
                     </p>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={page <= 1}
-                        className="border border-white/20 px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-white hover:bg-white hover:text-black transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-white flex items-center gap-1"
+                        className="border border-border px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-foreground hover:bg-foreground hover:text-background transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-foreground flex items-center gap-1"
                       >
                         <ChevronLeft className="h-4 w-4" />
                         Previous
@@ -519,7 +519,7 @@ export default function JobsPage() {
                       <button
                         onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                         disabled={page >= totalPages}
-                        className="border border-white/20 px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-white hover:bg-white hover:text-black transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-white flex items-center gap-1"
+                        className="border border-border px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-foreground hover:bg-foreground hover:text-background transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-foreground flex items-center gap-1"
                       >
                         Next
                         <ChevronRight className="h-4 w-4" />

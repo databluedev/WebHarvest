@@ -95,12 +95,12 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
   const wordCount = item.metadata?.word_count || 0;
 
   return (
-    <div className="border border-white/10 bg-white/[0.02] overflow-hidden">
+    <div className="border border-border bg-card/50 overflow-hidden">
       <div
-        className="flex items-start gap-3 p-4 cursor-pointer hover:bg-white/[0.03] transition-colors"
+        className="flex items-start gap-3 p-4 cursor-pointer hover:bg-muted/30 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
-        <span className="text-xs text-white/30 font-mono w-6 shrink-0 text-right mt-1">
+        <span className="text-xs text-muted-foreground font-mono w-6 shrink-0 text-right mt-1">
           {index + 1}
         </span>
         <div className="min-w-0 flex-1">
@@ -121,27 +121,27 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
               <ExternalLink className="h-3 w-3 shrink-0 opacity-50" />
             </a>
           </div>
-          <p className="text-xs text-white/40 mt-0.5 truncate">{item.url}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.url}</p>
           {item.snippet && (
-            <p className="text-xs text-white/40 mt-1 line-clamp-2">{item.snippet}</p>
+            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.snippet}</p>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {wordCount > 0 && (
-            <span className="text-xs border border-white/20 text-white/50 px-2 py-0.5 rounded-md">
+            <span className="text-xs border border-border text-foreground/50 px-2 py-0.5 rounded-md">
               {wordCount.toLocaleString()} words
             </span>
           )}
           {expanded ? (
-            <ChevronUp className="h-4 w-4 text-white/40" />
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
           ) : (
-            <ChevronDown className="h-4 w-4 text-white/40" />
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
       </div>
 
       {expanded && (
-        <div className="border-t border-white/10">
+        <div className="border-t border-border">
           {item.error && (
             <div className="mx-4 mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
               {item.error}
@@ -149,7 +149,7 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
           )}
 
           {/* Tab bar */}
-          <div className="flex gap-1 p-2 border-b border-white/10 bg-white/[0.02] overflow-x-auto">
+          <div className="flex gap-1 p-2 border-b border-border bg-card/50 overflow-x-auto">
             {availableTabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -159,7 +159,7 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                     activeTab === tab.id
                       ? "border-amber-500 text-amber-400 bg-amber-500/[0.03]"
-                      : "text-white/40 hover:text-white/70"
+                      : "text-muted-foreground hover:text-foreground/70"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -172,13 +172,13 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
           {/* Tab content */}
           <div className="p-4">
             {activeTab === "markdown" && hasMarkdown && (
-              <pre className="max-h-96 overflow-auto text-xs text-white/70 whitespace-pre-wrap font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-4">
+              <pre className="max-h-96 overflow-auto text-xs text-foreground/70 whitespace-pre-wrap font-mono bg-background border border-border rounded-md p-4">
                 {item.markdown}
               </pre>
             )}
 
             {activeTab === "html" && hasHtml && (
-              <pre className="max-h-96 overflow-auto text-xs text-white/70 whitespace-pre-wrap font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-4">
+              <pre className="max-h-96 overflow-auto text-xs text-foreground/70 whitespace-pre-wrap font-mono bg-background border border-border rounded-md p-4">
                 {item.html}
               </pre>
             )}
@@ -189,25 +189,25 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                   <img
                     src={`data:image/jpeg;base64,${screenshotData}`}
                     alt={`Screenshot of ${item.url}`}
-                    className="max-w-full rounded-md border border-white/10 shadow-lg"
+                    className="max-w-full rounded-md border border-border shadow-lg"
                     style={{ maxHeight: "600px" }}
                   />
                 ) : screenshotLoading ? (
                   <div className="flex flex-col items-center justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-white/40 mb-2" />
-                    <p className="text-sm text-white/40">Loading screenshot...</p>
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">Loading screenshot...</p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12">
-                    <Camera className="h-10 w-10 text-white/20 mb-3" />
+                    <Camera className="h-10 w-10 text-muted-foreground/50 mb-3" />
                     <button
                       onClick={loadScreenshot}
-                      className="flex items-center gap-2 px-4 py-2 rounded-md border border-white/20 text-sm font-medium text-white/50 hover:text-white hover:border-white/40 transition-colors"
+                      className="flex items-center gap-2 px-4 py-2 rounded-md border border-border text-sm font-medium text-foreground/50 hover:text-foreground hover:border-border/80 transition-colors"
                     >
                       <Camera className="h-4 w-4" />
                       Load Screenshot
                     </button>
-                    <p className="text-xs text-white/40 mt-2">Screenshots are loaded on demand</p>
+                    <p className="text-xs text-muted-foreground mt-2">Screenshots are loaded on demand</p>
                   </div>
                 )}
               </div>
@@ -218,35 +218,35 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                 {item.links_detail && (
                   <div className="flex gap-4 text-sm">
                     <div className="flex items-center gap-1.5">
-                      <Link2 className="h-4 w-4 text-white/40" />
-                      <span className="font-medium text-white/70">{item.links_detail.total}</span>
-                      <span className="text-white/40">total</span>
+                      <Link2 className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-foreground/70">{item.links_detail.total}</span>
+                      <span className="text-muted-foreground">total</span>
                     </div>
                     {item.links_detail.internal && (
                       <div className="flex items-center gap-1.5">
                         <ArrowDownLeft className="h-4 w-4 text-blue-400" />
-                        <span className="font-medium text-white/70">{item.links_detail.internal.count}</span>
-                        <span className="text-white/40">internal</span>
+                        <span className="font-medium text-foreground/70">{item.links_detail.internal.count}</span>
+                        <span className="text-muted-foreground">internal</span>
                       </div>
                     )}
                     {item.links_detail.external && (
                       <div className="flex items-center gap-1.5">
                         <ArrowUpRight className="h-4 w-4 text-orange-400" />
-                        <span className="font-medium text-white/70">{item.links_detail.external.count}</span>
-                        <span className="text-white/40">external</span>
+                        <span className="font-medium text-foreground/70">{item.links_detail.external.count}</span>
+                        <span className="text-muted-foreground">external</span>
                       </div>
                     )}
                   </div>
                 )}
                 {item.links_detail?.internal?.links?.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Internal Links</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Internal Links</h4>
                     <div className="space-y-1 max-h-64 overflow-auto">
                       {item.links_detail.internal.links.map((link: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
                           <ArrowDownLeft className="h-3 w-3 text-blue-400 shrink-0" />
                           <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300 truncate">{link.url}</a>
-                          {link.text && <span className="text-white/40 truncate shrink-0 max-w-48">&quot;{link.text}&quot;</span>}
+                          {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-48">&quot;{link.text}&quot;</span>}
                         </div>
                       ))}
                     </div>
@@ -254,13 +254,13 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                 )}
                 {item.links_detail?.external?.links?.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">External Links</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">External Links</h4>
                     <div className="space-y-1 max-h-64 overflow-auto">
                       {item.links_detail.external.links.map((link: any, i: number) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
                           <ArrowUpRight className="h-3 w-3 text-orange-400 shrink-0" />
                           <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300 truncate">{link.url}</a>
-                          {link.text && <span className="text-white/40 truncate shrink-0 max-w-48">&quot;{link.text}&quot;</span>}
+                          {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-48">&quot;{link.text}&quot;</span>}
                         </div>
                       ))}
                     </div>
@@ -280,19 +280,19 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
               <div className="space-y-4">
                 {item.structured_data.json_ld && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">JSON-LD (Schema.org)</h4>
-                    <pre className="max-h-64 overflow-auto text-xs font-mono bg-[#0a0a0a] border border-white/10 text-white/70 rounded-md p-3">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">JSON-LD (Schema.org)</h4>
+                    <pre className="max-h-64 overflow-auto text-xs font-mono bg-background border border-border text-foreground/70 rounded-md p-3">
                       {JSON.stringify(item.structured_data.json_ld, null, 2)}
                     </pre>
                   </div>
                 )}
                 {item.structured_data.open_graph && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">OpenGraph</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">OpenGraph</h4>
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(item.structured_data.open_graph).map(([key, val]) => (
                         <div key={key} className="text-xs">
-                          <span className="text-white/40">og:{key}:</span> <span className="font-mono text-white/70">{String(val)}</span>
+                          <span className="text-muted-foreground">og:{key}:</span> <span className="font-mono text-foreground/70">{String(val)}</span>
                         </div>
                       ))}
                     </div>
@@ -300,11 +300,11 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                 )}
                 {item.structured_data.twitter_card && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Twitter Card</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Twitter Card</h4>
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(item.structured_data.twitter_card).map(([key, val]) => (
                         <div key={key} className="text-xs">
-                          <span className="text-white/40">twitter:{key}:</span> <span className="font-mono text-white/70">{String(val)}</span>
+                          <span className="text-muted-foreground">twitter:{key}:</span> <span className="font-mono text-foreground/70">{String(val)}</span>
                         </div>
                       ))}
                     </div>
@@ -312,11 +312,11 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
                 )}
                 {item.structured_data.meta_tags && (
                   <div>
-                    <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Meta Tags</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Meta Tags</h4>
                     <div className="space-y-1 max-h-48 overflow-auto">
                       {Object.entries(item.structured_data.meta_tags).map(([key, val]) => (
                         <div key={key} className="text-xs font-mono">
-                          <span className="text-white/40">{key}:</span> <span className="text-white/70">{String(val)}</span>
+                          <span className="text-muted-foreground">{key}:</span> <span className="text-foreground/70">{String(val)}</span>
                         </div>
                       ))}
                     </div>
@@ -329,8 +329,8 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
               <div className="space-y-1">
                 {item.headings.map((h: any, i: number) => (
                   <div key={i} className="flex items-center gap-2 text-xs" style={{ paddingLeft: `${(h.level - 1) * 16}px` }}>
-                    <span className="text-[10px] px-1.5 py-0 shrink-0 border border-white/20 text-white/50 rounded-md">H{h.level}</span>
-                    <span className={`text-white/70 ${h.level === 1 ? "font-semibold" : ""}`}>{h.text}</span>
+                    <span className="text-[10px] px-1.5 py-0 shrink-0 border border-border text-foreground/50 rounded-md">H{h.level}</span>
+                    <span className={`text-foreground/70 ${h.level === 1 ? "font-semibold" : ""}`}>{h.text}</span>
                   </div>
                 ))}
               </div>
@@ -339,13 +339,13 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
             {activeTab === "images" && hasImages && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {item.images.map((img: any, i: number) => (
-                  <div key={i} className="border border-white/10 rounded-md overflow-hidden">
-                    <div className="aspect-video bg-white/[0.02] flex items-center justify-center">
+                  <div key={i} className="border border-border rounded-md overflow-hidden">
+                    <div className="aspect-video bg-card/50 flex items-center justify-center">
                       <img src={img.src} alt={img.alt || ""} className="max-w-full max-h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                     </div>
                     <div className="p-2">
-                      <p className="text-xs text-white/40 truncate" title={img.src}>{img.src.split("/").pop()}</p>
-                      {img.alt && <p className="text-xs text-white/70 truncate mt-0.5">{img.alt}</p>}
+                      <p className="text-xs text-muted-foreground truncate" title={img.src}>{img.src.split("/").pop()}</p>
+                      {img.alt && <p className="text-xs text-foreground/70 truncate mt-0.5">{img.alt}</p>}
                     </div>
                   </div>
                 ))}
@@ -353,7 +353,7 @@ function SearchResultCard({ item, index, jobId }: { item: any; index: number; jo
             )}
 
             {activeTab === "extract" && hasExtract && (
-              <pre className="max-h-96 overflow-auto text-xs text-white/70 whitespace-pre-wrap font-mono bg-[#0a0a0a] border border-white/10 rounded-md p-4">
+              <pre className="max-h-96 overflow-auto text-xs text-foreground/70 whitespace-pre-wrap font-mono bg-background border border-border rounded-md p-4">
                 {JSON.stringify(item.extract, null, 2)}
               </pre>
             )}
@@ -473,7 +473,7 @@ export default function SearchStatusPage() {
       <div className="max-w-[1200px] mx-auto px-6 md:px-10 py-10">
         <div className="mb-6 flex items-center gap-4">
           <Link href="/search">
-            <button className="border border-white/20 p-2 text-white/50 hover:text-white hover:border-white/40 transition-colors">
+            <button className="border border-border p-2 text-foreground/50 hover:text-foreground hover:border-border/80 transition-colors">
               <ArrowLeft className="h-4 w-4" />
             </button>
           </Link>
@@ -481,10 +481,10 @@ export default function SearchStatusPage() {
             <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text">Search Results</h1>
             {status?.query && (
               <p className="text-sm mt-0.5">
-                <span className="text-white/50">Query:</span> <span className="text-white font-mono">&quot;{status.query}&quot;</span>
+                <span className="text-foreground/50">Query:</span> <span className="text-foreground font-mono">&quot;{status.query}&quot;</span>
               </p>
             )}
-            <p className="text-[13px] text-white/40 font-mono">{jobId}</p>
+            <p className="text-[13px] text-muted-foreground font-mono">{jobId}</p>
           </div>
         </div>
 
@@ -496,14 +496,14 @@ export default function SearchStatusPage() {
 
         {!status && !error && (
           <div className="flex flex-col items-center justify-center py-24">
-            <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-4" />
-            <p className="text-sm text-white/40">Loading search status...</p>
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+            <p className="text-sm text-muted-foreground">Loading search status...</p>
           </div>
         )}
 
         {status && (
           <>
-            <div className="border border-white/10 bg-white/[0.02] mb-6 p-6 rounded-md relative overflow-hidden">
+            <div className="border border-border bg-card/50 mb-6 p-6 rounded-md relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500 to-emerald-500" />
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -527,14 +527,14 @@ export default function SearchStatusPage() {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-white/50 text-[12px] font-mono">
+                  <span className="text-foreground/50 text-[12px] font-mono">
                     {status.completed_results} of {status.total_results} results scraped
                   </span>
                   {progressPercent > 0 && (
-                    <span className="text-white/50 text-[12px] font-mono">{progressPercent}%</span>
+                    <span className="text-foreground/50 text-[12px] font-mono">{progressPercent}%</span>
                   )}
                 </div>
-                <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-foreground/[0.06] rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
                       isRunning ? "bg-amber-500" : status.status === "completed" ? "bg-emerald-500" : "bg-red-500"
@@ -546,7 +546,7 @@ export default function SearchStatusPage() {
 
               {/* Stats row */}
               {status.data && status.data.length > 0 && (
-                <div className="flex gap-6 mt-4 pt-4 border-t border-white/10 text-white/50 text-[12px] font-mono">
+                <div className="flex gap-6 mt-4 pt-4 border-t border-border text-foreground/50 text-[12px] font-mono">
                   <div className="flex items-center gap-1.5">
                     <Globe className="h-3.5 w-3.5" />
                     <span>{status.data.length} results</span>
@@ -589,12 +589,12 @@ export default function SearchStatusPage() {
             {status.data && status.data.length > 0 && (
               <div className="mb-4 flex flex-wrap items-center gap-3">
                 <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
                     placeholder="Filter by URL..."
                     value={searchFilter}
                     onChange={(e) => setSearchFilter(e.target.value)}
-                    className="w-full pl-9 h-9 bg-transparent border border-white/10 text-white font-mono text-sm rounded-md px-3 placeholder:text-white/30 focus:outline-none focus:border-white/30 transition-colors"
+                    className="w-full pl-9 h-9 bg-transparent border border-border text-foreground font-mono text-sm rounded-md px-3 placeholder:text-muted-foreground/50 focus:outline-none focus:border-border/80 transition-colors"
                   />
                 </div>
                 <div className="flex gap-1">
@@ -604,8 +604,8 @@ export default function SearchStatusPage() {
                       onClick={() => setStatusFilter(f)}
                       className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                         statusFilter === f
-                          ? "bg-white text-black"
-                          : "bg-white/[0.03] text-white/40 hover:text-white/70"
+                          ? "bg-foreground text-background"
+                          : "bg-muted/30 text-muted-foreground hover:text-foreground/70"
                       }`}
                     >
                       {f === "all" ? "All" : f === "success" ? "Success" : "Errors"}
@@ -617,8 +617,8 @@ export default function SearchStatusPage() {
                     onClick={() => setViewMode("cards")}
                     className={`p-1.5 rounded-md transition-colors ${
                       viewMode === "cards"
-                        ? "bg-white text-black"
-                        : "bg-white/[0.03] text-white/40 hover:text-white/70"
+                        ? "bg-foreground text-background"
+                        : "bg-muted/30 text-muted-foreground hover:text-foreground/70"
                     }`}
                     title="Card view"
                   >
@@ -628,15 +628,15 @@ export default function SearchStatusPage() {
                     onClick={() => setViewMode("table")}
                     className={`p-1.5 rounded-md transition-colors ${
                       viewMode === "table"
-                        ? "bg-white text-black"
-                        : "bg-white/[0.03] text-white/40 hover:text-white/70"
+                        ? "bg-foreground text-background"
+                        : "bg-muted/30 text-muted-foreground hover:text-foreground/70"
                     }`}
                     title="Table view"
                   >
                     <Table2 className="h-4 w-4" />
                   </button>
                 </div>
-                <span className="text-xs text-white/40 font-mono">
+                <span className="text-xs text-muted-foreground font-mono">
                   {filteredData.length} of {status.data.length} results
                 </span>
               </div>
@@ -644,7 +644,7 @@ export default function SearchStatusPage() {
 
             {status.data && status.data.length > 0 ? (
               <div className="space-y-3">
-                <h2 className="text-lg font-semibold flex items-center gap-2 mb-3 text-white font-mono">
+                <h2 className="text-lg font-semibold flex items-center gap-2 mb-3 text-foreground font-mono">
                   <Globe className="h-5 w-5" />
                   Search Results
                 </h2>
@@ -668,29 +668,29 @@ export default function SearchStatusPage() {
                           setTsvCopied(true);
                           setTimeout(() => setTsvCopied(false), 2000);
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-white/30 hover:text-white transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                       >
                         {tsvCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                         {tsvCopied ? "Copied!" : "Copy Table"}
                       </button>
                     </div>
-                    <div className="rounded-md border border-white/10 overflow-auto">
+                    <div className="rounded-md border border-border overflow-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono w-10">#</th>
-                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono">URL</th>
-                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono">Title</th>
-                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono w-16">Status</th>
-                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono max-w-[200px]">Snippet</th>
-                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-white/40 font-mono w-20">Words</th>
-                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-white/40 font-mono w-20">Code</th>
+                          <tr className="border-b border-border/60 bg-card/50">
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-mono w-10">#</th>
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-mono">URL</th>
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-mono">Title</th>
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-mono w-16">Status</th>
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-mono max-w-[200px]">Snippet</th>
+                            <th className="px-3 py-2 text-right text-[11px] uppercase tracking-wider text-muted-foreground font-mono w-20">Words</th>
+                            <th className="px-3 py-2 text-left text-[11px] uppercase tracking-wider text-muted-foreground font-mono w-20">Code</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredData.map((item: any) => (
-                            <tr key={item._index} className="border-b border-white/[0.06] last:border-0 hover:bg-white/[0.03] transition-colors">
-                              <td className="px-3 py-2 text-xs text-white/40 font-mono">{item._index + 1}</td>
+                            <tr key={item._index} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
+                              <td className="px-3 py-2 text-xs text-muted-foreground font-mono">{item._index + 1}</td>
                               <td className="px-3 py-2 max-w-xs">
                                 <a
                                   href={item.url}
@@ -701,7 +701,7 @@ export default function SearchStatusPage() {
                                   {item.url}
                                 </a>
                               </td>
-                              <td className="px-3 py-2 text-xs text-white/40 truncate max-w-[200px]">
+                              <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[200px]">
                                 {item.title || "\u2014"}
                               </td>
                               <td className="px-3 py-2">
@@ -711,10 +711,10 @@ export default function SearchStatusPage() {
                                   <XCircle className="h-3.5 w-3.5 text-red-400" />
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-xs text-white/40 truncate max-w-[200px]">
+                              <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[200px]">
                                 {item.snippet || "\u2014"}
                               </td>
-                              <td className="px-3 py-2 text-xs text-white/40 text-right font-mono">
+                              <td className="px-3 py-2 text-xs text-muted-foreground text-right font-mono">
                                 {item.metadata?.word_count > 0 ? item.metadata.word_count.toLocaleString() : "\u2014"}
                               </td>
                               <td className="px-3 py-2">
@@ -725,7 +725,7 @@ export default function SearchStatusPage() {
                                         ? "border-emerald-500/30 text-emerald-400"
                                         : item.metadata.status_code >= 400
                                         ? "border-red-500/30 text-red-400"
-                                        : "border-white/20 text-white/50"
+                                        : "border-border text-foreground/50"
                                     }`}
                                   >
                                     {item.metadata.status_code}
@@ -748,15 +748,15 @@ export default function SearchStatusPage() {
               </div>
             ) : isRunning ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-4" />
-                <p className="text-sm text-white/40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+                <p className="text-sm text-muted-foreground">
                   Searching the web and scraping results...
                 </p>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Search className="h-12 w-12 text-white/20 mb-4" />
-                <p className="text-sm text-white/40">No results found.</p>
+                <Search className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <p className="text-sm text-muted-foreground">No results found.</p>
               </div>
             )}
           </>
