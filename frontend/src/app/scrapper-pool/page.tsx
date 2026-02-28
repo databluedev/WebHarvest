@@ -122,13 +122,13 @@ const SCRAPER_APIS: ScraperApi[] = [
     category: "google",
   },
   {
-    id: "amazon-product",
-    name: "Amazon Product",
-    endpoint: "/v1/data/amazon/product",
-    description: "Product details with pricing, reviews, images, and ASIN data",
+    id: "amazon-products",
+    name: "Amazon Products",
+    endpoint: "/v1/data/amazon/products",
+    description: "Product search with pricing, ratings, reviews, badges, and ASIN data",
     icon: Package,
-    accent: "amber",
-    status: "coming-soon",
+    accent: "orange",
+    status: "active",
     category: "other",
   },
   {
@@ -145,7 +145,7 @@ const SCRAPER_APIS: ScraperApi[] = [
 
 const API_CATEGORIES: Array<{ key: string; label: string; sublabel: string }> = [
   { key: "google", label: "Google", sublabel: "Search, Shopping, Maps, News, Jobs, Images, Flights & Finance" },
-  { key: "other", label: "More Platforms", sublabel: "Coming Soon" },
+  { key: "other", label: "More Platforms", sublabel: "Amazon & More" },
 ];
 
 const ACCENT_MAP: Record<string, { text: string; border: string; bg: string }> = {
@@ -157,6 +157,7 @@ const ACCENT_MAP: Record<string, { text: string; border: string; bg: string }> =
   rose: { text: "text-rose-400", border: "border-rose-500/20", bg: "bg-rose-500/10" },
   sky: { text: "text-sky-400", border: "border-sky-500/20", bg: "bg-sky-500/10" },
   lime: { text: "text-lime-400", border: "border-lime-500/20", bg: "bg-lime-500/10" },
+  orange: { text: "text-orange-400", border: "border-orange-500/20", bg: "bg-orange-500/10" },
 };
 
 const TICKER_ITEMS = [
@@ -253,6 +254,15 @@ export default function ScrapperPoolPage() {
   const [financeQuery, setFinanceQuery] = useState("");
   const [financeLanguage, setFinanceLanguage] = useState("");
   const [financeCountry, setFinanceCountry] = useState("");
+
+  // Amazon Products
+  const [amazonQuery, setAmazonQuery] = useState("");
+  const [amazonNumResults, setAmazonNumResults] = useState(48);
+  const [amazonDomain, setAmazonDomain] = useState("amazon.in");
+  const [amazonSortBy, setAmazonSortBy] = useState("");
+  const [amazonMinPrice, setAmazonMinPrice] = useState("");
+  const [amazonMaxPrice, setAmazonMaxPrice] = useState("");
+  const [amazonPrimeOnly, setAmazonPrimeOnly] = useState(false);
 
   const handleCategorySwitch = (key: string) => {
     if (key === activeCategory) return;
@@ -446,6 +456,32 @@ export default function ScrapperPoolPage() {
         ...(financeQuery.trim() && { query: financeQuery.trim() }),
         ...(financeLanguage && { language: financeLanguage }),
         ...(financeCountry && { country: financeCountry }),
+      });
+      if (res.error) {
+        setError(res.error);
+      }
+      setResult(res);
+    } catch (err: any) {
+      setError(err.message || "Request failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAmazonProducts = async () => {
+    if (!amazonQuery.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await api.amazonProducts({
+        query: amazonQuery.trim(),
+        num_results: amazonNumResults,
+        domain: amazonDomain,
+        ...(amazonSortBy && { sort_by: amazonSortBy }),
+        ...(amazonMinPrice && { min_price: Number(amazonMinPrice) }),
+        ...(amazonMaxPrice && { max_price: Number(amazonMaxPrice) }),
+        prime_only: amazonPrimeOnly || undefined,
       });
       if (res.error) {
         setError(res.error);
@@ -3002,6 +3038,317 @@ export default function ScrapperPoolPage() {
                 </div>
               </div>
             )}
+            {/* ═══ AMAZON PRODUCTS PANEL ═══ */}
+            {activePanel === "amazon-products" && (
+              <div ref={panelRef} className="mt-[1px] border border-white/[0.08] bg-[#0a0a0a]">
+                {/* Panel header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 border border-orange-500/20 grid place-items-center">
+                      <Package className="h-4 w-4 text-orange-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-[14px] font-bold uppercase tracking-[0.05em] font-mono">Amazon Products API</h3>
+                      <code className="text-[11px] text-orange-400/60 font-mono">POST /v1/data/amazon/products</code>
+                    </div>
+                  </div>
+                  <button onClick={() => setActivePanel(null)} className="h-8 w-8 grid place-items-center text-white/30 hover:text-white transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+                  {/* Left: Input form */}
+                  <div className="p-6 space-y-5">
+                    <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono mb-4">Request Parameters</div>
+
+                    {/* Query input */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Product Search *</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={amazonQuery}
+                          onChange={(e) => setAmazonQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleAmazonProducts()}
+                          placeholder="e.g. wireless headphones bluetooth"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/40 transition-colors"
+                        />
+                        <Package className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                      </div>
+                    </div>
+
+                    {/* Domain + Num Results */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Domain</label>
+                        <div className="relative">
+                          <select
+                            value={amazonDomain}
+                            onChange={(e) => setAmazonDomain(e.target.value)}
+                            className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-orange-500/40 transition-colors"
+                          >
+                            <option value="amazon.in">amazon.in</option>
+                            <option value="amazon.com">amazon.com</option>
+                            <option value="amazon.co.uk">amazon.co.uk</option>
+                            <option value="amazon.de">amazon.de</option>
+                            <option value="amazon.fr">amazon.fr</option>
+                            <option value="amazon.co.jp">amazon.co.jp</option>
+                            <option value="amazon.ca">amazon.ca</option>
+                            <option value="amazon.com.au">amazon.com.au</option>
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Max Results</label>
+                        <input
+                          type="number"
+                          value={amazonNumResults}
+                          onChange={(e) => setAmazonNumResults(Number(e.target.value))}
+                          min={0}
+                          max={960}
+                          placeholder="0 = all"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/40 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Sort By */}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Sort By</label>
+                      <div className="relative">
+                        <select
+                          value={amazonSortBy}
+                          onChange={(e) => setAmazonSortBy(e.target.value)}
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white appearance-none focus:outline-none focus:border-orange-500/40 transition-colors"
+                        >
+                          <option value="">Relevance</option>
+                          <option value="price_low">Price: Low to High</option>
+                          <option value="price_high">Price: High to Low</option>
+                          <option value="rating">Avg. Rating</option>
+                          <option value="newest">Newest Arrivals</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3 w-3 text-white/30 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {/* Price Range */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Min Price</label>
+                        <input
+                          type="number"
+                          value={amazonMinPrice}
+                          onChange={(e) => setAmazonMinPrice(e.target.value)}
+                          min={0}
+                          placeholder="No min"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/40 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono mb-2 block">Max Price</label>
+                        <input
+                          type="number"
+                          value={amazonMaxPrice}
+                          onChange={(e) => setAmazonMaxPrice(e.target.value)}
+                          min={0}
+                          placeholder="No max"
+                          className="w-full bg-[#050505] border border-white/10 px-4 py-3 text-[13px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/40 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Prime Only toggle */}
+                    <div>
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <div
+                          onClick={() => setAmazonPrimeOnly(!amazonPrimeOnly)}
+                          className={`h-5 w-9 rounded-full border transition-colors flex items-center px-0.5 ${
+                            amazonPrimeOnly
+                              ? "bg-orange-500/20 border-orange-500/40"
+                              : "bg-white/5 border-white/10"
+                          }`}
+                        >
+                          <div className={`h-3.5 w-3.5 rounded-full transition-all ${
+                            amazonPrimeOnly
+                              ? "bg-orange-400 translate-x-3.5"
+                              : "bg-white/30 translate-x-0"
+                          }`} />
+                        </div>
+                        <span className="text-[11px] uppercase tracking-[0.15em] text-white/40 font-mono group-hover:text-white/60 transition-colors">Prime Only</span>
+                      </label>
+                    </div>
+
+                    {/* Submit button */}
+                    <button
+                      onClick={handleAmazonProducts}
+                      disabled={loading || !amazonQuery.trim()}
+                      className="w-full border border-orange-500/40 bg-orange-500/10 text-orange-400 py-3 text-[12px] uppercase tracking-[0.2em] font-mono hover:bg-orange-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Searching Amazon...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          Search Products
+                        </>
+                      )}
+                    </button>
+
+                    {error && (
+                      <div className="border border-red-500/20 bg-red-500/5 px-4 py-3 text-[12px] text-red-400 font-mono">
+                        {error}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: Response */}
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-mono">Products</div>
+                      {result && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-white/30 font-mono">
+                            {result.products?.length || 0} products &middot; {result.pages_fetched} pages &middot; {result.time_taken?.toFixed(2)}s
+                          </span>
+                          <button onClick={handleCopyResult} className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-white/30 hover:text-white/60 font-mono transition-colors">
+                            {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                            {copied ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {!result && !loading && !error && (
+                      <div className="h-[400px] border border-dashed border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Package className="h-8 w-8 text-white/10 mx-auto mb-3" />
+                          <p className="text-[12px] text-white/20 font-mono">Search Amazon to see products</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {loading && (
+                      <div className="h-[400px] border border-white/[0.06] grid place-items-center">
+                        <div className="text-center">
+                          <Loader2 className="h-6 w-6 text-orange-400 animate-spin mx-auto mb-3" />
+                          <p className="text-[12px] text-white/30 font-mono">Fetching Amazon products...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {result && (
+                      <div className="space-y-4">
+                        {/* Domain + total results badge */}
+                        <div className="flex flex-wrap gap-2">
+                          <span className="text-[10px] font-mono border border-orange-500/20 bg-orange-500/5 text-orange-400 px-2 py-1">
+                            {result.domain}
+                          </span>
+                          {result.total_results && (
+                            <span className="text-[10px] font-mono border border-white/10 bg-white/5 text-white/40 px-2 py-1">
+                              {result.total_results}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Product cards */}
+                        <div className="max-h-[600px] overflow-y-auto space-y-[1px] scrollbar-thin">
+                          {result.products?.map((product: any, i: number) => (
+                            <div key={i} className="bg-[#050505] border border-white/[0.04] p-4 hover:border-white/[0.08] transition-colors">
+                              <div className="flex gap-4">
+                                {/* Product image */}
+                                {product.image_url && (
+                                  <div className="flex-shrink-0 h-16 w-16 border border-white/[0.06] bg-white/[0.02] grid place-items-center overflow-hidden">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={product.image_url} alt={product.title} className="h-full w-full object-contain" />
+                                  </div>
+                                )}
+
+                                <div className="min-w-0 flex-1">
+                                  {/* Title + position */}
+                                  <div className="flex items-start justify-between gap-2 mb-1">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2 mb-0.5">
+                                        <span className="text-[10px] text-white/20 font-mono">#{product.position}</span>
+                                        {product.badge && (
+                                          <span className="text-[9px] uppercase tracking-wider text-orange-400 bg-orange-500/10 border border-orange-500/20 px-1.5 py-0.5 font-mono">
+                                            {product.badge}
+                                          </span>
+                                        )}
+                                        {product.is_sponsored && (
+                                          <span className="text-[9px] uppercase tracking-wider text-white/30 bg-white/5 border border-white/10 px-1.5 py-0.5 font-mono">AD</span>
+                                        )}
+                                        {product.is_prime && (
+                                          <span className="text-[9px] uppercase tracking-wider text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 font-mono">Prime</span>
+                                        )}
+                                      </div>
+                                      <a href={product.url} target="_blank" rel="noopener noreferrer" className="text-[12px] font-mono text-white/80 hover:text-white leading-snug line-clamp-2 transition-colors">
+                                        {product.title}
+                                        <ExternalLink className="inline h-2.5 w-2.5 ml-1 text-white/20" />
+                                      </a>
+                                    </div>
+                                  </div>
+
+                                  {/* Price + Rating row */}
+                                  <div className="flex items-center gap-4 mt-2">
+                                    {product.price && (
+                                      <span className="text-[13px] font-mono font-bold text-orange-400">{product.price}</span>
+                                    )}
+                                    {product.original_price && (
+                                      <span className="text-[11px] font-mono text-white/30 line-through">{product.original_price}</span>
+                                    )}
+                                    {product.discount && (
+                                      <span className="text-[10px] font-mono text-emerald-400">{product.discount}</span>
+                                    )}
+                                  </div>
+
+                                  {/* Rating + reviews + meta */}
+                                  <div className="flex items-center gap-4 mt-1.5 flex-wrap">
+                                    {product.rating != null && (
+                                      <span className="text-[11px] font-mono text-amber-400">
+                                        {"★".repeat(Math.round(product.rating))}{"☆".repeat(5 - Math.round(product.rating))} {product.rating}
+                                      </span>
+                                    )}
+                                    {product.review_count != null && (
+                                      <span className="text-[10px] font-mono text-white/30">{product.review_count.toLocaleString()} reviews</span>
+                                    )}
+                                    <span className="text-[10px] font-mono text-white/20">{product.asin}</span>
+                                  </div>
+
+                                  {/* Delivery + coupon */}
+                                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                                    {product.delivery && (
+                                      <span className="text-[10px] font-mono text-white/30">{product.delivery}</span>
+                                    )}
+                                    {product.coupon && (
+                                      <span className="text-[10px] font-mono text-emerald-400/80 border border-emerald-500/20 bg-emerald-500/5 px-1.5 py-0.5">{product.coupon}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <details className="border border-white/[0.06]">
+                          <summary className="px-4 py-3 text-[10px] uppercase tracking-[0.2em] text-white/30 font-mono cursor-pointer hover:text-white/50 transition-colors">
+                            Raw JSON Response
+                          </summary>
+                          <pre className="px-4 pb-4 text-[11px] text-white/50 font-mono overflow-x-auto max-h-[400px] overflow-y-auto leading-relaxed">
+                            {JSON.stringify(result, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         </section>
       </main>

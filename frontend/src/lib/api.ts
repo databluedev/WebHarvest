@@ -932,6 +932,53 @@ class ApiClient {
     });
   }
 
+  // ── Scrapper Pool: Amazon ───────────────────────────────
+  async amazonProducts(params: {
+    query: string;
+    num_results?: number;
+    page?: number;
+    domain?: string;
+    sort_by?: string;
+    min_price?: number;
+    max_price?: number;
+    prime_only?: boolean;
+    language?: string;
+  }) {
+    return this.request<{
+      success: boolean;
+      query: string;
+      domain: string;
+      total_results?: string;
+      pages_fetched: number;
+      time_taken: number;
+      products: Array<{
+        position: number;
+        asin: string;
+        title: string;
+        url: string;
+        image_url?: string;
+        price?: string;
+        price_value?: number;
+        currency?: string;
+        original_price?: string;
+        discount?: string;
+        rating?: number;
+        review_count?: number;
+        is_prime: boolean;
+        is_sponsored: boolean;
+        badge?: string;
+        delivery?: string;
+        seller?: string;
+        coupon?: string;
+      }>;
+      search_url?: string;
+      error?: string;
+    }>("/v1/data/amazon/products", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
   async googleMaps(params: {
     query?: string;
     coordinates?: string;
