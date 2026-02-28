@@ -1,8 +1,8 @@
-# WebHarvest
+# DataBlue
 
 **Open-source web scraping platform with industry-leading content extraction, data richness, and zero cost.**
 
-WebHarvest is a self-hosted, full-stack web scraping platform with 5 core features: Scrape, Map, Crawl, Batch, and Search. It uses a multi-strategy anti-detection pipeline to bypass bot protection on sites like Amazon, Ticketmaster, and Cloudflare-protected pages — and it's completely free to run.
+DataBlue is a self-hosted, full-stack web scraping platform with 5 core features: Scrape, Map, Crawl, Batch, and Search. It uses a multi-strategy anti-detection pipeline to bypass bot protection on sites like Amazon, Ticketmaster, and Cloudflare-protected pages — and it's completely free to run.
 
 ---
 
@@ -269,7 +269,7 @@ Search the web using DuckDuckGo (free, no API key) or Google Custom Search (BYOK
 
 ## Anti-Detection Pipeline
 
-WebHarvest uses a **multi-strategy pipeline** that automatically escalates through increasingly sophisticated methods. Most sites are scraped in 1-3 seconds. Hard sites (Amazon, Ticketmaster, etc.) may take 10-20 seconds.
+DataBlue uses a **multi-strategy pipeline** that automatically escalates through increasingly sophisticated methods. Most sites are scraped in 1-3 seconds. Hard sites (Amazon, Ticketmaster, etc.) may take 10-20 seconds.
 
 ```
 Request
@@ -399,7 +399,7 @@ GET /v1/settings/proxies
 DELETE /v1/settings/proxies/{proxy_id}
 ```
 
-When `use_proxy: true` is set on any request, WebHarvest randomly selects from your proxy pool and routes both HTTP (curl_cffi/httpx) and browser (Playwright) traffic through it.
+When `use_proxy: true` is set on any request, DataBlue randomly selects from your proxy pool and routes both HTTP (curl_cffi/httpx) and browser (Playwright) traffic through it.
 
 ---
 

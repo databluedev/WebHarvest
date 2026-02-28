@@ -1,4 +1,4 @@
-# WebHarvest
+# DataBlue
 
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-green)
@@ -14,7 +14,7 @@ Built with FastAPI + Next.js + PostgreSQL + Redis + Celery + Playwright.
 
 ---
 
-## Why WebHarvest?
+## Why DataBlue?
 
 | Feature | Included |
 |---------|:--------:|
@@ -84,7 +84,7 @@ Built with FastAPI + Next.js + PostgreSQL + Redis + Celery + Playwright.
 
 ## What It Does
 
-WebHarvest lets you extract content from any website through 4 core actions:
+DataBlue lets you extract content from any website through 4 core actions:
 
 | Action | Description |
 |--------|-------------|
@@ -223,7 +223,7 @@ Go to `http://localhost:3000` in your browser.
 
 ## Document Extraction
 
-WebHarvest automatically detects and extracts content from document URLs with format-specific strategies:
+DataBlue automatically detects and extracts content from document URLs with format-specific strategies:
 
 | Format | Extraction Capabilities |
 |--------|------------------------|
@@ -453,14 +453,14 @@ pip install -e .
 ### Synchronous Usage
 
 ```python
-from webharvest import WebHarvest
+from webharvest import DataBlue
 
 # Connect with email/password
-wh = WebHarvest(api_url="http://localhost:8000")
+wh = DataBlue(api_url="http://localhost:8000")
 wh.login("user@example.com", "password")
 
 # Or connect with API key
-wh = WebHarvest(api_url="http://localhost:8000", api_key="wh_abc123...")
+wh = DataBlue(api_url="http://localhost:8000", api_key="wh_abc123...")
 
 # Scrape a page
 result = wh.scrape("https://example.com", formats=["markdown", "links"])
@@ -487,10 +487,10 @@ for page in status.data:
 
 ```python
 import asyncio
-from webharvest import AsyncWebHarvest
+from webharvest import AsyncDataBlue
 
 async def main():
-    async with AsyncWebHarvest(api_key="wh_abc123...") as wh:
+    async with AsyncDataBlue(api_key="wh_abc123...") as wh:
         result = await wh.scrape("https://example.com")
         print(result.data.markdown)
 
@@ -578,7 +578,7 @@ WebHarvest/
 │   └── Dockerfile
 ├── sdk/                        # Python SDK
 │   ├── webharvest/
-│   │   ├── client.py          # WebHarvest + AsyncWebHarvest classes
+│   │   ├── client.py          # DataBlue + AsyncDataBlue classes
 │   │   ├── models.py          # Pydantic response models
 │   │   └── exceptions.py      # Typed exceptions
 │   └── pyproject.toml

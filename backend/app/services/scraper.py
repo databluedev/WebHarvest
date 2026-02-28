@@ -2514,7 +2514,7 @@ async def _fetch_with_cookie_http(
         response = await session.get(url, **kwargs)
 
     resp_headers = {k.lower(): v for k, v in response.headers.items()}
-    resp_headers["x-webharvest-strategy"] = "cookie_http"
+    resp_headers["x-datablue-strategy"] = "cookie_http"
     return response.text, response.status_code, resp_headers
 
 
@@ -3421,7 +3421,7 @@ async def _fetch_from_google_cache(
         return "", response.status_code, {}
 
     resp_headers = {k.lower(): v for k, v in response.headers.items()}
-    resp_headers["x-webharvest-source"] = "google-cache"
+    resp_headers["x-datablue-source"] = "google-cache"
     return html, response.status_code, resp_headers
 
 

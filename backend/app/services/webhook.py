@@ -44,9 +44,9 @@ async def send_webhook(
 
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "WebHarvest-Webhook/1.0",
-        "X-WebHarvest-Event": event,
-        "X-WebHarvest-Delivery": delivery_ts,
+        "User-Agent": "DataBlue-Webhook/1.0",
+        "X-DataBlue-Event": event,
+        "X-DataBlue-Delivery": delivery_ts,
     }
 
     # HMAC-SHA256 signature when secret is provided
@@ -54,7 +54,7 @@ async def send_webhook(
         signature = hmac.new(
             secret.encode("utf-8"), body_bytes, hashlib.sha256
         ).hexdigest()
-        headers["X-WebHarvest-Signature"] = f"sha256={signature}"
+        headers["X-DataBlue-Signature"] = f"sha256={signature}"
 
     # Retry with exponential backoff: 1s, 4s, 16s
     last_error = None
@@ -143,7 +143,7 @@ async def send_webhook_test(url: str, secret: str | None = None) -> dict:
     """
     payload = {
         "event": "webhook.test",
-        "message": "This is a test webhook from WebHarvest",
+        "message": "This is a test webhook from DataBlue",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -152,16 +152,16 @@ async def send_webhook_test(url: str, secret: str | None = None) -> dict:
 
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "WebHarvest-Webhook/1.0",
-        "X-WebHarvest-Event": "webhook.test",
-        "X-WebHarvest-Delivery": str(int(time.time())),
+        "User-Agent": "DataBlue-Webhook/1.0",
+        "X-DataBlue-Event": "webhook.test",
+        "X-DataBlue-Delivery": str(int(time.time())),
     }
 
     if secret:
         signature = hmac.new(
             secret.encode("utf-8"), body_bytes, hashlib.sha256
         ).hexdigest()
-        headers["X-WebHarvest-Signature"] = f"sha256={signature}"
+        headers["X-DataBlue-Signature"] = f"sha256={signature}"
 
     start = time.time()
     try:

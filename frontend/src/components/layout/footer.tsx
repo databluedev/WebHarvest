@@ -34,7 +34,7 @@ const footerLinks = [
   {
     label: "Connect",
     links: [
-      { text: "GitHub", href: "https://github.com/Takezo49/WebHarvest" },
+      { text: "GitHub", href: "https://github.com/Takezo49/DataBlue" },
     ],
   },
 ];
@@ -50,7 +50,7 @@ export function Footer() {
               <div className="h-7 w-7 rounded-lg bg-primary/10 grid place-items-center">
                 <Flame className="h-4 w-4 text-primary" />
               </div>
-              <span className="text-sm font-semibold tracking-tight">WebHarvest</span>
+              <span className="text-sm font-semibold tracking-tight">DataBlue</span>
             </div>
             <p className="text-[12px] text-muted-foreground/60 leading-relaxed max-w-xs">
               Open-source web scraping platform with multi-strategy anti-detection.
@@ -94,12 +94,12 @@ export function Footer() {
         {/* Bottom bar */}
         <div className="mt-10 pt-6 border-t border-border/20 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-[11px] text-muted-foreground/40">
-            &copy; {new Date().getFullYear()} WebHarvest. All rights reserved.
+            &copy; {new Date().getFullYear()} DataBlue. All rights reserved.
           </p>
           <div className="flex items-center gap-3">
             {/* GitHub */}
             <a
-              href="https://github.com/Takezo49/WebHarvest"
+              href="https://github.com/Takezo49/DataBlue"
               target="_blank"
               rel="noopener noreferrer"
               className="h-8 w-8 rounded-full bg-muted/50 grid place-items-center text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors"

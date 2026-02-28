@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "webharvest"
 version = "0.1.0"
-description = "Python SDK for the WebHarvest web scraping platform"
+description = "Python SDK for the DataBlue web scraping platform"
 license = "MIT"
 requires-python = ">=3.10"
 dependencies = [

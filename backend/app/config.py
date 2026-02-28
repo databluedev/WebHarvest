@@ -21,7 +21,7 @@ def _generate_secret(name: str) -> str:
 
 class Settings(BaseSettings):
     # App
-    APP_NAME: str = "WebHarvest"
+    APP_NAME: str = "DataBlue"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
 

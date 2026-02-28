@@ -302,7 +302,7 @@ class TestWebhookPayload:
 
     @pytest.mark.asyncio
     async def test_event_header_set_from_payload(self):
-        """X-WebHarvest-Event header is set to the event name from payload."""
+        """X-DataBlue-Event header is set to the event name from payload."""
         captured_headers = {}
 
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
@@ -321,11 +321,11 @@ class TestWebhookPayload:
                 url="https://hook.example.com",
                 payload={"event": "batch.done"},
             )
-            assert captured_headers["X-WebHarvest-Event"] == "batch.done"
+            assert captured_headers["X-DataBlue-Event"] == "batch.done"
 
     @pytest.mark.asyncio
     async def test_user_agent_header(self):
-        """User-Agent is set to WebHarvest-Webhook/1.0."""
+        """User-Agent is set to DataBlue-Webhook/1.0."""
         captured_headers = {}
 
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
@@ -343,11 +343,11 @@ class TestWebhookPayload:
             await send_webhook(
                 url="https://hook.example.com", payload={"event": "test"}
             )
-            assert captured_headers["User-Agent"] == "WebHarvest-Webhook/1.0"
+            assert captured_headers["User-Agent"] == "DataBlue-Webhook/1.0"
 
     @pytest.mark.asyncio
     async def test_delivery_timestamp_header(self):
-        """X-WebHarvest-Delivery header contains a Unix timestamp."""
+        """X-DataBlue-Delivery header contains a Unix timestamp."""
         captured_headers = {}
 
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
@@ -368,7 +368,7 @@ class TestWebhookPayload:
             )
             after = int(time.time())
 
-            delivery_ts = int(captured_headers["X-WebHarvest-Delivery"])
+            delivery_ts = int(captured_headers["X-DataBlue-Delivery"])
             assert before <= delivery_ts <= after
 
     @pytest.mark.asyncio
@@ -402,7 +402,7 @@ class TestWebhookPayload:
 class TestWebhookHMAC:
     @pytest.mark.asyncio
     async def test_hmac_signature_present_when_secret_provided(self):
-        """X-WebHarvest-Signature header is present when secret is given."""
+        """X-DataBlue-Signature header is present when secret is given."""
         captured_headers = {}
 
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
@@ -422,8 +422,8 @@ class TestWebhookHMAC:
                 payload={"event": "test"},
                 secret="my-secret-key",
             )
-            assert "X-WebHarvest-Signature" in captured_headers
-            assert captured_headers["X-WebHarvest-Signature"].startswith("sha256=")
+            assert "X-DataBlue-Signature" in captured_headers
+            assert captured_headers["X-DataBlue-Signature"].startswith("sha256=")
 
     @pytest.mark.asyncio
     async def test_hmac_signature_is_correct(self):
@@ -457,11 +457,11 @@ class TestWebhookHMAC:
             expected_sig = hmac.new(
                 secret.encode("utf-8"), captured_body, hashlib.sha256
             ).hexdigest()
-            assert captured_headers["X-WebHarvest-Signature"] == f"sha256={expected_sig}"
+            assert captured_headers["X-DataBlue-Signature"] == f"sha256={expected_sig}"
 
     @pytest.mark.asyncio
     async def test_no_signature_without_secret(self):
-        """No X-WebHarvest-Signature header when secret is not provided."""
+        """No X-DataBlue-Signature header when secret is not provided."""
         captured_headers = {}
 
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
@@ -480,11 +480,11 @@ class TestWebhookHMAC:
                 url="https://hook.example.com",
                 payload={"event": "test"},
             )
-            assert "X-WebHarvest-Signature" not in captured_headers
+            assert "X-DataBlue-Signature" not in captured_headers
 
     @pytest.mark.asyncio
     async def test_no_signature_with_none_secret(self):
-        """No X-WebHarvest-Signature when secret is explicitly None."""
+        """No X-DataBlue-Signature when secret is explicitly None."""
         captured_headers = {}
 
         with patch("app.services.webhook.httpx.AsyncClient") as MockClient:
@@ -504,4 +504,4 @@ class TestWebhookHMAC:
                 payload={"event": "test"},
                 secret=None,
             )
-            assert "X-WebHarvest-Signature" not in captured_headers
+            assert "X-DataBlue-Signature" not in captured_headers
