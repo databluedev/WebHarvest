@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PageLayout } from "@/components/layout/page-layout";
 import { api } from "@/lib/api";
-import { Settings as SettingsIcon, Plus, Trash2, Star, Check, Shield, Globe, Webhook } from "lucide-react";
+import { Settings as SettingsIcon, Plus, Trash2, Star, Check, Shield, Globe, Webhook, Sun, Moon, Monitor } from "lucide-react";
 
 const PROVIDERS = [
   { id: "openai", name: "OpenAI", placeholder: "sk-...", defaultModel: "gpt-4o-mini" },
@@ -30,6 +30,9 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
+  // Theme state
+  const [theme, setTheme] = useState<"light" | "dark" | "system">("dark");
+
   // Default webhook state
   const [defaultWebhookUrl, setDefaultWebhookUrl] = useState("");
   const [defaultWebhookSecret, setDefaultWebhookSecret] = useState("");
@@ -50,12 +53,32 @@ export default function SettingsPage() {
     }
     loadKeys();
     loadProxies();
-    // Load default webhook from localStorage
+    // Load theme from localStorage
     if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("wh_theme") as "light" | "dark" | "system" | null;
+      if (stored) setTheme(stored);
       setDefaultWebhookUrl(localStorage.getItem("wh_default_webhook_url") || "");
       setDefaultWebhookSecret(localStorage.getItem("wh_default_webhook_secret") || "");
     }
   }, [router]);
+
+  const applyTheme = (t: "light" | "dark" | "system") => {
+    const root = document.documentElement;
+    if (t === "system") {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.classList.toggle("dark", prefersDark);
+      root.classList.toggle("light", !prefersDark);
+    } else {
+      root.classList.toggle("dark", t === "dark");
+      root.classList.toggle("light", t === "light");
+    }
+  };
+
+  const handleThemeChange = (newTheme: "light" | "dark" | "system") => {
+    setTheme(newTheme);
+    localStorage.setItem("wh_theme", newTheme);
+    applyTheme(newTheme);
+  };
 
   const loadKeys = async () => {
     try {
@@ -147,20 +170,81 @@ export default function SettingsPage() {
         {/* Page Header */}
         <div className="mb-10">
           <h1 className="text-[36px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-violet">Settings</h1>
-          <p className="text-white/50 font-mono text-[14px] mt-1">
-            Manage your LLM API keys and proxy configuration
+          <p className="text-muted-foreground font-mono text-[14px] mt-1">
+            Manage your LLM API keys, theme, and proxy configuration
           </p>
         </div>
 
+        {/* Theme Section */}
+        <div className="border border-border bg-card/50 p-6 mb-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 to-violet-500" />
+          <div className="mb-4">
+            <h2 className="text-[16px] font-bold text-foreground font-mono uppercase tracking-wider flex items-center gap-2">
+              {theme === "dark" ? <Moon className="h-5 w-5 text-blue-400" /> : theme === "light" ? <Sun className="h-5 w-5 text-amber-400" /> : <Monitor className="h-5 w-5 text-violet-400" />}
+              Appearance
+            </h2>
+            <p className="text-muted-foreground text-[13px] font-mono mt-1">
+              Choose your preferred color theme for the interface.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => handleThemeChange("light")}
+              className={
+                theme === "light"
+                  ? "flex items-center gap-2.5 border-2 border-primary bg-primary/10 text-foreground text-[13px] font-mono px-5 py-3 transition-all"
+                  : "flex items-center gap-2.5 border border-border text-muted-foreground text-[13px] font-mono px-5 py-3 hover:border-foreground/30 hover:text-foreground transition-all"
+              }
+            >
+              <Sun className="h-4.5 w-4.5" />
+              <div className="text-left">
+                <div className="font-semibold">Light</div>
+                <div className="text-[11px] opacity-60">Clean, bright interface</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleThemeChange("dark")}
+              className={
+                theme === "dark"
+                  ? "flex items-center gap-2.5 border-2 border-primary bg-primary/10 text-foreground text-[13px] font-mono px-5 py-3 transition-all"
+                  : "flex items-center gap-2.5 border border-border text-muted-foreground text-[13px] font-mono px-5 py-3 hover:border-foreground/30 hover:text-foreground transition-all"
+              }
+            >
+              <Moon className="h-4.5 w-4.5" />
+              <div className="text-left">
+                <div className="font-semibold">Dark</div>
+                <div className="text-[11px] opacity-60">Easy on the eyes</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleThemeChange("system")}
+              className={
+                theme === "system"
+                  ? "flex items-center gap-2.5 border-2 border-primary bg-primary/10 text-foreground text-[13px] font-mono px-5 py-3 transition-all"
+                  : "flex items-center gap-2.5 border border-border text-muted-foreground text-[13px] font-mono px-5 py-3 hover:border-foreground/30 hover:text-foreground transition-all"
+              }
+            >
+              <Monitor className="h-4.5 w-4.5" />
+              <div className="text-left">
+                <div className="font-semibold">System</div>
+                <div className="text-[11px] opacity-60">Match OS preference</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
         {/* BYOK Section */}
-        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6 relative overflow-hidden">
+        <div className="border border-border bg-card/50 p-6 mb-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500 to-pink-500" />
           <div className="mb-4">
-            <h2 className="text-[16px] font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+            <h2 className="text-[16px] font-bold text-foreground font-mono uppercase tracking-wider flex items-center gap-2">
               <SettingsIcon className="h-5 w-5 text-amber-400" />
               Bring Your Own Key (BYOK)
             </h2>
-            <p className="text-white/50 text-[13px] font-mono mt-1">
+            <p className="text-muted-foreground text-[13px] font-mono mt-1">
               Add your LLM API keys to enable AI-powered data extraction.
               Keys are encrypted at rest using AES-256.
             </p>
@@ -169,7 +253,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             {/* Provider Selection */}
             <div className="space-y-2">
-              <label className="text-[13px] font-mono text-white/70">Provider</label>
+              <label className="text-[13px] font-mono text-muted-foreground">Provider</label>
               <div className="flex flex-wrap gap-2">
                 {PROVIDERS.map((p) => (
                   <button
@@ -180,8 +264,8 @@ export default function SettingsPage() {
                     }}
                     className={
                       selectedProvider === p.id
-                        ? "bg-white text-black text-[12px] font-mono uppercase tracking-wider px-3 py-1.5"
-                        : "border border-white/20 text-white/50 text-[12px] font-mono uppercase tracking-wider px-3 py-1.5 hover:border-white/40 hover:text-white"
+                        ? "bg-foreground text-background text-[12px] font-mono uppercase tracking-wider px-3 py-1.5"
+                        : "border border-border text-muted-foreground text-[12px] font-mono uppercase tracking-wider px-3 py-1.5 hover:border-foreground/40 hover:text-foreground"
                     }
                   >
                     {p.name}
@@ -192,26 +276,26 @@ export default function SettingsPage() {
 
             {/* API Key Input */}
             <div className="space-y-2">
-              <label className="text-[13px] font-mono text-white/70">API Key</label>
+              <label className="text-[13px] font-mono text-muted-foreground">API Key</label>
               <input
                 type="password"
                 placeholder={currentProvider.placeholder}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                className="h-10 w-full bg-transparent border border-white/10 px-3 text-[14px] font-mono text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+                className="h-10 w-full bg-transparent border border-border px-3 text-[14px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
               />
             </div>
 
             {/* Model Input */}
             <div className="space-y-2">
-              <label className="text-[13px] font-mono text-white/70">Model (optional)</label>
+              <label className="text-[13px] font-mono text-muted-foreground">Model (optional)</label>
               <input
                 placeholder={currentProvider.defaultModel}
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="h-10 w-full bg-transparent border border-white/10 px-3 text-[14px] font-mono text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+                className="h-10 w-full bg-transparent border border-border px-3 text-[14px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
               />
-              <p className="text-white/50 text-[13px] font-mono">
+              <p className="text-muted-foreground text-[13px] font-mono">
                 Leave empty to use default: {currentProvider.defaultModel}
               </p>
             </div>
@@ -222,11 +306,11 @@ export default function SettingsPage() {
                 onClick={() => setIsDefault(!isDefault)}
                 className={
                   isDefault
-                    ? "bg-white text-black text-[12px] font-mono uppercase tracking-wider px-3 py-1.5 flex items-center gap-1"
-                    : "border border-white/20 text-white/50 text-[12px] font-mono uppercase tracking-wider px-3 py-1.5 hover:border-white/40 hover:text-white flex items-center gap-1"
+                    ? "bg-foreground text-background text-[12px] font-mono uppercase tracking-wider px-3 py-1.5 flex items-center gap-1"
+                    : "border border-border text-muted-foreground text-[12px] font-mono uppercase tracking-wider px-3 py-1.5 hover:border-foreground/40 hover:text-foreground flex items-center gap-1"
                 }
               >
-                <Star className={`h-3.5 w-3.5 ${isDefault ? "text-amber-400" : "text-white/50"}`} />
+                <Star className={`h-3.5 w-3.5 ${isDefault ? "text-amber-400" : "text-muted-foreground"}`} />
                 {isDefault ? "Set as default" : "Not default"}
               </button>
             </div>
@@ -246,7 +330,7 @@ export default function SettingsPage() {
             <button
               onClick={handleSave}
               disabled={loading || !apiKey}
-              className="border border-white/20 px-5 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-white hover:bg-white hover:text-black transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+              className="border border-border px-5 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-foreground hover:bg-foreground hover:text-background transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
             >
               <Plus className="h-4 w-4" />
               {loading ? "Saving..." : "Save Key"}
@@ -255,13 +339,13 @@ export default function SettingsPage() {
         </div>
 
         {/* Saved Keys */}
-        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6 relative overflow-hidden">
+        <div className="border border-border bg-card/50 p-6 mb-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500/50 to-pink-500/50" />
           <div className="mb-4">
-            <h2 className="text-[16px] font-bold text-white font-mono uppercase tracking-wider">Saved LLM Keys</h2>
+            <h2 className="text-[16px] font-bold text-foreground font-mono uppercase tracking-wider">Saved LLM Keys</h2>
           </div>
           {keys.length === 0 ? (
-            <p className="text-white/40 text-[13px] font-mono text-center py-8">
+            <p className="text-muted-foreground text-[13px] font-mono text-center py-8">
               No LLM keys saved yet. Add one above to enable AI extraction.
             </p>
           ) : (
@@ -269,11 +353,11 @@ export default function SettingsPage() {
               {keys.map((key) => (
                 <div
                   key={key.id}
-                  className="border border-white/10 bg-white/[0.02] p-4 flex items-center justify-between"
+                  className="border border-border bg-card/50 p-4 flex items-center justify-between"
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-mono text-white capitalize">{key.provider}</span>
+                      <span className="text-[14px] font-mono text-foreground capitalize">{key.provider}</span>
                       {key.is_default && (
                         <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-emerald-500/30 text-emerald-400 bg-emerald-500/10 flex items-center gap-1">
                           <Star className="h-3 w-3" />
@@ -282,15 +366,15 @@ export default function SettingsPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-3 mt-1">
-                      <code className="text-[12px] text-white/40 font-mono">{key.key_preview}</code>
+                      <code className="text-[12px] text-muted-foreground font-mono">{key.key_preview}</code>
                       {key.model && (
-                        <span className="border border-white/20 text-white/50 text-[11px] font-mono px-2 py-0.5">{key.model}</span>
+                        <span className="border border-border text-muted-foreground text-[11px] font-mono px-2 py-0.5">{key.model}</span>
                       )}
                     </div>
                   </div>
                   <button
                     onClick={() => handleDelete(key.id)}
-                    className="text-white/30 hover:text-red-400 p-2"
+                    className="text-muted-foreground/50 hover:text-red-400 p-2"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -301,14 +385,14 @@ export default function SettingsPage() {
         </div>
 
         {/* Proxy Configuration */}
-        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6 relative overflow-hidden">
+        <div className="border border-border bg-card/50 p-6 mb-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-violet-500 to-cyan-500" />
           <div className="mb-4">
-            <h2 className="text-[16px] font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+            <h2 className="text-[16px] font-bold text-foreground font-mono uppercase tracking-wider flex items-center gap-2">
               <Shield className="h-5 w-5 text-violet-400" />
               Proxy Configuration
             </h2>
-            <p className="text-white/50 text-[13px] font-mono mt-1">
+            <p className="text-muted-foreground text-[13px] font-mono mt-1">
               Add rotating proxies for anti-bot bypassing. Supports HTTP, HTTPS, and SOCKS5 proxies.
               Enable &quot;Use Proxy&quot; on scrape/crawl requests to route through these proxies.
             </p>
@@ -317,7 +401,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             {/* Proxy Type Selection */}
             <div className="space-y-2">
-              <label className="text-[13px] font-mono text-white/70">Proxy Type</label>
+              <label className="text-[13px] font-mono text-muted-foreground">Proxy Type</label>
               <div className="flex gap-2">
                 {["http", "https", "socks5"].map((t) => (
                   <button
@@ -325,8 +409,8 @@ export default function SettingsPage() {
                     onClick={() => setProxyType(t)}
                     className={
                       proxyType === t
-                        ? "bg-white text-black text-[12px] font-mono uppercase tracking-wider px-3 py-1.5"
-                        : "border border-white/20 text-white/50 text-[12px] font-mono uppercase tracking-wider px-3 py-1.5 hover:border-white/40 hover:text-white"
+                        ? "bg-foreground text-background text-[12px] font-mono uppercase tracking-wider px-3 py-1.5"
+                        : "border border-border text-muted-foreground text-[12px] font-mono uppercase tracking-wider px-3 py-1.5 hover:border-foreground/40 hover:text-foreground"
                     }
                   >
                     {t.toUpperCase()}
@@ -337,9 +421,9 @@ export default function SettingsPage() {
 
             {/* Proxy URLs Textarea */}
             <div className="space-y-2">
-              <label className="text-[13px] font-mono text-white/70">Proxy URLs (one per line)</label>
+              <label className="text-[13px] font-mono text-muted-foreground">Proxy URLs (one per line)</label>
               <textarea
-                className="min-h-[120px] w-full bg-transparent border border-white/10 px-3 py-2 text-[14px] font-mono text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+                className="min-h-[120px] w-full bg-transparent border border-border px-3 py-2 text-[14px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
                 placeholder={"http://user:pass@proxy1.example.com:8080\nhttp://proxy2.example.com:3128\nsocks5://user:pass@proxy3.example.com:1080"}
                 value={proxyText}
                 onChange={(e) => setProxyText(e.target.value)}
@@ -361,7 +445,7 @@ export default function SettingsPage() {
             <button
               onClick={handleAddProxies}
               disabled={proxyLoading || !proxyText.trim()}
-              className="border border-white/20 px-5 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-white hover:bg-white hover:text-black transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+              className="border border-border px-5 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-foreground hover:bg-foreground hover:text-background transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
             >
               <Plus className="h-4 w-4" />
               {proxyLoading ? "Adding..." : "Add Proxies"}
@@ -370,14 +454,14 @@ export default function SettingsPage() {
         </div>
 
         {/* Default Webhook */}
-        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6 relative overflow-hidden">
+        <div className="border border-border bg-card/50 p-6 mb-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 to-emerald-500" />
           <div className="mb-4">
-            <h2 className="text-[16px] font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+            <h2 className="text-[16px] font-bold text-foreground font-mono uppercase tracking-wider flex items-center gap-2">
               <Webhook className="h-5 w-5 text-cyan-400" />
               Default Webhook
             </h2>
-            <p className="text-white/50 text-[13px] font-mono mt-1">
+            <p className="text-muted-foreground text-[13px] font-mono mt-1">
               Set a default webhook URL and secret that will be auto-applied to new jobs from the playground.
               Stored locally in your browser.
             </p>
@@ -386,24 +470,24 @@ export default function SettingsPage() {
           <div className="space-y-4">
             {/* Webhook URL */}
             <div className="space-y-2">
-              <label className="text-[13px] font-mono text-white/70">Webhook URL</label>
+              <label className="text-[13px] font-mono text-muted-foreground">Webhook URL</label>
               <input
                 placeholder="https://your-server.com/webhook"
                 value={defaultWebhookUrl}
                 onChange={(e) => setDefaultWebhookUrl(e.target.value)}
-                className="h-10 w-full bg-transparent border border-white/10 px-3 text-[14px] font-mono text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+                className="h-10 w-full bg-transparent border border-border px-3 text-[14px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
               />
             </div>
 
             {/* Webhook Secret */}
             <div className="space-y-2">
-              <label className="text-[13px] font-mono text-white/70">Webhook Secret (optional)</label>
+              <label className="text-[13px] font-mono text-muted-foreground">Webhook Secret (optional)</label>
               <input
                 type="password"
                 placeholder="Optional HMAC signing secret"
                 value={defaultWebhookSecret}
                 onChange={(e) => setDefaultWebhookSecret(e.target.value)}
-                className="h-10 w-full bg-transparent border border-white/10 px-3 text-[14px] font-mono text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+                className="h-10 w-full bg-transparent border border-border px-3 text-[14px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
               />
             </div>
 
@@ -426,7 +510,7 @@ export default function SettingsPage() {
                   setWebhookSaved(true);
                   setTimeout(() => setWebhookSaved(false), 3000);
                 }}
-                className="border border-white/20 px-5 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-white hover:bg-white hover:text-black transition-all flex items-center gap-1"
+                className="border border-border px-5 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-foreground hover:bg-foreground hover:text-background transition-all flex items-center gap-1"
               >
                 <Check className="h-4 w-4" />
                 Save Webhook
@@ -443,7 +527,7 @@ export default function SettingsPage() {
                     setWebhookSaved(true);
                     setTimeout(() => setWebhookSaved(false), 3000);
                   }}
-                  className="border border-white/20 px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-white/50 hover:text-white hover:border-white/40 flex items-center gap-1"
+                  className="border border-border px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/40 flex items-center gap-1"
                 >
                   <Trash2 className="h-4 w-4" />
                   Clear
@@ -454,13 +538,13 @@ export default function SettingsPage() {
         </div>
 
         {/* Saved Proxies */}
-        <div className="border border-white/10 bg-white/[0.02] p-6 mb-6 relative overflow-hidden">
+        <div className="border border-border bg-card/50 p-6 mb-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-violet-500/50 to-cyan-500/50" />
           <div className="mb-4">
-            <h2 className="text-[16px] font-bold text-white font-mono uppercase tracking-wider">Saved Proxies</h2>
+            <h2 className="text-[16px] font-bold text-foreground font-mono uppercase tracking-wider">Saved Proxies</h2>
           </div>
           {proxies.length === 0 ? (
-            <p className="text-white/40 text-[13px] font-mono text-center py-8">
+            <p className="text-muted-foreground text-[13px] font-mono text-center py-8">
               No proxies configured. Add proxies above to enable rotating proxy support.
             </p>
           ) : (
@@ -468,25 +552,25 @@ export default function SettingsPage() {
               {proxies.map((proxy) => (
                 <div
                   key={proxy.id}
-                  className="border border-white/10 bg-white/[0.02] p-4 flex items-center justify-between"
+                  className="border border-border bg-card/50 p-4 flex items-center justify-between"
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-white/50" />
-                      <code className="text-[12px] text-white/40 font-mono">{proxy.proxy_url_masked}</code>
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                      <code className="text-[12px] text-muted-foreground font-mono">{proxy.proxy_url_masked}</code>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="border border-white/20 text-white/50 text-[11px] font-mono uppercase px-2 py-0.5">{proxy.proxy_type}</span>
+                      <span className="border border-border text-muted-foreground text-[11px] font-mono uppercase px-2 py-0.5">{proxy.proxy_type}</span>
                       {proxy.is_active ? (
                         <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-emerald-500/30 text-emerald-400 bg-emerald-500/10">Active</span>
                       ) : (
-                        <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-white/20 text-white/40">Inactive</span>
+                        <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-border text-muted-foreground">Inactive</span>
                       )}
                     </div>
                   </div>
                   <button
                     onClick={() => handleDeleteProxy(proxy.id)}
-                    className="text-white/30 hover:text-red-400 p-2"
+                    className="text-muted-foreground/50 hover:text-red-400 p-2"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

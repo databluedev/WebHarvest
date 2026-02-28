@@ -111,8 +111,8 @@ const PIE_COLORS = [
 
 const PRIMARY_CHART = "hsl(160, 84%, 45%)";
 const PRIMARY_CHART_LIGHT = "hsl(160, 84%, 55%)";
-const GRID_STROKE = "rgba(255,255,255,0.06)";
-const AXIS_TICK = "rgba(255,255,255,0.4)";
+const GRID_STROKE = "hsl(var(--border))";
+const AXIS_TICK = "hsl(var(--muted-foreground))";
 
 // ---- Helpers ----
 
@@ -198,7 +198,7 @@ function getStatusClasses(status: string): string {
     case "running":
       return "border-amber-400/30 text-amber-400";
     default:
-      return "border-white/20 text-white/50";
+      return "border-border text-muted-foreground";
   }
 }
 
@@ -207,8 +207,8 @@ function getStatusClasses(status: string): string {
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="border border-white/10 bg-[#0a0a0a] px-3 py-2 shadow-md">
-      <p className="text-xs text-white/50 mb-1 font-mono">{label}</p>
+    <div className="border border-border bg-card px-3 py-2 shadow-md">
+      <p className="text-xs text-muted-foreground mb-1 font-mono">{label}</p>
       {payload.map((entry: any, i: number) => (
         <p key={i} className="text-sm font-bold font-mono" style={{ color: entry.color }}>
           {entry.name}: {entry.value}
@@ -222,9 +222,9 @@ function PieTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const data = payload[0];
   return (
-    <div className="border border-white/10 bg-[#0a0a0a] px-3 py-2 shadow-md">
-      <p className="text-sm font-medium capitalize text-white font-mono">{data.name}</p>
-      <p className="text-xs text-white/50 font-mono">{data.value} jobs</p>
+    <div className="border border-border bg-card px-3 py-2 shadow-md">
+      <p className="text-sm font-medium capitalize text-foreground font-mono">{data.name}</p>
+      <p className="text-xs text-muted-foreground font-mono">{data.value} jobs</p>
     </div>
   );
 }
@@ -374,14 +374,14 @@ export default function DashboardPage() {
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-[36px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text">Dashboard</h1>
-            <p className="mt-1 text-white/50 font-mono text-sm">
+            <p className="mt-1 text-muted-foreground font-mono text-sm">
               Real-time analytics, active jobs, and usage overview
             </p>
           </div>
           <button
             onClick={loadData}
             disabled={loading}
-            className="flex items-center gap-2 border border-white/20 px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono hover:bg-white hover:text-black transition-all disabled:opacity-50"
+            className="flex items-center gap-2 border border-border px-4 py-2 text-[12px] uppercase tracking-[0.15em] font-mono hover:bg-foreground hover:text-background transition-all disabled:opacity-50"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -398,19 +398,19 @@ export default function DashboardPage() {
             <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
             <div>
               <p className="text-sm font-medium text-red-400 font-mono">Failed to load dashboard data</p>
-              <p className="text-xs text-white/50 mt-0.5 font-mono">{error}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 font-mono">{error}</p>
             </div>
           </div>
         )}
 
         {/* ── API Keys ── */}
-        <div className="mb-8 border border-white/10 bg-white/[0.02] p-6 relative overflow-hidden">
+        <div className="mb-8 border border-border bg-card/50 p-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 to-emerald-500" />
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
               <Key className="h-5 w-5 text-cyan-400" />
-              <h2 className="text-lg font-bold text-white font-mono">API Keys</h2>
-              <span className="text-xs font-mono text-white/50 ml-1">
+              <h2 className="text-lg font-bold text-foreground font-mono">API Keys</h2>
+              <span className="text-xs font-mono text-muted-foreground ml-1">
                 ({apiKeys.filter((k) => k.is_active).length} active)
               </span>
             </div>
@@ -424,7 +424,7 @@ export default function DashboardPage() {
               value={newKeyName}
               onChange={(e) => setNewKeyName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleGenerateKey()}
-              className="flex-1 max-w-[300px] bg-transparent border border-white/10 px-3 py-2 text-sm font-mono text-white placeholder:text-white/25 focus:outline-none focus:border-cyan-500/40 transition-colors"
+              className="flex-1 max-w-[300px] bg-transparent border border-border px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-cyan-500/40 transition-colors"
             />
             <button
               onClick={handleGenerateKey}
@@ -449,19 +449,19 @@ export default function DashboardPage() {
                 <span className="text-[10px] uppercase tracking-wider text-amber-400 font-mono ml-2">Save it now — it won&apos;t be shown again</span>
               </div>
               <div className="flex items-center gap-2">
-                <code className="flex-1 bg-black/30 border border-white/10 px-3 py-2 text-sm font-mono text-white break-all select-all">
+                <code className="flex-1 bg-muted/50 border border-border px-3 py-2 text-sm font-mono text-foreground break-all select-all">
                   {showKeyValue ? generatedKey : "•".repeat(40)}
                 </code>
                 <button
                   onClick={() => setShowKeyValue(!showKeyValue)}
-                  className="h-9 w-9 grid place-items-center border border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors"
+                  className="h-9 w-9 grid place-items-center border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
                   title={showKeyValue ? "Hide" : "Reveal"}
                 >
                   {showKeyValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
                 <button
                   onClick={() => handleCopyKey(generatedKey)}
-                  className="h-9 w-9 grid place-items-center border border-white/10 text-white/40 hover:text-white hover:border-white/20 transition-colors"
+                  className="h-9 w-9 grid place-items-center border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
                   title="Copy"
                 >
                   {keyCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
@@ -475,19 +475,19 @@ export default function DashboardPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/[0.06] text-left">
-                    <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">Name</th>
-                    <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">Key</th>
-                    <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">Status</th>
-                    <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">Created</th>
-                    <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono text-right">Actions</th>
+                  <tr className="border-b border-border text-left">
+                    <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Name</th>
+                    <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Key</th>
+                    <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Status</th>
+                    <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Created</th>
+                    <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {apiKeys.map((k) => (
-                    <tr key={k.id} className="border-b border-white/[0.06]">
+                    <tr key={k.id} className="border-b border-border">
                       <td className="py-2.5 pr-3">
-                        <span className="text-white font-mono">{k.name || "—"}</span>
+                        <span className="text-foreground font-mono">{k.name || "—"}</span>
                       </td>
                       <td className="py-2.5 pr-3">
                         <code className="text-cyan-400/70 font-mono text-xs">{k.key_prefix}••••••••</code>
@@ -496,11 +496,11 @@ export default function DashboardPage() {
                         {k.is_active ? (
                           <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-emerald-400/30 text-emerald-400">Active</span>
                         ) : (
-                          <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-white/20 text-white/30">Revoked</span>
+                          <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-border text-muted-foreground">Revoked</span>
                         )}
                       </td>
                       <td className="py-2.5 pr-3">
-                        <span className="text-white/50 font-mono text-xs">{timeAgo(k.created_at)}</span>
+                        <span className="text-muted-foreground font-mono text-xs">{timeAgo(k.created_at)}</span>
                       </td>
                       <td className="py-2.5 text-right">
                         {k.is_active && (
@@ -523,7 +523,7 @@ export default function DashboardPage() {
               </table>
             </div>
           ) : (
-            <div className="text-center py-6 text-white/30">
+            <div className="text-center py-6 text-muted-foreground">
               <Key className="h-8 w-8 mx-auto mb-2 opacity-40" />
               <p className="text-sm font-mono">No API keys yet</p>
               <p className="text-xs font-mono mt-1">Generate a key to use the API programmatically</p>
@@ -536,17 +536,17 @@ export default function DashboardPage() {
           <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="border border-white/10 bg-white/[0.02] p-6">
-                  <div className="h-4 w-20 bg-white/[0.05] animate-pulse mb-2" />
-                  <div className="h-7 w-16 bg-white/[0.05] animate-pulse mb-1" />
-                  <div className="h-3 w-24 bg-white/[0.05] animate-pulse" />
+                <div key={i} className="border border-border bg-card/50 p-6">
+                  <div className="h-4 w-20 bg-muted animate-pulse mb-2" />
+                  <div className="h-7 w-16 bg-muted animate-pulse mb-1" />
+                  <div className="h-3 w-24 bg-muted animate-pulse" />
                 </div>
               ))}
             </div>
             <div className="grid gap-6 lg:grid-cols-2">
               {[...Array(2)].map((_, i) => (
-                <div key={i} className="border border-white/10 bg-white/[0.02] p-6">
-                  <div className="h-[300px] bg-white/[0.05] animate-pulse" />
+                <div key={i} className="border border-border bg-card/50 p-6">
+                  <div className="h-[300px] bg-muted animate-pulse" />
                 </div>
               ))}
             </div>
@@ -558,50 +558,50 @@ export default function DashboardPage() {
           <>
             {/* Stat Cards (6-column grid) */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-8">
-              <div className="border border-white/10 bg-white/[0.02] p-6">
+              <div className="border border-border bg-card/50 p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-white/50">Total Jobs</span>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">Total Jobs</span>
                   <div className="h-7 w-7 bg-emerald-400/10 grid place-items-center">
                     <Activity className="h-3.5 w-3.5 text-emerald-400" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-white">{stats.total_jobs.toLocaleString()}</p>
-                <p className="text-[11px] text-white/50 mt-0.5 font-mono">All time</p>
+                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-foreground">{stats.total_jobs.toLocaleString()}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">All time</p>
               </div>
 
-              <div className="border border-white/10 bg-white/[0.02] p-6">
+              <div className="border border-border bg-card/50 p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-white/50">Pages Scraped</span>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">Pages Scraped</span>
                   <div className="h-7 w-7 bg-blue-500/10 grid place-items-center">
                     <FileText className="h-3.5 w-3.5 text-blue-400" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-white">{stats.total_pages_scraped.toLocaleString()}</p>
-                <p className="text-[11px] text-white/50 mt-0.5 font-mono">
+                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-foreground">{stats.total_pages_scraped.toLocaleString()}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">
                   ~{stats.avg_pages_per_job.toFixed(1)} per job
                 </p>
               </div>
 
-              <div className="border border-white/10 bg-white/[0.02] p-6">
+              <div className="border border-border bg-card/50 p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-white/50">Avg Duration</span>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">Avg Duration</span>
                   <div className="h-7 w-7 bg-violet-500/10 grid place-items-center">
                     <Clock className="h-3.5 w-3.5 text-violet-400" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-white">{formatDuration(stats.avg_duration_seconds)}</p>
-                <p className="text-[11px] text-white/50 mt-0.5 font-mono">Per job completion</p>
+                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-foreground">{formatDuration(stats.avg_duration_seconds)}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">Per job completion</p>
               </div>
 
-              <div className="border border-white/10 bg-white/[0.02] p-6">
+              <div className="border border-border bg-card/50 p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-white/50">Success Rate</span>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">Success Rate</span>
                   <div className="h-7 w-7 bg-emerald-500/10 grid place-items-center">
                     <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-white">{stats.success_rate.toFixed(1)}%</p>
-                <div className="mt-1.5 h-1.5 w-full bg-white/[0.06] overflow-hidden">
+                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-foreground">{stats.success_rate.toFixed(1)}%</p>
+                <div className="mt-1.5 h-1.5 w-full bg-foreground/[0.06] overflow-hidden">
                   <div
                     className="h-full transition-all duration-500"
                     style={{
@@ -612,28 +612,28 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="border border-white/10 bg-white/[0.02] p-6">
+              <div className="border border-border bg-card/50 p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-white/50">Unique Domains</span>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">Unique Domains</span>
                   <div className="h-7 w-7 bg-cyan-500/10 grid place-items-center">
                     <Globe className="h-3.5 w-3.5 text-cyan-400" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-white">{totalUniqueDomains.toLocaleString()}</p>
-                <p className="text-[11px] text-white/50 mt-0.5 font-mono">Distinct domains scraped</p>
+                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-foreground">{totalUniqueDomains.toLocaleString()}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">Distinct domains scraped</p>
               </div>
 
-              <div className="border border-white/10 bg-white/[0.02] p-6">
+              <div className="border border-border bg-card/50 p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-white/50">Active Now</span>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">Active Now</span>
                   <div className="h-7 w-7 bg-amber-500/10 grid place-items-center">
                     <Zap className="h-3.5 w-3.5 text-amber-400" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-white">
+                <p className="text-2xl font-bold tracking-tight tabular-nums font-mono text-foreground">
                   {runningJobs + pendingJobs}
                 </p>
-                <p className="text-[11px] text-white/50 mt-0.5 font-mono">
+                <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">
                   {runningJobs} running, {pendingJobs} pending
                 </p>
               </div>
@@ -641,11 +641,11 @@ export default function DashboardPage() {
 
             {/* Active Jobs (only shown when there are running/pending jobs) */}
             {activeJobs.length > 0 && (
-              <div className="mb-8 border border-white/10 bg-white/[0.02] p-6 relative overflow-hidden">
+              <div className="mb-8 border border-border bg-card/50 p-6 relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-400 to-pink-500" />
                 <div className="flex items-center gap-2 mb-4">
                   <Loader2 className="h-5 w-5 text-amber-400 animate-spin" />
-                  <h2 className="text-lg font-bold text-white font-mono">Active Jobs</h2>
+                  <h2 className="text-lg font-bold text-foreground font-mono">Active Jobs</h2>
                   <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-amber-400/30 text-amber-400">{activeJobs.length}</span>
                 </div>
                 <div className="space-y-3">
@@ -654,35 +654,35 @@ export default function DashboardPage() {
                     const progress = job.total_pages > 0 ? (job.completed_pages / job.total_pages) * 100 : 0;
                     return (
                       <Link key={job.id} href={getJobDetailPath(job)}>
-                        <div className="flex items-center gap-4 p-3 border border-white/[0.06] hover:bg-white/[0.03] transition-all duration-150 cursor-pointer">
+                        <div className="flex items-center gap-4 p-3 border border-border hover:bg-muted/50 transition-all duration-150 cursor-pointer">
                           <div className="shrink-0">
                             <Icon className="h-5 w-5 text-amber-400" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-sm font-medium capitalize text-white font-mono">{job.type}</span>
+                              <span className="text-sm font-medium capitalize text-foreground font-mono">{job.type}</span>
                               <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-amber-400/30 text-amber-400">{job.status}</span>
                             </div>
-                            <p className="text-xs text-white/50 truncate font-mono">
+                            <p className="text-xs text-muted-foreground truncate font-mono">
                               {getJobUrl(job) || job.id.slice(0, 8)}
                             </p>
                           </div>
                           <div className="shrink-0 w-32">
-                            <div className="flex items-center justify-between text-xs text-white/50 mb-1 font-mono">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground mb-1 font-mono">
                               <span>{job.completed_pages}/{job.total_pages} pages</span>
                               <span>{progress.toFixed(0)}%</span>
                             </div>
-                            <div className="h-1.5 w-full bg-white/[0.06] overflow-hidden">
+                            <div className="h-1.5 w-full bg-foreground/[0.06] overflow-hidden">
                               <div
                                 className="h-full bg-amber-400 transition-all duration-300"
                                 style={{ width: `${Math.min(progress, 100)}%` }}
                               />
                             </div>
                           </div>
-                          <div className="shrink-0 text-xs text-white/50 font-mono">
+                          <div className="shrink-0 text-xs text-muted-foreground font-mono">
                             {job.started_at ? timeAgo(job.started_at) : "Queued"}
                           </div>
-                          <ArrowRight className="h-4 w-4 text-white/50 shrink-0" />
+                          <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
                         </div>
                       </Link>
                     );
@@ -693,11 +693,11 @@ export default function DashboardPage() {
 
             {/* Quota & Usage (if available) */}
             {quota && Object.keys(quota.operations).length > 0 && (
-              <div className="mb-8 border border-white/10 bg-white/[0.02] p-6">
+              <div className="mb-8 border border-border bg-card/50 p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Database className="h-5 w-5 text-cyan-400" />
-                  <h2 className="text-lg font-bold text-white font-mono">Usage Quota</h2>
-                  <span className="text-xs font-mono text-white/50 ml-1">
+                  <h2 className="text-lg font-bold text-foreground font-mono">Usage Quota</h2>
+                  <span className="text-xs font-mono text-muted-foreground ml-1">
                     ({quota.period})
                   </span>
                 </div>
@@ -705,19 +705,19 @@ export default function DashboardPage() {
                   {Object.entries(quota.operations).map(([op, data]) => {
                     const pct = data.unlimited ? 0 : data.limit > 0 ? (data.used / data.limit) * 100 : 0;
                     return (
-                      <div key={op} className="border border-white/[0.06] p-4">
+                      <div key={op} className="border border-border p-4">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium capitalize text-white font-mono">{op.replace(/_/g, " ")}</span>
+                          <span className="text-sm font-medium capitalize text-foreground font-mono">{op.replace(/_/g, " ")}</span>
                           {data.unlimited ? (
-                            <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-white/20 text-white/50">Unlimited</span>
+                            <span className="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border border-border text-muted-foreground">Unlimited</span>
                           ) : (
-                            <span className="text-xs text-white/50 font-mono">
+                            <span className="text-xs text-muted-foreground font-mono">
                               {data.used.toLocaleString()} / {data.limit.toLocaleString()}
                             </span>
                           )}
                         </div>
                         {!data.unlimited && (
-                          <div className="h-2 w-full bg-white/[0.06] overflow-hidden">
+                          <div className="h-2 w-full bg-foreground/[0.06] overflow-hidden">
                             <div
                               className="h-full transition-all duration-500"
                               style={{
@@ -728,7 +728,7 @@ export default function DashboardPage() {
                           </div>
                         )}
                         {!data.unlimited && (
-                          <p className="text-xs text-white/50 mt-1.5 font-mono">
+                          <p className="text-xs text-muted-foreground mt-1.5 font-mono">
                             {data.remaining.toLocaleString()} remaining
                           </p>
                         )}
@@ -737,7 +737,7 @@ export default function DashboardPage() {
                   })}
                 </div>
                 {quota.total_bytes_processed > 0 && (
-                  <p className="text-xs text-white/50 mt-3 font-mono">
+                  <p className="text-xs text-muted-foreground mt-3 font-mono">
                     Total data processed: {formatBytes(quota.total_bytes_processed)}
                   </p>
                 )}
@@ -746,15 +746,15 @@ export default function DashboardPage() {
 
             {/* Charts Row 1: Area chart + Pie chart */}
             <div className="grid gap-6 lg:grid-cols-3 mb-8">
-              <div className="lg:col-span-2 border border-white/10 bg-white/[0.02] p-6 relative overflow-hidden">
+              <div className="lg:col-span-2 border border-border bg-card/50 p-6 relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500 via-cyan-500 to-violet-500" />
                 <div className="flex items-center gap-2 mb-4">
                   <TrendingUp className="h-5 w-5 text-cyan-400" />
-                  <h2 className="text-lg font-bold text-white font-mono">Jobs Per Day</h2>
-                  <span className="text-xs font-mono text-white/50 ml-1">(last 30 days)</span>
+                  <h2 className="text-lg font-bold text-foreground font-mono">Jobs Per Day</h2>
+                  <span className="text-xs font-mono text-muted-foreground ml-1">(last 30 days)</span>
                 </div>
                 {jobsPerDay.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-[280px] text-white/50">
+                  <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground">
                     <Activity className="h-10 w-10 mb-3 opacity-40" />
                     <p className="text-sm font-mono">No job data for the last 30 days</p>
                   </div>
@@ -797,10 +797,10 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              <div className="border border-white/10 bg-white/[0.02] p-6">
-                <h2 className="text-lg font-bold text-white font-mono mb-4">Jobs by Type</h2>
+              <div className="border border-border bg-card/50 p-6">
+                <h2 className="text-lg font-bold text-foreground font-mono mb-4">Jobs by Type</h2>
                 {jobsByType.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-[280px] text-white/50">
+                  <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground">
                     <Activity className="h-10 w-10 mb-3 opacity-40" />
                     <p className="text-sm font-mono">No job type data available</p>
                   </div>
@@ -832,9 +832,9 @@ export default function DashboardPage() {
                               className="h-2.5 w-2.5 rounded-full"
                               style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
                             />
-                            <span className="capitalize text-white/50 font-mono">{item.name}</span>
+                            <span className="capitalize text-muted-foreground font-mono">{item.name}</span>
                           </div>
-                          <span className="font-bold tabular-nums text-white font-mono">{item.value}</span>
+                          <span className="font-bold tabular-nums text-foreground font-mono">{item.value}</span>
                         </div>
                       ))}
                     </div>
@@ -846,13 +846,13 @@ export default function DashboardPage() {
             {/* Charts Row 2: Status breakdown + Top domains */}
             <div className="grid gap-6 lg:grid-cols-2 mb-8">
               {/* Status breakdown */}
-              <div className="border border-white/10 bg-white/[0.02] p-6">
+              <div className="border border-border bg-card/50 p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <BarChart3 className="h-5 w-5 text-amber-400" />
-                  <h2 className="text-lg font-bold text-white font-mono">Status Breakdown</h2>
+                  <h2 className="text-lg font-bold text-foreground font-mono">Status Breakdown</h2>
                 </div>
                 {Object.keys(stats.jobs_by_status ?? {}).length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-white/50">
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <Activity className="h-10 w-10 mb-3 opacity-40" />
                     <p className="text-sm font-mono">No job data available</p>
                   </div>
@@ -870,11 +870,11 @@ export default function DashboardPage() {
                             <div className="flex items-center gap-2">
                               <span className={`text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 border ${getStatusClasses(status)}`}>{status}</span>
                             </div>
-                            <span className="text-sm font-medium tabular-nums text-white font-mono">
-                              {count} <span className="text-xs text-white/50">({pct.toFixed(1)}%)</span>
+                            <span className="text-sm font-medium tabular-nums text-foreground font-mono">
+                              {count} <span className="text-xs text-muted-foreground">({pct.toFixed(1)}%)</span>
                             </span>
                           </div>
-                          <div className="h-2 w-full bg-white/[0.06] overflow-hidden">
+                          <div className="h-2 w-full bg-foreground/[0.06] overflow-hidden">
                             <div
                               className="h-full transition-all duration-500"
                               style={{ width: `${pct}%`, backgroundColor: color }}
@@ -888,13 +888,13 @@ export default function DashboardPage() {
               </div>
 
               {/* Top domains */}
-              <div className="border border-white/10 bg-white/[0.02] p-6">
+              <div className="border border-border bg-card/50 p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Globe className="h-5 w-5 text-violet-400" />
-                  <h2 className="text-lg font-bold text-white font-mono">Top 10 Domains</h2>
+                  <h2 className="text-lg font-bold text-foreground font-mono">Top 10 Domains</h2>
                 </div>
                 {domainsChart.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-white/50">
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <Globe className="h-10 w-10 mb-3 opacity-40" />
                     <p className="text-sm font-mono">No domain data available yet</p>
                   </div>
@@ -906,12 +906,12 @@ export default function DashboardPage() {
                       return (
                         <div key={d.domain} className="group">
                           <div className="flex items-center justify-between mb-0.5">
-                            <span className="text-sm text-white/50 truncate max-w-[200px] font-mono">
+                            <span className="text-sm text-muted-foreground truncate max-w-[200px] font-mono">
                               {d.domain}
                             </span>
-                            <span className="text-sm font-bold tabular-nums ml-2 text-white font-mono">{d.count}</span>
+                            <span className="text-sm font-bold tabular-nums ml-2 text-foreground font-mono">{d.count}</span>
                           </div>
-                          <div className="h-1.5 w-full bg-white/[0.06] overflow-hidden">
+                          <div className="h-1.5 w-full bg-foreground/[0.06] overflow-hidden">
                             <div
                               className="h-full transition-all duration-500"
                               style={{
@@ -929,21 +929,21 @@ export default function DashboardPage() {
             </div>
 
             {/* Recent Jobs Table */}
-            <div className="border border-white/10 bg-white/[0.02] p-6">
+            <div className="border border-border bg-card/50 p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Timer className="h-5 w-5 text-pink-400" />
-                  <h2 className="text-lg font-bold text-white font-mono">Recent Jobs</h2>
+                  <h2 className="text-lg font-bold text-foreground font-mono">Recent Jobs</h2>
                 </div>
                 <Link
                   href="/jobs"
-                  className="text-sm font-mono text-white/50 hover:text-white flex items-center gap-1 transition-colors"
+                  className="text-sm font-mono text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
                 >
                   View all <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
               {recentJobs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-white/50">
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <Activity className="h-10 w-10 mb-3 opacity-40" />
                   <p className="text-sm font-mono">No recent jobs</p>
                   <p className="text-xs mt-1 font-mono">Start a scrape, crawl, or search to see jobs here</p>
@@ -952,13 +952,13 @@ export default function DashboardPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-white/[0.06] text-left">
-                        <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">Type</th>
-                        <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">URL / Query</th>
-                        <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono">Status</th>
-                        <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono text-right">Pages</th>
-                        <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono text-right">Duration</th>
-                        <th className="pb-2 font-medium text-white/50 text-[11px] uppercase tracking-wider font-mono text-right">When</th>
+                      <tr className="border-b border-border text-left">
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Type</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono">URL / Query</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono">Status</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono text-right">Pages</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono text-right">Duration</th>
+                        <th className="pb-2 font-medium text-muted-foreground text-[11px] uppercase tracking-wider font-mono text-right">When</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -968,17 +968,17 @@ export default function DashboardPage() {
                         return (
                           <tr
                             key={job.id}
-                            className="border-b border-white/[0.06] hover:bg-white/[0.03] cursor-pointer transition-colors"
+                            className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors"
                             onClick={() => router.push(getJobDetailPath(job))}
                           >
                             <td className="py-2.5 pr-3">
                               <div className="flex items-center gap-1.5">
-                                <Icon className="h-3.5 w-3.5 text-white/50" />
-                                <span className="capitalize text-white font-mono">{job.type}</span>
+                                <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span className="capitalize text-foreground font-mono">{job.type}</span>
                               </div>
                             </td>
                             <td className="py-2.5 pr-3 max-w-[300px]">
-                              <span className="text-white/50 truncate block font-mono">
+                              <span className="text-muted-foreground truncate block font-mono">
                                 {jobUrl || job.id.slice(0, 12)}
                               </span>
                             </td>
@@ -987,13 +987,13 @@ export default function DashboardPage() {
                                 {job.status}
                               </span>
                             </td>
-                            <td className="py-2.5 pr-3 text-right tabular-nums text-white font-mono">
+                            <td className="py-2.5 pr-3 text-right tabular-nums text-foreground font-mono">
                               {job.completed_pages}/{job.total_pages}
                             </td>
-                            <td className="py-2.5 pr-3 text-right tabular-nums text-white font-mono">
+                            <td className="py-2.5 pr-3 text-right tabular-nums text-foreground font-mono">
                               {job.duration_seconds != null ? formatDuration(job.duration_seconds) : "\u2014"}
                             </td>
-                            <td className="py-2.5 text-right text-white/50 whitespace-nowrap font-mono">
+                            <td className="py-2.5 text-right text-muted-foreground whitespace-nowrap font-mono">
                               {job.created_at ? timeAgo(job.created_at) : "\u2014"}
                             </td>
                           </tr>

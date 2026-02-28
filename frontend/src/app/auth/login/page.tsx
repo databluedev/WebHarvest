@@ -33,7 +33,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center relative overflow-hidden">
       {/* Grid bg */}
       <div className="fixed inset-0 opacity-[0.025] pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "40px 40px" }} />
       {/* Background glow */}
@@ -48,13 +48,13 @@ export default function LoginPage() {
         </div>
 
         {/* Login Card */}
-        <div className="border border-white/10 bg-white/[0.02] relative overflow-hidden">
+        <div className="border border-border bg-card/50 relative overflow-hidden">
           <div className="h-[2px] bg-gradient-to-r from-cyan-500 via-emerald-500 to-amber-500" />
 
           <div className="p-8 md:p-10">
             <div className="mb-8">
               <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-blue">Sign In</h1>
-              <p className="text-[13px] text-white/40 font-mono mt-2">
+              <p className="text-[13px] text-muted-foreground font-mono mt-2">
                 Access your scraping dashboard
               </p>
             </div>
@@ -67,21 +67,21 @@ export default function LoginPage() {
               )}
 
               <div className="space-y-2">
-                <label className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/50">Email</label>
+                <label className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">Email</label>
                 <input
                   type="email"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="h-12 w-full bg-transparent border border-white/10 px-4 text-[14px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                  className="h-12 w-full bg-transparent border border-border px-4 text-[14px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
                 />
               </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/50">Password</label>
-                  <Link href="/auth/forgot-password" className="text-[11px] font-mono text-white/30 hover:text-white/60 transition-colors uppercase tracking-wider">
+                  <label className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">Password</label>
+                  <Link href="/auth/forgot-password" className="text-[11px] font-mono text-muted-foreground/70 hover:text-foreground/60 transition-colors uppercase tracking-wider">
                     Forgot?
                   </Link>
                 </div>
@@ -91,26 +91,26 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="h-12 w-full bg-transparent border border-white/10 px-4 text-[14px] font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                  className="h-12 w-full bg-transparent border border-border px-4 text-[14px] font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 transition-colors"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-white text-black h-12 text-[13px] font-bold uppercase tracking-[0.15em] font-mono hover:bg-emerald-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full bg-foreground text-background h-12 text-[13px] font-bold uppercase tracking-[0.15em] font-mono hover:bg-emerald-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? "Signing in..." : <>Sign In <span className="text-[16px]">→</span></>}
               </button>
             </form>
 
             <div className="flex items-center gap-4 my-6">
-              <div className="h-px flex-1 bg-white/[0.06]" />
-              <span className="text-[11px] font-mono text-white/20 uppercase tracking-wider">or</span>
-              <div className="h-px flex-1 bg-white/[0.06]" />
+              <div className="h-px flex-1 bg-muted" />
+              <span className="text-[11px] font-mono text-muted-foreground/50 uppercase tracking-wider">or</span>
+              <div className="h-px flex-1 bg-muted" />
             </div>
 
-            <p className="text-center text-[13px] font-mono text-white/40">
+            <p className="text-center text-[13px] font-mono text-muted-foreground">
               No account?{" "}
               <Link href="/auth/register" className="text-cyan-400 hover:text-cyan-300 transition-colors">
                 Create one
@@ -119,7 +119,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-[11px] text-white/20 font-mono mt-6 tracking-wider">
+        <p className="text-center text-[11px] text-muted-foreground/50 font-mono mt-6 tracking-wider">
           OPEN SOURCE · SELF-HOSTED · MIT LICENSE
         </p>
       </div>

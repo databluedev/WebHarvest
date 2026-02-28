@@ -181,13 +181,13 @@ export default function ScrapeDetailPage() {
         {/* Header */}
         <div className="mb-6 flex items-center gap-4">
           <Link href="/scrape">
-            <button className="border border-white/20 p-2 text-white/50 hover:text-white hover:border-white/40 transition-colors">
+            <button className="border border-border p-2 text-muted-foreground hover:text-foreground hover:border-border/80 transition-colors">
               <ArrowLeft className="h-4 w-4" />
             </button>
           </Link>
           <div>
             <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-blue">Scrape Result</h1>
-            <p className="text-[13px] text-white/40 font-mono">{jobId}</p>
+            <p className="text-[13px] text-muted-foreground font-mono">{jobId}</p>
           </div>
         </div>
 
@@ -201,15 +201,15 @@ export default function ScrapeDetailPage() {
         {/* Loading */}
         {!status && !error && (
           <div className="flex flex-col items-center justify-center py-24">
-            <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-4" />
-            <p className="text-sm text-white/40">Loading scrape result...</p>
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+            <p className="text-sm text-muted-foreground">Loading scrape result...</p>
           </div>
         )}
 
         {status && (
           <>
             {/* Status Card */}
-            <div className="border border-white/10 bg-white/[0.02] mb-6 relative overflow-hidden">
+            <div className="border border-border bg-card/50 mb-6 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 to-emerald-500" />
               <div className="p-6">
                 <div className="flex items-center justify-between">
@@ -245,7 +245,7 @@ export default function ScrapeDetailPage() {
                 </div>
 
                 {result?.metadata && (
-                  <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                  <div className="mt-4 pt-4 border-t border-border space-y-3">
                     <div className="flex flex-wrap gap-3">
                       {result.metadata.status_code && (
                         <span
@@ -254,60 +254,60 @@ export default function ScrapeDetailPage() {
                               ? "border-emerald-500/30 text-emerald-400"
                               : result.metadata.status_code >= 400
                               ? "border-red-500/30 text-red-400"
-                              : "border-white/20 text-white/50"
+                              : "border-border text-muted-foreground"
                           }`}
                         >
                           {result.metadata.status_code}
                         </span>
                       )}
                       {result.metadata.word_count > 0 && (
-                        <span className="text-[11px] font-mono px-2 py-0.5 border border-white/20 text-white/50">
+                        <span className="text-[11px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                           {result.metadata.word_count.toLocaleString()} words
                         </span>
                       )}
                       {result.metadata.reading_time_seconds > 0 && (
-                        <span className="text-[11px] font-mono px-2 py-0.5 border border-white/20 text-white/50 flex items-center gap-1">
+                        <span className="text-[11px] font-mono px-2 py-0.5 border border-border text-muted-foreground flex items-center gap-1">
                           <Clock className="h-3 w-3" />
                           {Math.ceil(result.metadata.reading_time_seconds / 60)}m read
                         </span>
                       )}
                       {result.metadata.language && (
-                        <span className="text-[11px] font-mono px-2 py-0.5 border border-white/20 text-white/50">
+                        <span className="text-[11px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                           {result.metadata.language}
                         </span>
                       )}
                       {result.metadata.title && (
-                        <span className="text-xs text-white/40 truncate">{result.metadata.title}</span>
+                        <span className="text-xs text-muted-foreground truncate">{result.metadata.title}</span>
                       )}
                     </div>
                     {(result.structured_data?.open_graph?.description || result.structured_data?.meta_tags?.description) && (
-                      <p className="text-xs text-white/40 line-clamp-2">
+                      <p className="text-xs text-muted-foreground line-clamp-2">
                         {result.structured_data?.open_graph?.description || result.structured_data?.meta_tags?.description}
                       </p>
                     )}
                     <div className="flex flex-wrap gap-2">
                       {result.metadata.canonical_url && result.metadata.canonical_url !== result.url && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40 truncate flex items-center gap-1">
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground truncate flex items-center gap-1">
                           canonical: <a href={result.metadata.canonical_url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 transition-colors">{result.metadata.canonical_url}</a>
                         </span>
                       )}
                       {result.structured_data?.open_graph?.type && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                           og:{result.structured_data.open_graph.type}
                         </span>
                       )}
                       {result.structured_data?.twitter_card?.card && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                           twitter:{result.structured_data.twitter_card.card}
                         </span>
                       )}
                       {result.structured_data?.json_ld?.length > 0 && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                           {result.structured_data.json_ld.length} JSON-LD
                         </span>
                       )}
                       {result.images?.length > 0 && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 border border-white/10 text-white/40">
+                        <span className="text-[10px] font-mono px-2 py-0.5 border border-border text-muted-foreground">
                           {result.images.length} images
                         </span>
                       )}
@@ -325,11 +325,11 @@ export default function ScrapeDetailPage() {
 
             {/* Result Content */}
             {result && (
-              <div className="border border-white/10 bg-white/[0.02] relative overflow-hidden">
+              <div className="border border-border bg-card/50 relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-500 to-emerald-500" />
                 <div className="p-6">
                   {/* Tab bar */}
-                  <div className="flex gap-1 mb-4 pb-2 border-b border-white/10 overflow-x-auto">
+                  <div className="flex gap-1 mb-4 pb-2 border-b border-border overflow-x-auto">
                     {availableTabs.map((tab) => {
                       const Icon = tab.icon;
                       return (
@@ -339,7 +339,7 @@ export default function ScrapeDetailPage() {
                           className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-mono transition-colors whitespace-nowrap ${
                             activeTab === tab.id
                               ? "border-cyan-500 text-cyan-400 bg-cyan-500/[0.03]"
-                              : "text-white/40 hover:text-white/70"
+                              : "text-muted-foreground hover:text-foreground/70"
                           }`}
                         >
                           <Icon className="h-3.5 w-3.5" />
@@ -353,7 +353,7 @@ export default function ScrapeDetailPage() {
                   <div className="relative">
                     {activeTab !== "screenshot" && (
                       <button
-                        className="absolute right-2 top-2 z-10 text-white/30 hover:text-white p-1.5 transition-colors"
+                        className="absolute right-2 top-2 z-10 text-foreground/30 hover:text-foreground p-1.5 transition-colors"
                         onClick={() => {
                           const text = getCopyText();
                           if (text) copyToClipboard(text);
@@ -364,35 +364,35 @@ export default function ScrapeDetailPage() {
                     )}
 
                     {activeTab === "markdown" && result.markdown && (
-                      <pre className="max-h-[600px] overflow-auto bg-[#0a0a0a] border border-white/10 p-4 font-mono text-[13px] text-white/70 whitespace-pre-wrap">
+                      <pre className="max-h-[600px] overflow-auto bg-background border border-border p-4 font-mono text-[13px] text-foreground/70 whitespace-pre-wrap">
                         {result.markdown}
                       </pre>
                     )}
 
                     {activeTab === "html" && result.html && (
-                      <pre className="max-h-[600px] overflow-auto bg-[#0a0a0a] border border-white/10 p-4 font-mono text-[13px] text-white/70 whitespace-pre-wrap">
+                      <pre className="max-h-[600px] overflow-auto bg-background border border-border p-4 font-mono text-[13px] text-foreground/70 whitespace-pre-wrap">
                         {result.html}
                       </pre>
                     )}
 
                     {activeTab === "screenshot" && (
-                      <div className="flex justify-center bg-[#0a0a0a] border border-white/10 p-4">
+                      <div className="flex justify-center bg-background border border-border p-4">
                         {screenshotData[result.id] ? (
                           <img
                             src={`data:image/jpeg;base64,${screenshotData[result.id]}`}
                             alt={`Screenshot of ${result.url}`}
-                            className="max-w-full border border-white/10 shadow-lg"
+                            className="max-w-full border border-border shadow-lg"
                             style={{ maxHeight: "600px" }}
                           />
                         ) : screenshotLoading[result.id] ? (
                           <div className="flex flex-col items-center justify-center py-12">
-                            <Loader2 className="h-6 w-6 animate-spin text-white/40 mb-2" />
-                            <p className="text-sm text-white/40">Loading screenshot...</p>
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground">Loading screenshot...</p>
                           </div>
                         ) : (
                           <button
                             onClick={() => loadScreenshot(result.id)}
-                            className="flex items-center gap-2 px-5 py-3 text-sm font-mono border border-white/10 text-white/50 hover:text-white/80 hover:bg-white/[0.03] transition-all"
+                            className="flex items-center gap-2 px-5 py-3 text-sm font-mono border border-border text-muted-foreground hover:text-foreground/80 hover:bg-muted/30 transition-all"
                           >
                             <Camera className="h-4 w-4" /> Load Screenshot
                           </button>
@@ -401,26 +401,26 @@ export default function ScrapeDetailPage() {
                     )}
 
                     {activeTab === "links" && (
-                      <div className="max-h-[600px] overflow-auto bg-[#0a0a0a] border border-white/10 p-4 space-y-4">
+                      <div className="max-h-[600px] overflow-auto bg-background border border-border p-4 space-y-4">
                         {result.links_detail && (
-                          <div className="flex gap-4 text-sm pb-3 border-b border-white/10">
+                          <div className="flex gap-4 text-sm pb-3 border-b border-border">
                             <div className="flex items-center gap-1.5">
-                              <Link2 className="h-4 w-4 text-white/40" />
-                              <span className="font-medium text-white/70">{result.links_detail.total}</span>
-                              <span className="text-white/40">total</span>
+                              <Link2 className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium text-foreground/70">{result.links_detail.total}</span>
+                              <span className="text-muted-foreground">total</span>
                             </div>
                             {result.links_detail.internal && (
                               <div className="flex items-center gap-1.5">
                                 <ArrowDownLeft className="h-4 w-4 text-blue-400" />
-                                <span className="font-medium text-white/70">{result.links_detail.internal.count}</span>
-                                <span className="text-white/40">internal</span>
+                                <span className="font-medium text-foreground/70">{result.links_detail.internal.count}</span>
+                                <span className="text-muted-foreground">internal</span>
                               </div>
                             )}
                             {result.links_detail.external && (
                               <div className="flex items-center gap-1.5">
                                 <ArrowUpRight className="h-4 w-4 text-orange-400" />
-                                <span className="font-medium text-white/70">{result.links_detail.external.count}</span>
-                                <span className="text-white/40">external</span>
+                                <span className="font-medium text-foreground/70">{result.links_detail.external.count}</span>
+                                <span className="text-muted-foreground">external</span>
                               </div>
                             )}
                           </div>
@@ -428,7 +428,7 @@ export default function ScrapeDetailPage() {
 
                         {result.links_detail?.internal?.links?.length > 0 && (
                           <div>
-                            <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Internal Links</h4>
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Internal Links</h4>
                             <div className="space-y-1">
                               {result.links_detail.internal.links.map((link: any, i: number) => (
                                 <div key={i} className="flex items-center gap-2 text-xs">
@@ -436,7 +436,7 @@ export default function ScrapeDetailPage() {
                                   <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 truncate transition-colors">
                                     {link.url}
                                   </a>
-                                  {link.text && <span className="text-white/40 truncate shrink-0 max-w-40">&quot;{link.text}&quot;</span>}
+                                  {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-40">&quot;{link.text}&quot;</span>}
                                 </div>
                               ))}
                             </div>
@@ -445,7 +445,7 @@ export default function ScrapeDetailPage() {
 
                         {result.links_detail?.external?.links?.length > 0 && (
                           <div>
-                            <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">External Links</h4>
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">External Links</h4>
                             <div className="space-y-1">
                               {result.links_detail.external.links.map((link: any, i: number) => (
                                 <div key={i} className="flex items-center gap-2 text-xs">
@@ -453,7 +453,7 @@ export default function ScrapeDetailPage() {
                                   <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 truncate transition-colors">
                                     {link.url}
                                   </a>
-                                  {link.text && <span className="text-white/40 truncate shrink-0 max-w-40">&quot;{link.text}&quot;</span>}
+                                  {link.text && <span className="text-muted-foreground truncate shrink-0 max-w-40">&quot;{link.text}&quot;</span>}
                                 </div>
                               ))}
                             </div>
@@ -473,25 +473,25 @@ export default function ScrapeDetailPage() {
                     )}
 
                     {activeTab === "structured" && result.structured_data && (
-                      <div className="max-h-[600px] overflow-auto bg-[#0a0a0a] border border-white/10 p-4 space-y-4">
+                      <div className="max-h-[600px] overflow-auto bg-background border border-border p-4 space-y-4">
                         {result.structured_data.json_ld && (
                           <div>
-                            <h4 className="text-xs font-semibold text-white/40 uppercase mb-2 flex items-center gap-1.5">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
                               <Braces className="h-3.5 w-3.5" /> JSON-LD (Schema.org)
                             </h4>
-                            <pre className="text-xs font-mono text-white/70 bg-[#0a0a0a] border border-white/10 rounded p-3 overflow-auto max-h-48">
+                            <pre className="text-xs font-mono text-foreground/70 bg-background border border-border rounded p-3 overflow-auto max-h-48">
                               {JSON.stringify(result.structured_data.json_ld, null, 2)}
                             </pre>
                           </div>
                         )}
                         {result.structured_data.open_graph && (
                           <div>
-                            <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">OpenGraph</h4>
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">OpenGraph</h4>
                             <div className="grid grid-cols-1 gap-1">
                               {Object.entries(result.structured_data.open_graph).map(([key, val]) => (
                                 <div key={key} className="text-xs">
-                                  <span className="text-white/40">og:{key}:</span>{" "}
-                                  <span className="text-white/70 font-mono">{String(val)}</span>
+                                  <span className="text-muted-foreground">og:{key}:</span>{" "}
+                                  <span className="text-foreground/70 font-mono">{String(val)}</span>
                                 </div>
                               ))}
                             </div>
@@ -499,12 +499,12 @@ export default function ScrapeDetailPage() {
                         )}
                         {result.structured_data.twitter_card && (
                           <div>
-                            <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">Twitter Card</h4>
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Twitter Card</h4>
                             <div className="grid grid-cols-1 gap-1">
                               {Object.entries(result.structured_data.twitter_card).map(([key, val]) => (
                                 <div key={key} className="text-xs">
-                                  <span className="text-white/40">twitter:{key}:</span>{" "}
-                                  <span className="text-white/70 font-mono">{String(val)}</span>
+                                  <span className="text-muted-foreground">twitter:{key}:</span>{" "}
+                                  <span className="text-foreground/70 font-mono">{String(val)}</span>
                                 </div>
                               ))}
                             </div>
@@ -512,11 +512,11 @@ export default function ScrapeDetailPage() {
                         )}
                         {result.structured_data.meta_tags && (
                           <div>
-                            <h4 className="text-xs font-semibold text-white/40 uppercase mb-2">All Meta Tags</h4>
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">All Meta Tags</h4>
                             <div className="space-y-1 max-h-48 overflow-auto">
                               {Object.entries(result.structured_data.meta_tags).map(([key, val]) => (
                                 <div key={key} className="text-xs font-mono">
-                                  <span className="text-white/40">{key}:</span> <span className="text-white/70">{String(val)}</span>
+                                  <span className="text-muted-foreground">{key}:</span> <span className="text-foreground/70">{String(val)}</span>
                                 </div>
                               ))}
                             </div>
@@ -527,11 +527,11 @@ export default function ScrapeDetailPage() {
 
 
                     {activeTab === "images" && result.images && (
-                      <div className="max-h-[600px] overflow-auto bg-[#0a0a0a] border border-white/10 p-4">
+                      <div className="max-h-[600px] overflow-auto bg-background border border-border p-4">
                         <div className="grid grid-cols-2 gap-3">
                           {result.images.map((img: any, i: number) => (
-                            <div key={i} className="border border-white/10 bg-[#0a0a0a] overflow-hidden">
-                              <div className="aspect-video bg-white/[0.02] flex items-center justify-center">
+                            <div key={i} className="border border-border bg-background overflow-hidden">
+                              <div className="aspect-video bg-card/50 flex items-center justify-center">
                                 <img
                                   src={img.src}
                                   alt={img.alt || ""}
@@ -540,10 +540,10 @@ export default function ScrapeDetailPage() {
                                 />
                               </div>
                               <div className="p-2">
-                                <p className="text-[11px] text-white/40 truncate" title={img.src}>
+                                <p className="text-[11px] text-muted-foreground truncate" title={img.src}>
                                   {img.src.split("/").pop()}
                                 </p>
-                                {img.alt && <p className="text-[11px] text-white/70 truncate mt-0.5">{img.alt}</p>}
+                                {img.alt && <p className="text-[11px] text-foreground/70 truncate mt-0.5">{img.alt}</p>}
                               </div>
                             </div>
                           ))}
@@ -552,7 +552,7 @@ export default function ScrapeDetailPage() {
                     )}
 
                     {activeTab === "extract" && result.extract && (
-                      <pre className="max-h-[600px] overflow-auto bg-[#0a0a0a] border border-white/10 p-4 font-mono text-[13px] text-white/70 whitespace-pre-wrap">
+                      <pre className="max-h-[600px] overflow-auto bg-background border border-border p-4 font-mono text-[13px] text-foreground/70 whitespace-pre-wrap">
                         {JSON.stringify(result.extract, null, 2)}
                       </pre>
                     )}
@@ -583,21 +583,21 @@ export default function ScrapeDetailPage() {
                                 setTsvCopied(true);
                                 setTimeout(() => setTsvCopied(false), 2000);
                               }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-mono text-white/30 hover:text-white transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-mono text-foreground/30 hover:text-foreground transition-colors"
                             >
                               {tsvCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                               {tsvCopied ? "Copied!" : "Copy Table"}
                             </button>
                           </div>
-                          <div className="border border-white/10 overflow-hidden">
+                          <div className="border border-border overflow-hidden">
                             <table className="w-full text-sm">
                               <tbody>
                                 {tableRows.map(([label, value]) => (
-                                  <tr key={label} className="border-b border-white/10 last:border-0 hover:bg-white/[0.02] transition-colors">
-                                    <td className="px-4 py-2.5 text-xs text-white/40 w-40 bg-white/[0.02]">
+                                  <tr key={label} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                                    <td className="px-4 py-2.5 text-xs text-muted-foreground w-40 bg-card/50">
                                       {label}
                                     </td>
-                                    <td className="px-4 py-2.5 text-xs text-white font-mono">
+                                    <td className="px-4 py-2.5 text-xs text-foreground font-mono">
                                       {label === "URL" || label === "Canonical URL" ? (
                                         value !== "\u2014" ? (
                                           <a
@@ -626,9 +626,9 @@ export default function ScrapeDetailPage() {
             )}
 
             {!result && status.status === "failed" && (
-              <div className="border border-white/10 bg-white/[0.02] flex flex-col items-center justify-center py-16 text-center">
-                <FileText className="h-12 w-12 text-white/20 mb-4" />
-                <p className="text-sm text-white/40">Scrape failed. No results available.</p>
+              <div className="border border-border bg-card/50 flex flex-col items-center justify-center py-16 text-center">
+                <FileText className="h-12 w-12 text-foreground/20 mb-4" />
+                <p className="text-sm text-muted-foreground">Scrape failed. No results available.</p>
               </div>
             )}
           </>

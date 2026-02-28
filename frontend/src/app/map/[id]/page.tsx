@@ -122,13 +122,13 @@ export default function MapDetailPage() {
         {/* Header */}
         <div className="mb-6 flex items-center gap-4">
           <Link href="/map">
-            <button className="border border-white/20 p-2 text-white/50 hover:text-white hover:border-white/40 transition-colors">
+            <button className="border border-border p-2 text-foreground/50 hover:text-foreground hover:border-border/80 transition-colors">
               <ArrowLeft className="h-4 w-4" />
             </button>
           </Link>
           <div>
             <h1 className="text-[28px] font-extrabold tracking-tight uppercase font-mono animate-gradient-text-pink">Map Result</h1>
-            <p className="text-[13px] text-white/40 font-mono">{jobId}</p>
+            <p className="text-[13px] text-muted-foreground font-mono">{jobId}</p>
           </div>
         </div>
 
@@ -142,15 +142,15 @@ export default function MapDetailPage() {
         {/* Loading */}
         {!status && !error && (
           <div className="flex flex-col items-center justify-center py-24">
-            <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-4" />
-            <p className="text-sm text-white/40">Loading map result...</p>
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+            <p className="text-sm text-muted-foreground">Loading map result...</p>
           </div>
         )}
 
         {status && (
           <>
             {/* Status Card */}
-            <div className="border border-white/10 bg-white/[0.02] mb-6 relative overflow-hidden">
+            <div className="border border-border bg-card/50 mb-6 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pink-500 to-amber-500" />
               <div className="p-6">
                 <div className="flex items-center justify-between">
@@ -184,7 +184,7 @@ export default function MapDetailPage() {
                       <>
                         <button
                           onClick={copyAllUrls}
-                          className="border border-white/20 px-4 py-2 text-[12px] font-mono text-white/50 hover:text-white transition-colors inline-flex items-center gap-1"
+                          className="border border-border px-4 py-2 text-[12px] font-mono text-foreground/50 hover:text-foreground transition-colors inline-flex items-center gap-1"
                         >
                           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                           Copy All
@@ -196,9 +196,9 @@ export default function MapDetailPage() {
                 </div>
 
                 {/* Progress */}
-                <div className="space-y-2 mt-4 pt-4 border-t border-white/10">
+                <div className="space-y-2 mt-4 pt-4 border-t border-border">
                   <div className="flex items-center justify-between">
-                    <span className="text-white/50 font-mono text-[13px]">
+                    <span className="text-foreground/50 font-mono text-[13px]">
                       {status.completed_pages || status.total || 0} URL{(status.completed_pages || status.total || 0) !== 1 ? "s" : ""}{" "}
                       discovered
                       {isRunning && status.total_pages > 0 && (
@@ -206,10 +206,10 @@ export default function MapDetailPage() {
                       )}
                     </span>
                     {progressPercent > 0 && (
-                      <span className="text-white/50 font-mono text-[13px]">{isFinished ? 100 : progressPercent}%</span>
+                      <span className="text-foreground/50 font-mono text-[13px]">{isFinished ? 100 : progressPercent}%</span>
                     )}
                   </div>
-                  <div className="w-full h-2 bg-white/[0.06] overflow-hidden">
+                  <div className="w-full h-2 bg-foreground/[0.06] overflow-hidden">
                     <div
                       className={`h-full transition-all duration-500 ${
                         isRunning
@@ -237,32 +237,32 @@ export default function MapDetailPage() {
 
             {/* Links List */}
             {status.links?.length > 0 ? (
-              <div className="border border-white/10 bg-white/[0.02] relative overflow-hidden">
+              <div className="border border-border bg-card/50 relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pink-500 to-amber-500" />
                 <div className="p-6 pb-0">
                   <div className="flex items-center gap-2 mb-4">
-                    <h2 className="text-[16px] font-bold text-white font-mono uppercase">Discovered URLs</h2>
-                    <span className="border border-white/20 text-white/40 text-[11px] font-mono px-2 py-0.5">{status.total}</span>
+                    <h2 className="text-[16px] font-bold text-foreground font-mono uppercase">Discovered URLs</h2>
+                    <span className="border border-border text-muted-foreground text-[11px] font-mono px-2 py-0.5">{status.total}</span>
                   </div>
                 </div>
                 <div className="px-6 pb-6">
                   <div className="mb-3 flex items-center gap-3">
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <input
                         placeholder="Filter URLs..."
                         value={urlFilter}
                         onChange={(e) => { setUrlFilter(e.target.value); setVisibleCount(100); }}
-                        className="w-full bg-transparent border border-white/10 text-white font-mono placeholder:text-white/30 pl-9 h-9 px-3 py-1 text-sm outline-none focus:border-white/20 transition-colors"
+                        className="w-full bg-transparent border border-border text-foreground font-mono placeholder:text-muted-foreground/50 pl-9 h-9 px-3 py-1 text-sm outline-none focus:border-border/80 transition-colors"
                       />
                     </div>
-                    <span className="text-white/40 text-[12px] font-mono">
+                    <span className="text-muted-foreground text-[12px] font-mono">
                       {filteredLinks.length} of {status.links.length} URLs
                     </span>
                   </div>
                   <div className="max-h-[600px] overflow-auto space-y-1">
                     {filteredLinks.slice(0, visibleCount).map((link: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between hover:bg-white/[0.03] px-3 py-2 group">
+                      <div key={i} className="flex items-center justify-between hover:bg-muted/30 px-3 py-2 group">
                         <div className="min-w-0 flex-1">
                           <a
                             href={link.url}
@@ -273,15 +273,15 @@ export default function MapDetailPage() {
                             {link.url}
                           </a>
                           {link.title && (
-                            <p className="text-white/40 text-[12px] truncate">{link.title}</p>
+                            <p className="text-muted-foreground text-[12px] truncate">{link.title}</p>
                           )}
                           {link.description && (
-                            <p className="text-white/30 text-[12px] truncate">{link.description}</p>
+                            <p className="text-muted-foreground/70 text-[12px] truncate">{link.description}</p>
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0 ml-2">
                           {link.lastmod && (
-                            <span className="text-white/30 text-[12px] font-mono">{link.lastmod}</span>
+                            <span className="text-muted-foreground/70 text-[12px] font-mono">{link.lastmod}</span>
                           )}
                           <a
                             href={link.url}
@@ -289,7 +289,7 @@ export default function MapDetailPage() {
                             rel="noopener noreferrer"
                             className="opacity-0 group-hover:opacity-100 transition-opacity"
                           >
-                            <ExternalLink className="h-3.5 w-3.5 text-white/30" />
+                            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
                           </a>
                         </div>
                       </div>
@@ -299,7 +299,7 @@ export default function MapDetailPage() {
                     <div className="mt-3 text-center">
                       <button
                         onClick={() => setVisibleCount((c) => c + 100)}
-                        className="border border-white/20 text-white/50 hover:text-white font-mono px-4 py-2 text-sm transition-colors"
+                        className="border border-border text-foreground/50 hover:text-foreground font-mono px-4 py-2 text-sm transition-colors"
                       >
                         Load more ({filteredLinks.length - visibleCount} remaining)
                       </button>
@@ -309,26 +309,26 @@ export default function MapDetailPage() {
               </div>
             ) : isRunning ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-white/40 mb-4" />
-                <p className="text-sm text-white/40">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+                <p className="text-sm text-muted-foreground">
                   Discovering URLs...
                 </p>
-                <p className="text-xs text-white/30 mt-1">
+                <p className="text-xs text-muted-foreground/70 mt-1">
                   Crawling sitemaps, homepage links, and following internal pages
                 </p>
               </div>
             ) : status.status === "failed" ? (
-              <div className="border border-white/10 bg-white/[0.02]">
+              <div className="border border-border bg-card/50">
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <MapIcon className="h-12 w-12 text-white/20 mb-4" />
-                  <p className="text-sm text-white/40">Map failed. No URLs discovered.</p>
+                  <MapIcon className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-sm text-muted-foreground">Map failed. No URLs discovered.</p>
                 </div>
               </div>
             ) : (
-              <div className="border border-white/10 bg-white/[0.02]">
+              <div className="border border-border bg-card/50">
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <MapIcon className="h-12 w-12 text-white/20 mb-4" />
-                  <p className="text-sm text-white/40">No URLs discovered.</p>
+                  <MapIcon className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-sm text-muted-foreground">No URLs discovered.</p>
                 </div>
               </div>
             )}
