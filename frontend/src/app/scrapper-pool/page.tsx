@@ -512,7 +512,7 @@ export default function ScrapperPoolPage() {
         <div className="flex items-center justify-between px-6 md:px-10 h-16">
           <Link href="/dashboard" className="flex items-center gap-3">
             <div className="h-4 w-4 bg-gradient-to-br from-emerald-400 to-cyan-500" />
-            <span className="text-[18px] font-extrabold tracking-tight uppercase font-mono text-foreground">WEBHARVEST</span>
+            <span className="text-[18px] font-extrabold tracking-tight uppercase font-mono text-foreground">DATABLUE</span>
           </Link>
           <div className="hidden md:flex items-center gap-10">
             <Link href="/dashboard" className="text-[12px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors font-mono">Dashboard</Link>
@@ -3331,11 +3331,11 @@ export default function ScrapperPoolPage() {
         <div className="flex flex-col md:flex-row items-center justify-between px-6 md:px-10 max-w-[1400px] mx-auto py-8 gap-4">
           <Link href="/dashboard" className="flex items-center gap-3">
             <div className="h-3 w-3 bg-gradient-to-br from-emerald-400 to-cyan-500" />
-            <span className="text-[14px] font-bold uppercase tracking-[0.1em] text-muted-foreground font-mono">WebHarvest</span>
+            <span className="text-[14px] font-bold uppercase tracking-[0.1em] text-muted-foreground font-mono">DataBlue</span>
           </Link>
           <div className="flex items-center gap-8">
             <Link href="/docs" className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground/60 transition-colors font-mono">Documentation</Link>
-            <a href="https://github.com/Takezo49/WebHarvest" target="_blank" rel="noopener noreferrer" className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground/60 transition-colors font-mono">GitHub</a>
+            <a href="https://github.com/Takezo49/DataBlue" target="_blank" rel="noopener noreferrer" className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground/60 transition-colors font-mono">GitHub</a>
             <Link href="/docs" className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground/60 transition-colors font-mono">API Reference</Link>
           </div>
         </div>

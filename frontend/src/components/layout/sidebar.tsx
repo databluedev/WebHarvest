@@ -270,7 +270,7 @@ function DesktopSidebar() {
         </div>
         {!collapsed && (
           <span className="text-sm font-semibold tracking-tight whitespace-nowrap overflow-hidden">
-            WebHarvest
+            DataBlue
           </span>
         )}
       </div>
@@ -414,7 +414,7 @@ function MobileSidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10">
           <Flame className="h-4 w-4 text-primary" />
         </div>
-        <span className="text-sm font-semibold tracking-tight">WebHarvest</span>
+        <span className="text-sm font-semibold tracking-tight">DataBlue</span>
       </div>
 
       {/* Navigation */}

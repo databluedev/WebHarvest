@@ -1,4 +1,4 @@
-"""CLI tool for WebHarvest — command-line crawling and scraping.
+"""CLI tool for DataBlue — command-line crawling and scraping.
 
 Usage:
     python -m app.cli scrape https://example.com
@@ -208,8 +208,8 @@ async def _cmd_map(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="webharvest",
-        description="WebHarvest CLI — crawl, scrape, and map websites",
+        prog="datablue",
+        description="DataBlue CLI — crawl, scrape, and map websites",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
     parser.add_argument(

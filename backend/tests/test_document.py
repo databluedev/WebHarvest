@@ -141,7 +141,7 @@ class TestDetectDocumentType:
 
 
 def _create_minimal_pdf(
-    text: str = "Hello, WebHarvest!", title: str = "Test PDF"
+    text: str = "Hello, DataBlue!", title: str = "Test PDF"
 ) -> bytes:
     """Programmatically create a minimal PDF using PyMuPDF."""
     import fitz  # PyMuPDF
@@ -159,12 +159,12 @@ class TestExtractPdf:
     @pytest.mark.asyncio
     async def test_extracts_text_from_pdf(self):
         """Text inserted into a PDF is extracted correctly."""
-        pdf_bytes = _create_minimal_pdf("Hello, WebHarvest!")
+        pdf_bytes = _create_minimal_pdf("Hello, DataBlue!")
         result = await extract_pdf(pdf_bytes)
 
         assert isinstance(result, DocumentResult)
         assert "Hello" in result.text
-        assert "WebHarvest" in result.text
+        assert "DataBlue" in result.text
 
     @pytest.mark.asyncio
     async def test_page_count(self):

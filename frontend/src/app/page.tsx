@@ -124,9 +124,9 @@ const CAPABILITIES_LIST = [
 ];
 
 const TESTIMONIALS = [
-  { quote: "We switched to WebHarvest and cut our scraping costs to zero. The 5-tier pipeline handles sites that no other tool could even load.", name: "Alex Kim", role: "CTO @ DataStack", initials: "AK" },
-  { quote: "We crawl 100K pages daily for our RAG pipeline. WebHarvest on a $40/mo server outperforms what we were paying $800/mo for on managed scraping APIs.", name: "Sarah Reeves", role: "ML Engineer @ NeuralSearch", initials: "SR" },
-  { quote: "The Cloudflare bypass actually works. We monitor competitor pricing across 2,000 product pages and WebHarvest handles the anti-bot detection flawlessly.", name: "Marcus Johnson", role: "Lead Dev @ PriceWatch", initials: "MJ" },
+  { quote: "We switched to DataBlue and cut our scraping costs to zero. The 5-tier pipeline handles sites that no other tool could even load.", name: "Alex Kim", role: "CTO @ DataStack", initials: "AK" },
+  { quote: "We crawl 100K pages daily for our RAG pipeline. DataBlue on a $40/mo server outperforms what we were paying $800/mo for on managed scraping APIs.", name: "Sarah Reeves", role: "ML Engineer @ NeuralSearch", initials: "SR" },
+  { quote: "The Cloudflare bypass actually works. We monitor competitor pricing across 2,000 product pages and DataBlue handles the anti-bot detection flawlessly.", name: "Marcus Johnson", role: "Lead Dev @ PriceWatch", initials: "MJ" },
 ];
 
 // ── Logo SVG ──────────────────────────────────────────────
@@ -178,10 +178,10 @@ export default function LandingPage() {
         <div className="max-w-[1280px] mx-auto flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2.5 no-underline text-foreground">
             <Logo />
-            <span className="font-display font-extrabold text-lg tracking-[2px]">WEBHARVEST</span>
+            <span className="font-display font-extrabold text-lg tracking-[2px]">DATABLUE</span>
           </Link>
           <ul className="hidden md:flex items-center gap-8 list-none">
-            {[["Features", "#features"], ["How It Works", "#how"], ["Pricing", "#pricing"], ["GitHub", "https://github.com/Takezo49/WebHarvest"]].map(([label, href]) => (
+            {[["Features", "#features"], ["How It Works", "#how"], ["Pricing", "#pricing"], ["GitHub", "https://github.com/Takezo49/DataBlue"]].map(([label, href]) => (
               <li key={label}>
                 <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noopener noreferrer" : undefined}
                   className="font-mono text-xs tracking-[1px] uppercase text-muted-foreground hover:text-emerald-500 transition-colors no-underline">
@@ -234,7 +234,7 @@ export default function LandingPage() {
                     className="font-mono text-[13px] font-semibold tracking-[1px] uppercase px-8 py-3.5 bg-emerald-500 text-background hover:shadow-[0_0_40px_rgba(16,185,129,0.15)] hover:-translate-y-0.5 transition-all no-underline inline-flex items-center gap-2">
                     {ctaLabel} →
                   </Link>
-                  <a href="https://github.com/Takezo49/WebHarvest" target="_blank" rel="noopener noreferrer"
+                  <a href="https://github.com/Takezo49/DataBlue" target="_blank" rel="noopener noreferrer"
                     className="font-mono text-[13px] font-medium tracking-[1px] uppercase px-8 py-3.5 border border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground transition-all no-underline inline-flex items-center gap-2">
                     <GitHubIcon /> View on GitHub
                   </a>
@@ -430,12 +430,12 @@ job = response.json()
         </div>
       </section>
 
-      {/* ═══ WHY WEBHARVEST ═══ */}
+      {/* ═══ WHY DATABLUE ═══ */}
       <section className="py-28" id="compare">
         <div className="max-w-[1280px] mx-auto px-6">
           <div className="text-center mb-16">
             <Reveal><span className="font-mono text-[11px] tracking-[3px] uppercase text-emerald-500 block mb-4">Everything Included</span></Reveal>
-            <Reveal delay={80}><h2 className="font-display text-[clamp(32px,4vw,48px)] font-extrabold tracking-[-1px] mb-4">Why WebHarvest?</h2></Reveal>
+            <Reveal delay={80}><h2 className="font-display text-[clamp(32px,4vw,48px)] font-extrabold tracking-[-1px] mb-4">Why DataBlue?</h2></Reveal>
             <Reveal delay={160}><p className="text-base text-muted-foreground max-w-[560px] mx-auto leading-[1.7]">Full control over your scraping infrastructure. No vendor lock-in, no per-page costs, no limits.</p></Reveal>
           </div>
 
@@ -579,7 +579,7 @@ job = response.json()
                 className="font-mono text-[13px] font-semibold tracking-[1px] uppercase px-8 py-3.5 bg-emerald-500 text-background hover:shadow-[0_0_40px_rgba(16,185,129,0.15)] hover:-translate-y-0.5 transition-all no-underline inline-flex items-center gap-2">
                 {ctaLabel} →
               </Link>
-              <a href="https://github.com/Takezo49/WebHarvest" target="_blank" rel="noopener noreferrer"
+              <a href="https://github.com/Takezo49/DataBlue" target="_blank" rel="noopener noreferrer"
                 className="font-mono text-[13px] font-medium tracking-[1px] uppercase px-8 py-3.5 border border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground transition-all no-underline inline-flex items-center gap-2">
                 Read the Docs
               </a>
@@ -595,7 +595,7 @@ job = response.json()
             <div className="col-span-2 md:col-span-1">
               <Link href="/" className="inline-flex items-center gap-2 mb-4 no-underline text-foreground">
                 <Logo size={24} />
-                <span className="font-display font-extrabold text-base tracking-[2px]">WEBHARVEST</span>
+                <span className="font-display font-extrabold text-base tracking-[2px]">DATABLUE</span>
               </Link>
               <p className="text-sm text-muted-foreground/50 leading-[1.7] max-w-[300px]">
                 Open-source web scraping platform. Self-hosted, anti-bot pipeline, built for scale.
@@ -604,7 +604,7 @@ job = response.json()
             {[
               { title: "Product", links: [["Features", "#features"], ["Pricing", "#pricing"], ["Changelog", "#"], ["Roadmap", "#"]] },
               { title: "Resources", links: [["Documentation", "#"], ["API Reference", "#"], ["SDK", "#"], ["Examples", "#"]] },
-              { title: "Community", links: [["GitHub", "https://github.com/Takezo49/WebHarvest"], ["Discord", "#"], ["Twitter", "#"], ["Contributing", "#"]] },
+              { title: "Community", links: [["GitHub", "https://github.com/Takezo49/DataBlue"], ["Discord", "#"], ["Twitter", "#"], ["Contributing", "#"]] },
             ].map((col) => (
               <div key={col.title}>
                 <h4 className="font-mono text-[11px] tracking-[2px] uppercase text-muted-foreground/50 mb-5">{col.title}</h4>
@@ -619,7 +619,7 @@ job = response.json()
           </div>
 
           <div className="flex flex-col sm:flex-row justify-between items-center pt-6 border-t border-border gap-4">
-            <span className="font-mono text-[11px] text-muted-foreground/50">&copy; {new Date().getFullYear()} WebHarvest. MIT License.</span>
+            <span className="font-mono text-[11px] text-muted-foreground/50">&copy; {new Date().getFullYear()} DataBlue. MIT License.</span>
             <div className="flex gap-3">
               {["FastAPI", "Next.js", "Celery", "PostgreSQL"].map((badge) => (
                 <span key={badge} className="font-mono text-[10px] tracking-[1px] px-2.5 py-1 border border-border text-muted-foreground/50">

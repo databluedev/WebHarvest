@@ -56,7 +56,7 @@ function ResetPasswordForm() {
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-12">
           <div className="h-5 w-5 bg-gradient-to-br from-emerald-400 to-cyan-500" />
-          <span className="text-[20px] font-extrabold tracking-tight uppercase font-mono">WEBHARVEST</span>
+          <span className="text-[20px] font-extrabold tracking-tight uppercase font-mono">DATABLUE</span>
         </div>
 
         {/* Card */}

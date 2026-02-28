@@ -1,16 +1,16 @@
-"""WebHarvest -- Python SDK for the WebHarvest web scraping platform."""
+"""DataBlue -- Python SDK for the DataBlue web scraping platform."""
 
 __version__ = "0.1.0"
 
-from webharvest.client import AsyncWebHarvest, WebHarvest
+from webharvest.client import AsyncDataBlue, DataBlue
 from webharvest.exceptions import (
     AuthenticationError,
+    DataBlueError,
     JobFailedError,
     NotFoundError,
     RateLimitError,
     ServerError,
     TimeoutError,
-    WebHarvestError,
 )
 from webharvest.models import (
     CrawlJob,
@@ -41,10 +41,10 @@ __all__ = [
     # Version
     "__version__",
     # Clients
-    "WebHarvest",
-    "AsyncWebHarvest",
+    "DataBlue",
+    "AsyncDataBlue",
     # Exceptions
-    "WebHarvestError",
+    "DataBlueError",
     "AuthenticationError",
     "NotFoundError",
     "RateLimitError",

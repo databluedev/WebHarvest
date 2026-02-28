@@ -1,8 +1,8 @@
-"""Exception classes for the WebHarvest SDK."""
+"""Exception classes for the DataBlue SDK."""
 
 
-class WebHarvestError(Exception):
-    """Base exception for all WebHarvest SDK errors.
+class DataBlueError(Exception):
+    """Base exception for all DataBlue SDK errors.
 
     Attributes:
         message: Human-readable error description.
@@ -22,14 +22,14 @@ class WebHarvestError(Exception):
         super().__init__(message)
 
 
-class AuthenticationError(WebHarvestError):
+class AuthenticationError(DataBlueError):
     """Raised when the API returns a 401 Unauthorized response.
 
     This typically means the token is missing, expired, or invalid.
     """
 
 
-class NotFoundError(WebHarvestError):
+class NotFoundError(DataBlueError):
     """Raised when the API returns a 404 Not Found response.
 
     The requested resource (job, schedule, etc.) does not exist
@@ -37,7 +37,7 @@ class NotFoundError(WebHarvestError):
     """
 
 
-class RateLimitError(WebHarvestError):
+class RateLimitError(DataBlueError):
     """Raised when the API returns a 429 Too Many Requests response.
 
     The caller has exceeded the allowed request rate. Retry after
@@ -55,14 +55,14 @@ class RateLimitError(WebHarvestError):
         self.retry_after = retry_after
 
 
-class ServerError(WebHarvestError):
+class ServerError(DataBlueError):
     """Raised when the API returns a 5xx server error response.
 
     An unexpected error occurred on the server side.
     """
 
 
-class JobFailedError(WebHarvestError):
+class JobFailedError(DataBlueError):
     """Raised when a polled job completes with an error status.
 
     Attributes:
@@ -79,7 +79,7 @@ class JobFailedError(WebHarvestError):
         self.job_id = job_id
 
 
-class TimeoutError(WebHarvestError):
+class TimeoutError(DataBlueError):
     """Raised when polling for a job exceeds the specified timeout.
 
     Attributes:

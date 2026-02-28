@@ -1,4 +1,4 @@
-"""Pydantic models for WebHarvest API request and response types."""
+"""Pydantic models for DataBlue API request and response types."""
 
 from __future__ import annotations
 

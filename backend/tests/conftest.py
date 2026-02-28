@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the WebHarvest backend test suite."""
+"""Shared pytest fixtures for the DataBlue backend test suite."""
 
 import uuid
 from datetime import datetime, timezone
@@ -145,7 +145,7 @@ def mock_redis():
 # Test user + JWT token
 # ---------------------------------------------------------------------------
 
-TEST_USER_EMAIL = "test@webharvest.dev"
+TEST_USER_EMAIL = "test@datablue.dev"
 TEST_USER_PASSWORD = "supersecret123"
 TEST_USER_NAME = "Test User"
 

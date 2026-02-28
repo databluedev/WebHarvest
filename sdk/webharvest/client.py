@@ -1,4 +1,4 @@
-"""Synchronous and asynchronous clients for the WebHarvest API."""
+"""Synchronous and asynchronous clients for the DataBlue API."""
 
 from __future__ import annotations
 
@@ -9,12 +9,12 @@ import httpx
 
 from webharvest.exceptions import (
     AuthenticationError,
+    DataBlueError,
     JobFailedError,
     NotFoundError,
     RateLimitError,
     ServerError,
     TimeoutError,
-    WebHarvestError,
 )
 from webharvest.models import (
     CrawlJob,
@@ -80,7 +80,7 @@ def _raise_for_status(response: httpx.Response) -> None:
     if 500 <= response.status_code < 600:
         raise ServerError(detail, status_code=response.status_code, response_body=body)
 
-    raise WebHarvestError(detail, status_code=response.status_code, response_body=body)
+    raise DataBlueError(detail, status_code=response.status_code, response_body=body)
 
 
 def _strip_none(d: dict[str, Any]) -> dict[str, Any]:
@@ -93,21 +93,21 @@ def _strip_none(d: dict[str, Any]) -> dict[str, Any]:
 # ===================================================================
 
 
-class WebHarvest:
-    """Synchronous Python client for the WebHarvest API.
+class DataBlue:
+    """Synchronous Python client for the DataBlue API.
 
     Example usage::
 
-        from webharvest import WebHarvest
+        from webharvest import DataBlue
 
-        wh = WebHarvest(api_url="http://localhost:8000")
+        wh = DataBlue(api_url="http://localhost:8000")
         wh.login("user@example.com", "password")
 
         result = wh.scrape("https://example.com")
         print(result.data.markdown)
 
     Args:
-        api_url: Base URL of the WebHarvest API server.
+        api_url: Base URL of the DataBlue API server.
         api_key: Optional API key for authentication. When provided the
             client will send this key as a Bearer token on every request
             and no explicit ``login()`` call is needed.
@@ -975,7 +975,7 @@ class WebHarvest:
         """Close the underlying HTTP connection pool."""
         self._client.close()
 
-    def __enter__(self) -> WebHarvest:
+    def __enter__(self) -> DataBlue:
         return self
 
     def __exit__(self, *args: Any) -> None:
@@ -987,19 +987,19 @@ class WebHarvest:
 # ===================================================================
 
 
-class AsyncWebHarvest:
-    """Asynchronous Python client for the WebHarvest API.
+class AsyncDataBlue:
+    """Asynchronous Python client for the DataBlue API.
 
-    This class mirrors every method of :class:`WebHarvest` but uses
+    This class mirrors every method of :class:`DataBlue` but uses
     ``httpx.AsyncClient`` and ``async``/``await`` syntax.
 
     Example usage::
 
         import asyncio
-        from webharvest import AsyncWebHarvest
+        from webharvest import AsyncDataBlue
 
         async def main():
-            async with AsyncWebHarvest() as wh:
+            async with AsyncDataBlue() as wh:
                 await wh.login("user@example.com", "password")
                 result = await wh.scrape("https://example.com")
                 print(result.data.markdown)
@@ -1007,7 +1007,7 @@ class AsyncWebHarvest:
         asyncio.run(main())
 
     Args:
-        api_url: Base URL of the WebHarvest API server.
+        api_url: Base URL of the DataBlue API server.
         api_key: Optional API key for authentication.
         timeout: Default HTTP timeout in seconds.
     """
@@ -1604,7 +1604,7 @@ class AsyncWebHarvest:
         """Close the underlying HTTP connection pool."""
         await self._client.aclose()
 
-    async def __aenter__(self) -> AsyncWebHarvest:
+    async def __aenter__(self) -> AsyncDataBlue:
         return self
 
     async def __aexit__(self, *args: Any) -> None:

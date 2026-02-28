@@ -2,9 +2,9 @@
 
 import json
 
-from webharvest import WebHarvest
+from webharvest import DataBlue
 
-wh = WebHarvest(api_url="http://localhost:8000", api_key="wh_your_key_here")
+wh = DataBlue(api_url="http://localhost:8000", api_key="wh_your_key_here")
 
 # Start crawl and wait for completion (blocking)
 print("Starting crawl...")

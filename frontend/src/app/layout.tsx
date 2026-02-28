@@ -15,7 +15,7 @@ const syne = Syne({
 });
 
 export const metadata: Metadata = {
-  title: "WebHarvest - Web Crawling Platform",
+  title: "DataBlue - Web Crawling Platform",
   description: "Open source web crawling platform with AI-powered extraction. Scrape, crawl, and map websites.",
 };
 

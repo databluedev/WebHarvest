@@ -16,7 +16,7 @@ class TestRegister:
         resp = await client.post(
             "/v1/auth/register",
             json={
-                "email": "newuser@webharvest.dev",
+                "email": "newuser@datablue.dev",
                 "password": "strongpass123",
                 "name": "New User",
             },
@@ -33,7 +33,7 @@ class TestRegister:
         resp = await client.post(
             "/v1/auth/register",
             json={
-                "email": "test@webharvest.dev",  # same as test_user
+                "email": "test@datablue.dev",  # same as test_user
                 "password": "anotherpass",
             },
         )
@@ -74,7 +74,7 @@ class TestLogin:
         resp = await client.post(
             "/v1/auth/login",
             json={
-                "email": "test@webharvest.dev",
+                "email": "test@datablue.dev",
                 "password": "supersecret123",
             },
         )
@@ -89,7 +89,7 @@ class TestLogin:
         resp = await client.post(
             "/v1/auth/login",
             json={
-                "email": "test@webharvest.dev",
+                "email": "test@datablue.dev",
                 "password": "wrongpassword",
             },
         )
@@ -120,7 +120,7 @@ class TestGetMe:
         resp = await client.get("/v1/auth/me", headers=auth_headers)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["email"] == "test@webharvest.dev"
+        assert data["email"] == "test@datablue.dev"
         assert data["name"] == "Test User"
         assert "id" in data
 
@@ -203,7 +203,7 @@ class TestApiKeyAuth:
             },
         )
         assert resp.status_code == 200
-        assert resp.json()["email"] == "test@webharvest.dev"
+        assert resp.json()["email"] == "test@datablue.dev"
 
     @pytest.mark.asyncio
     async def test_revoke_api_key(self, client: AsyncClient, auth_headers):

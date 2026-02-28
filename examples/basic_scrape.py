@@ -1,12 +1,12 @@
 """Basic scrape example — extract markdown content from a single URL."""
 
-from webharvest import WebHarvest
+from webharvest import DataBlue
 
 # Connect with API key (generate one at /api-keys in the dashboard)
-wh = WebHarvest(api_url="http://localhost:8000", api_key="wh_your_key_here")
+wh = DataBlue(api_url="http://localhost:8000", api_key="wh_your_key_here")
 
 # Or connect with email/password:
-# wh = WebHarvest(api_url="http://localhost:8000")
+# wh = DataBlue(api_url="http://localhost:8000")
 # wh.login("user@example.com", "password")
 
 # Scrape a page — returns markdown, HTML, links, and metadata

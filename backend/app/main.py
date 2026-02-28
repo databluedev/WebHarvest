@@ -22,7 +22,7 @@ if settings.SENTRY_DSN:
         dsn=settings.SENTRY_DSN,
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
         environment=settings.SENTRY_ENVIRONMENT,
-        release=f"webharvest@{settings.APP_VERSION}",
+        release=f"datablue@{settings.APP_VERSION}",
         send_default_pii=True,
         enable_logs=True,
         profile_session_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="WebHarvest - Open source web crawling platform. "
+    description="DataBlue - Open source web crawling platform. "
     "Scrape, crawl, and map websites with AI-powered extraction. "
     "Bring Your Own Key (BYOK) for LLM processing.",
     docs_url="/docs",

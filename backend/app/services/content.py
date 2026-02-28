@@ -239,7 +239,7 @@ DOC_FRAMEWORK_EXTRACTION: dict[str, tuple[list[str], list[str]]] = {
 }
 
 
-class WebHarvestConverter(MarkdownConverter):
+class DataBlueConverter(MarkdownConverter):
     """Custom markdown converter that preserves links, structure, and all content."""
 
     def convert_a(self, el, text, *args, **kwargs):
@@ -657,7 +657,7 @@ def _postprocess_markdown(markdown: str) -> str:
     return markdown.strip()
 
 
-_CONVERTER = WebHarvestConverter(
+_CONVERTER = DataBlueConverter(
     heading_style="ATX",
     bullets="-",
     newline_style="spaces",

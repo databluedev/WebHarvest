@@ -1,8 +1,8 @@
 """LLM extraction with structured output — extract data from a page using AI."""
 
-from webharvest import WebHarvest
+from webharvest import DataBlue
 
-wh = WebHarvest(api_url="http://localhost:8000", api_key="wh_your_key_here")
+wh = DataBlue(api_url="http://localhost:8000", api_key="wh_your_key_here")
 
 # First, make sure you've added an LLM key in Settings (e.g., OpenAI key)
 # via the dashboard at /settings or via the API:

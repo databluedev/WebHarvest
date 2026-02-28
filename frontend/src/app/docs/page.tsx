@@ -1805,7 +1805,7 @@ export default function DocsPage() {
                 API Documentation
               </h1>
               <p className="text-sm sm:text-base text-muted-foreground max-w-2xl mt-4 leading-relaxed font-light">
-                Complete reference for the WebHarvest REST API. All endpoints accept and
+                Complete reference for the DataBlue REST API. All endpoints accept and
                 return JSON. Authenticate using a Bearer token or API key in the{" "}
                 <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono text-foreground/70">
                   Authorization
@@ -1925,7 +1925,7 @@ export default function DocsPage() {
                   for usage analytics.
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-2 font-mono">
-                  WebHarvest API v1 -- Self-hosted open source web crawling platform
+                  DataBlue API v1 -- Self-hosted open source web crawling platform
                 </p>
               </div>
             </footer>
